@@ -55,6 +55,19 @@ npm --prefix frontend run api:generate
 
 `api:check` 本地跑会因为「改动未提交」而失败，这是正常的——它对比的是 HEAD。真正要验的是生成幂等：连跑两次 `api:generate`，第二次应无变化。
 
+### 本地 git 钩子（推荐配置，不随仓库分发）
+
+`.git/hooks/` 不被跟踪，所以新克隆的仓库没有这些钩子，需要各自配置。当前这台机器上装了两个：
+
+| 钩子         | 跑什么                                             | 耗时     |
+| ------------ | -------------------------------------------------- | -------- |
+| `pre-commit` | ruff + mypy（改了 `.py` 时）、eslint（改了前端时） | 1 秒内   |
+| `pre-push`   | pytest（改了 `.py` 时）、vitest（改了前端时）      | 约 25 秒 |
+
+慢的测试放在推送前而不是提交前，是为了让提交保持无感——太慢的钩子会被绕过，等于没有。两者都按「本次改了什么」决定跑什么，只改文档不会触发任何检查。
+
+临时跳过：`git commit --no-verify` / `git push --no-verify`。
+
 ## 陷阱
 
 **别在 `backend/` 下建虚拟环境。** 架构测试用 `rglob("*.py")` 遍历整个 `backend/`，会把 venv 里 pip 的 vendor 代码算进去，导致「超 1000 行」和「import 环」双双误报。venv 只放 `.aniu/local/.venv`。
