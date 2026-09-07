@@ -597,9 +597,9 @@ function PositionTable({
                   <TableHead className="w-[18%] px-1.5 text-center">股票</TableHead>
                   <TableHead className="w-[13%] px-1.5 text-center">数量</TableHead>
                   <TableHead className="w-[17%] px-1.5 text-center">现价/成本</TableHead>
-                  <TableHead className="w-[17%] px-1.5 text-center">市值/盈亏比</TableHead>
-                  <TableHead className="w-[21%] px-1.5 text-center">当日盈亏/当日盈亏比</TableHead>
-                  <TableHead className="w-[14%] px-1.5 text-center">仓位比例</TableHead>
+                  <TableHead className="w-[18%] px-1.5 text-center">持仓市值</TableHead>
+                  <TableHead className="w-[18%] px-1.5 text-center">当日盈亏</TableHead>
+                  <TableHead className="w-[16%] px-1.5 text-center">仓位比例</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

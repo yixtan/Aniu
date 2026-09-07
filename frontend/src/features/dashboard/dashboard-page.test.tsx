@@ -196,7 +196,6 @@ describe("DashboardPage", () => {
 
     expect(await screen.findByText("投资总览")).toBeInTheDocument();
     expect((await screen.findAllByText("浦发银行")).length).toBeGreaterThan(0);
-    expect(screen.getByText("当日盈亏/当日盈亏比")).toBeInTheDocument();
     expect(screen.getByText("¥150.50")).toBeInTheDocument();
     expect(screen.getByText("买入")).toBeInTheDocument();
 
@@ -204,7 +203,8 @@ describe("DashboardPage", () => {
     // positions table rather than the whole page.
     const positionsTable = within(screen.getAllByRole("table")[0]!);
     expect(positionsTable.getByText("现价/成本")).toBeInTheDocument();
-    expect(positionsTable.getByText("市值/盈亏比")).toBeInTheDocument();
+    expect(positionsTable.getByText("持仓市值")).toBeInTheDocument();
+    expect(positionsTable.getByText("当日盈亏")).toBeInTheDocument();
     expect(positionsTable.getByText("¥9.00")).toBeInTheDocument();
     expect(positionsTable.getByText("+11.11%")).toBeInTheDocument();
     expect(positionsTable.getByText("+1.53%")).toBeInTheDocument();
