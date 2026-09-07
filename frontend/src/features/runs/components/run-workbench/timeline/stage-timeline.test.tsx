@@ -1,9 +1,49 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { toast } from "sonner";
 
 import type { RunDetail, TraceStage } from "@/lib/api-types";
 
 import { StageTimeline } from "./stage-timeline";
+
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+
+const MARKDOWN_REPORT = "## 运行报告\n\n- 买入 600519";
+
+/** The Run stage carries the Markdown the Summary stage later turns into HTML. */
+function runStageWithReport(): TraceStage {
+  return {
+    ...runStage,
+    steps: [
+      {
+        step_id: "result",
+        type: "result",
+        title: "生成 Markdown 运行报告",
+        status: "completed",
+        summary: "调用工具 3 次",
+        content: MARKDOWN_REPORT,
+        tool_call: null,
+        started_at: null,
+        ended_at: null,
+      },
+    ],
+  };
+}
+
+function mockClipboard() {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText },
+  });
+  return writeText;
+}
+
+afterEach(() => {
+  vi.clearAllMocks();
+  Reflect.deleteProperty(navigator, "clipboard");
+});
 
 const runStage: TraceStage = {
   stage_id: "run:na",
@@ -297,5 +337,53 @@ describe("StageTimeline", () => {
 
     expect(screen.getByText("已中止")).toBeInTheDocument();
     expect(screen.queryByText("执行中")).toBeNull();
+  });
+
+  it("copies the Markdown source rather than the rendered HTML", async () => {
+    const writeText = mockClipboard();
+    renderTimeline(
+      makeRun({
+        summary: "<section><h2>执行总结</h2></section>",
+        summary_render_mode: "html",
+        trace: {
+          schema_version: 3,
+          event_seq: 4,
+          current_stage_id: null,
+          stages: [runStageWithReport(), summaryStage],
+        },
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /复制 Markdown/ }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(MARKDOWN_REPORT));
+    expect(await screen.findByRole("button", { name: /已复制/ })).toBeInTheDocument();
+  });
+
+  it("falls back to the summary when the report was never rendered to HTML", async () => {
+    const writeText = mockClipboard();
+    renderTimeline(makeRun({ summary: MARKDOWN_REPORT, summary_render_mode: "markdown" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /复制 Markdown/ }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(MARKDOWN_REPORT));
+  });
+
+  it("explains that a plain-HTTP page has no clipboard", async () => {
+    renderTimeline(makeRun({ summary: MARKDOWN_REPORT, summary_render_mode: "markdown" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /复制 Markdown/ }));
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith("当前连接不支持剪贴板，请使用 HTTPS 或本机访问"),
+    );
+  });
+
+  it("offers no copy button when an HTML-only report has no Markdown source", () => {
+    renderTimeline(
+      makeRun({ summary: "<section><h2>执行总结</h2></section>", summary_render_mode: "html" }),
+    );
+
+    expect(screen.queryByRole("button", { name: /复制 Markdown/ })).toBeNull();
   });
 });

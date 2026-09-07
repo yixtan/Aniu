@@ -1,6 +1,8 @@
-import { useState } from "react";
-import { ChevronRightIcon, CircleAlertIcon } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CheckIcon, ChevronRightIcon, CircleAlertIcon, CopyIcon } from "lucide-react";
+import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
 import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { formatRunDuration } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -8,6 +10,44 @@ import type { RunDetail } from "@/lib/api-types";
 
 import { StreamingContent } from "../streaming";
 import { StageNode } from "./stage-node";
+
+/** Copy the report's Markdown source so it can be pasted into an editor. */
+function CopyReportButton({ markdown }: { markdown: string }) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 2000);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  const copy = async () => {
+    try {
+      // Only available over HTTPS or on localhost; a LAN deployment over plain
+      // HTTP has no clipboard, so say so instead of failing silently.
+      if (!navigator.clipboard) {
+        throw new Error("当前连接不支持剪贴板，请使用 HTTPS 或本机访问");
+      }
+      await navigator.clipboard.writeText(markdown);
+      setCopied(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "复制失败");
+    }
+  };
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="h-7 gap-1.5 px-2 text-xs"
+      onClick={() => void copy()}
+    >
+      {copied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
+      {copied ? "已复制" : "复制 Markdown"}
+    </Button>
+  );
+}
 
 /**
  * Compact stage process summary followed by the terminal report or failure reason.
@@ -71,6 +111,14 @@ export function StageTimeline({
   const showFinalReport =
     (summaryStage?.status === "completed" || summaryStage?.status === "degraded") &&
     finalReportContent.length > 0;
+  // The Summary stage rewrites the report as HTML for display, so the Markdown
+  // an editor wants is the Run stage's own result, not what is on screen.
+  const markdownReport =
+    runStage?.steps
+      .filter((step) => step.type === "result")
+      .map((step) => step.content?.trim() || "")
+      .filter(Boolean)
+      .join("\n\n") || (run.summary_render_mode === "html" ? "" : finalReportContent);
   const failureReason = recordedFailureReason || "任务执行失败，但没有记录具体失败原因。";
 
   return (
@@ -149,9 +197,12 @@ export function StageTimeline({
         </section>
       ) : showFinalReport ? (
         <section className="px-2 pt-4 pb-3">
-          <h2 className="text-foreground mb-3 font-sans text-base font-semibold tracking-[-0.01em]">
-            最终运行报告
-          </h2>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-foreground font-sans text-base font-semibold tracking-[-0.01em]">
+              最终运行报告
+            </h2>
+            {markdownReport ? <CopyReportButton markdown={markdownReport} /> : null}
+          </div>
           <StreamingContent
             content={finalReportContent}
             streaming={false}
