@@ -9,8 +9,9 @@ from backend.business.reports import (
     ReportMailService,
     RunReportMail,
     SaveEmailSettingsCommand,
-    render_report_html,
+    render_report_email,
 )
+from backend.business.reports.email_body import MAX_CONTENT_WIDTH_PX
 from backend.business.shared import RunNotFoundError, ServiceConfigurationError
 
 HTML_REPORT = '<section class="report"><h2>执行总结</h2><p>成交 1 笔</p></section>'
@@ -88,16 +89,53 @@ def _service(
     )
 
 
-def test_an_html_report_is_used_as_the_body_unchanged() -> None:
-    assert render_report_html(HTML_REPORT, "html") == HTML_REPORT
+MIXED_REPORT = """## 一、市场环境
+
+**核心特征：极端分化**。沪指几乎平盘。
+
+<div style="color:#111;">模型自己写的卡片</div>
+
+正文段落。
+"""
+
+
+def test_markdown_is_converted_the_way_the_web_page_converts_it() -> None:
+    """The page renders with remark; markdown-it-py follows the same rules."""
+
+    body = render_report_email(MIXED_REPORT, "html")
+
+    assert "<h2" in body and "## 一、市场环境" not in body
+    assert "<strong>核心特征：极端分化</strong>" in body
+    assert "**" not in body
+
+
+def test_the_report_own_inline_markup_is_left_untouched() -> None:
+    body = render_report_email(MIXED_REPORT, "html")
+
+    assert '<div style="color:#111;">模型自己写的卡片</div>' in body
+
+
+def test_generated_tags_get_inline_styles_because_clients_strip_css() -> None:
+    body = render_report_email(MIXED_REPORT, "html")
+
+    assert "<h2 style=" in body
+    assert "<p style=" in body
+
+
+def test_the_body_is_width_constrained() -> None:
+    """Mail clients render at window width unless a container says otherwise."""
+
+    assert f"max-width:{MAX_CONTENT_WIDTH_PX}px" in render_report_email(
+        HTML_REPORT, "html"
+    )
 
 
 def test_a_markdown_report_is_escaped_into_a_readable_block() -> None:
     """A degraded run yields Markdown, which no mail client renders as markup."""
 
-    body = render_report_html("# 标题 <script>alert(1)</script>", "markdown")
+    body = render_report_email("# 标题 <script>alert(1)</script>", "markdown")
 
-    assert body.startswith("<pre")
+    assert "<pre" in body
     assert "&lt;script&gt;" in body
     assert "<script>" not in body
 
@@ -114,7 +152,10 @@ async def test_sending_uses_the_stored_key_and_recipient() -> None:
     assert api_key == "re_stored_key"
     assert recipient == "me@example.com"
     assert mail.subject == "Aniu 运行报告 · #42"
-    assert mail.html == HTML_REPORT
+    # Bare tags from the report gain inline styles, so match on content.
+    assert "执行总结" in mail.html
+    assert "成交 1 笔" in mail.html
+    assert f"max-width:{MAX_CONTENT_WIDTH_PX}px" in mail.html
 
 
 @pytest.mark.asyncio

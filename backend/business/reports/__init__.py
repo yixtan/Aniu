@@ -6,6 +6,7 @@ from backend.business.reports.dto import (
     ReportMailResultDTO,
     to_email_settings_dto,
 )
+from backend.business.reports.email_body import render_report_email
 from backend.business.reports.models import (
     EmailDeliverySettings,
     RunReportMail,
@@ -16,7 +17,7 @@ from backend.business.reports.ports import (
     ReportMailerPort,
     RunReportQueryPort,
 )
-from backend.business.reports.service import ReportMailService, render_report_html
+from backend.business.reports.service import ReportMailService
 
 __all__ = [
     "EmailDeliverySettings",
@@ -29,6 +30,6 @@ __all__ = [
     "RunReportQueryPort",
     "SaveEmailSettingsCommand",
     "normalize_address",
-    "render_report_html",
+    "render_report_email",
     "to_email_settings_dto",
 ]

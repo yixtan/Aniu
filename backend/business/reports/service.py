@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import html
 import logging
 
 from backend.business.reports.commands import SaveEmailSettingsCommand
@@ -11,6 +10,7 @@ from backend.business.reports.dto import (
     ReportMailResultDTO,
     to_email_settings_dto,
 )
+from backend.business.reports.email_body import render_report_email
 from backend.business.reports.models import (
     EmailDeliverySettings,
     RunReportMail,
@@ -33,24 +33,6 @@ logger = logging.getLogger(__name__)
 def _last_four(secret: str) -> str:
     text = secret.strip()
     return text[-4:] if len(text) >= 4 else text
-
-
-def render_report_html(summary: str, render_mode: str) -> str:
-    """Return an email body for the report.
-
-    An HTML summary is already a document and goes in as-is. A Markdown one
-    means the Summary stage degraded, so it is escaped into a preformatted
-    block rather than shipped as markup that no mail client will render.
-    """
-
-    if render_mode == "html":
-        return summary
-    escaped = html.escape(summary)
-    return (
-        '<pre style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;'
-        'font-size:13px;line-height:1.6;white-space:pre-wrap;'
-        f'word-break:break-word">{escaped}</pre>'
-    )
 
 
 class ReportMailService:
@@ -142,7 +124,7 @@ class ReportMailService:
         mail = RunReportMail(
             run_id=run_id,
             subject=f"Aniu 运行报告 · #{run_id}",
-            html=render_report_html(summary, render_mode),
+            html=render_report_email(summary, render_mode),
         )
         try:
             await self._mailer.send(
@@ -173,4 +155,4 @@ class ReportMailService:
             await self._committer.commit()
 
 
-__all__ = ["ReportMailService", "render_report_html"]
+__all__ = ["ReportMailService"]
