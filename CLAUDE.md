@@ -61,6 +61,8 @@ npm --prefix frontend run api:generate
 
 **改了定时任务要重启后端。** cron 在应用启动时注册，`--reload` 只热更新 Python 代码，不会重新排期。
 
+**切分支前先停掉前后端。** 带 `--reload` 的服务会跟着分支切换加载/丢失文件，切到不含某模块的分支时后端会因为 import 失败而起不来。同步上游的完整顺序是：停服务 → `git checkout main` → 同步 → 切回功能分支 → 重启。
+
 **后端日志在 `.aniu/local/backend.log`。** 如果用的是自己写的前台启动脚本，注意它是用 `>` 还是 `>>` 重定向——用 `>` 的话每次重启都会清空日志，排查历史问题前先确认日志还在。
 
 **日志脱敏有边界**（[`infra/observability/log_config.py`](backend/infra/observability/log_config.py)）：
