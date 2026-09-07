@@ -85,6 +85,16 @@ WHERE summary IS NOT NULL GROUP BY 1;
 
 降级原因记录在该次运行 `trace_json` 的 Summary 阶段里，step_id 为 `markdown_fallback`。
 
+**国内镜像源会让本地和 CI 看到不同的世界。** `registry.npmmirror.com` 不提供 audit 数据，
+本地 `npm audit` 永远返回 0 漏洞，而 CI 走官方源会真实报出来。查真实结果要显式指定源：
+
+```bash
+npm --prefix frontend audit --registry=https://registry.npmjs.org
+```
+
+pip 同理：用 pip-compile 重建 `requirements.lock` 时，本地镜像配置会被写进文件头，
+必须手动删掉 `--index-url` / `--trusted-host` 两行再提交。
+
 **别在 `backend/` 下建虚拟环境。** 架构测试用 `rglob("*.py")` 遍历整个 `backend/`，会把 venv 里 pip 的 vendor 代码算进去，导致「超 1000 行」和「import 环」双双误报。venv 只放 `.aniu/local/.venv`。
 
 **改了定时任务要重启后端。** cron 在应用启动时注册，`--reload` 只热更新 Python 代码，不会重新排期。
