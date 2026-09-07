@@ -518,14 +518,68 @@ function AccountOverview({
       ) : null}
 
       <div className="grid min-h-0 min-w-0 flex-1 gap-4 xl:grid-cols-2">
-        <PositionTable positions={topPositions} />
+        <PositionTable positions={topPositions} totalAsset={data.overview.total_asset} />
         <OrderTable orders={recentOrders} />
       </div>
     </div>
   );
 }
 
-function PositionTable({ positions }: { positions: DashboardData["positions"] }) {
+type Position = DashboardData["positions"][number];
+
+/** Unrealised profit on one holding, in currency. */
+function holdingProfit(position: Position) {
+  return (position.current_price - position.avg_cost) * position.quantity;
+}
+
+/** Today's move as a ratio of yesterday's closing value for this holding.
+ *
+ * The upstream portfolio feed has no such field, so it is derived from the
+ * day's profit and the current market value. Buying or selling this symbol
+ * today shifts the denominator, which makes the figure approximate.
+ */
+function dayProfitRatio(position: Position) {
+  const dayProfit = position.day_profit;
+  if (dayProfit === null || dayProfit === undefined) return null;
+  const previousValue = position.market_value - dayProfit;
+  if (previousValue <= 0) return null;
+  return dayProfit / previousValue;
+}
+
+function positionShare(position: Position, totalAsset: number) {
+  if (totalAsset <= 0) return null;
+  return position.market_value / totalAsset;
+}
+
+/** Two stacked figures in one cell, keeping the table narrow enough to read. */
+function StackedCell({
+  primary,
+  secondary,
+  secondaryClassName,
+}: {
+  primary: React.ReactNode;
+  secondary: React.ReactNode;
+  // getChangeTone returns undefined for a neutral value, and this project
+  // enables exactOptionalPropertyTypes, so undefined must be spelled out.
+  secondaryClassName?: string | undefined;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-0 tabular-nums">
+      <span>{primary}</span>
+      <span className={cn("text-xs", secondaryClassName ?? "text-muted-foreground")}>
+        {secondary}
+      </span>
+    </div>
+  );
+}
+
+function PositionTable({
+  positions,
+  totalAsset,
+}: {
+  positions: DashboardData["positions"];
+  totalAsset: number;
+}) {
   return (
     <Card className="flex h-[415px] min-h-0 min-w-0 flex-col">
       <CardHeader>
@@ -545,12 +599,12 @@ function PositionTable({ positions }: { positions: DashboardData["positions"] })
             <Table className="table-fixed" containerClassName="overflow-visible">
               <TableHeader className="bg-card sticky top-0 z-10">
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-[18%] px-1.5 text-center">股票</TableHead>
-                  <TableHead className="w-[14%] px-1.5 text-center">数量</TableHead>
-                  <TableHead className="w-[15%] px-1.5 text-center">现价</TableHead>
-                  <TableHead className="w-[15%] px-1.5 text-center">盈亏比</TableHead>
-                  <TableHead className="w-[17%] px-1.5 text-center">市值</TableHead>
-                  <TableHead className="w-[21%] px-1.5 text-center">当日盈亏</TableHead>
+                  <TableHead className="w-[16%] px-1.5 text-center">股票</TableHead>
+                  <TableHead className="w-[11%] px-1.5 text-center">数量</TableHead>
+                  <TableHead className="w-[16%] px-1.5 text-center">现价/成本</TableHead>
+                  <TableHead className="w-[22%] px-1.5 text-center">持仓市值/持仓盈亏</TableHead>
+                  <TableHead className="w-[21%] px-1.5 text-center">当日盈亏/当日盈亏比</TableHead>
+                  <TableHead className="w-[14%] px-1.5 text-center">仓位比例</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -567,27 +621,33 @@ function PositionTable({ positions }: { positions: DashboardData["positions"] })
                     <TableCell className="px-1.5 py-1 text-center tabular-nums">
                       {formatNumber(position.quantity)}
                     </TableCell>
+                    <TableCell className="px-1.5 py-1 text-center">
+                      <StackedCell
+                        primary={formatCurrency(position.current_price)}
+                        secondary={formatCurrency(position.avg_cost)}
+                      />
+                    </TableCell>
+                    <TableCell className="px-1.5 py-1 text-center">
+                      <StackedCell
+                        primary={formatCurrency(position.market_value)}
+                        secondary={
+                          <>
+                            {formatCurrency(holdingProfit(position))}
+                            <span className="ps-1">{formatPercent(position.profit_ratio)}</span>
+                          </>
+                        }
+                        secondaryClassName={getChangeTone(position.profit_ratio)}
+                      />
+                    </TableCell>
+                    <TableCell className="px-1.5 py-1 text-center">
+                      <StackedCell
+                        primary={formatCurrency(position.day_profit)}
+                        secondary={formatPercent(dayProfitRatio(position))}
+                        secondaryClassName={getChangeTone(position.day_profit)}
+                      />
+                    </TableCell>
                     <TableCell className="px-1.5 py-1 text-center tabular-nums">
-                      {formatCurrency(position.current_price)}
-                    </TableCell>
-                    <TableCell
-                      className={cn(
-                        "px-1.5 py-1 text-center tabular-nums",
-                        getChangeTone(position.profit_ratio),
-                      )}
-                    >
-                      {formatPercent(position.profit_ratio)}
-                    </TableCell>
-                    <TableCell className="px-1.5 py-1 text-center tabular-nums">
-                      {formatCurrency(position.market_value)}
-                    </TableCell>
-                    <TableCell
-                      className={cn(
-                        "px-1.5 py-1 text-center tabular-nums",
-                        getChangeTone(position.day_profit),
-                      )}
-                    >
-                      {formatCurrency(position.day_profit)}
+                      {formatPercentNoSign(positionShare(position, totalAsset))}
                     </TableCell>
                   </TableRow>
                 ))}
