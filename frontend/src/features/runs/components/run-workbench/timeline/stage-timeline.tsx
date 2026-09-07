@@ -1,13 +1,95 @@
-import { useState } from "react";
-import { ChevronRightIcon, CircleAlertIcon } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { CheckIcon, ChevronRightIcon, CircleAlertIcon, CopyIcon, MailIcon } from "lucide-react";
+import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
 import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
-import { formatRunDuration } from "@/lib/format";
+import { emailRunReport } from "@/lib/api";
+import { formatRunDuration, getErrorMessage } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { RunDetail } from "@/lib/api-types";
 
 import { StreamingContent } from "../streaming";
 import { StageNode } from "./stage-node";
+
+/** Whether the browser exposes the Clipboard API at all.
+ *
+ * It only exists in a secure context, so an installation served over plain
+ * HTTP — a public host without TLS, or a LAN address — has none. The button is
+ * hidden in that case rather than offered and then failing.
+ */
+function clipboardAvailable() {
+  return typeof navigator !== "undefined" && Boolean(navigator.clipboard);
+}
+
+/** Mail this run's report to the configured address.
+ *
+ * Always offered, unlike the copy button: a missing configuration is something
+ * the operator can fix, and the error says where to fix it.
+ */
+function EmailReportButton({ runId }: { runId: number }) {
+  const sendMutation = useMutation({
+    mutationFn: () => emailRunReport(runId),
+    onSuccess: (result) => {
+      if (result.delivered) {
+        toast.success(result.message);
+      } else {
+        toast.error(result.message);
+      }
+    },
+    onError: (error: unknown) => toast.error(getErrorMessage(error)),
+  });
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="h-7 gap-1.5 px-2 text-xs"
+      disabled={sendMutation.isPending}
+      onClick={() => sendMutation.mutate()}
+    >
+      <MailIcon className="size-3.5" />
+      {sendMutation.isPending ? "发送中…" : "发送到邮箱"}
+    </Button>
+  );
+}
+
+/** Copy the report's Markdown source so it can be pasted into an editor. */
+function CopyReportButton({ markdown }: { markdown: string }) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 2000);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(markdown);
+      setCopied(true);
+    } catch (error) {
+      // A secure context can still refuse the write, e.g. when the document is
+      // not focused or the permission was denied.
+      toast.error(error instanceof Error ? error.message : "复制失败");
+    }
+  };
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="h-7 gap-1.5 px-2 text-xs"
+      onClick={() => void copy()}
+    >
+      {copied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
+      {copied ? "已复制" : "复制 Markdown"}
+    </Button>
+  );
+}
 
 /**
  * Compact stage process summary followed by the terminal report or failure reason.
@@ -71,6 +153,14 @@ export function StageTimeline({
   const showFinalReport =
     (summaryStage?.status === "completed" || summaryStage?.status === "degraded") &&
     finalReportContent.length > 0;
+  // The Summary stage rewrites the report as HTML for display, so the Markdown
+  // an editor wants is the Run stage's own result, not what is on screen.
+  const markdownReport =
+    runStage?.steps
+      .filter((step) => step.type === "result")
+      .map((step) => step.content?.trim() || "")
+      .filter(Boolean)
+      .join("\n\n") || (run.summary_render_mode === "html" ? "" : finalReportContent);
   const failureReason = recordedFailureReason || "任务执行失败，但没有记录具体失败原因。";
 
   return (
@@ -149,9 +239,17 @@ export function StageTimeline({
         </section>
       ) : showFinalReport ? (
         <section className="px-2 pt-4 pb-3">
-          <h2 className="text-foreground mb-3 font-sans text-base font-semibold tracking-[-0.01em]">
-            最终运行报告
-          </h2>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-foreground font-sans text-base font-semibold tracking-[-0.01em]">
+              最终运行报告
+            </h2>
+            <div className="flex shrink-0 items-center gap-2">
+              {markdownReport && clipboardAvailable() ? (
+                <CopyReportButton markdown={markdownReport} />
+              ) : null}
+              <EmailReportButton runId={run.run_id} />
+            </div>
+          </div>
           <StreamingContent
             content={finalReportContent}
             streaming={false}

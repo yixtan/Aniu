@@ -17,6 +17,7 @@ dependencies = [
     "apscheduler>=3.10",
     "cryptography>=44.0",
     "pwdlib[argon2]>=0.2",
+    "markdown-it-py>=3.0,<5",
 ]
 
 

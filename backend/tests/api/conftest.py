@@ -6,7 +6,7 @@ from collections.abc import AsyncIterator
 from dataclasses import replace
 
 import pytest
-from httpx import ASGITransport, AsyncClient
+from httpx import ASGITransport, AsyncClient, MockTransport, Request, Response
 
 from backend.api.deps import get_session_factory
 from backend.api.sse import StreamHub
@@ -39,6 +39,21 @@ async def authenticate_api_client(client: AsyncClient) -> None:
     )
     assert response.status_code == 201
     client.headers["X-CSRF-Token"] = response.json()["csrf_token"]
+
+
+class RecordingNotificationEndpoint:
+    """Stand-in receiver so push tests never touch the network."""
+
+    def __init__(self) -> None:
+        self.requests: list[Request] = []
+        self.status_code = 200
+
+    def handle(self, request: Request) -> Response:
+        self.requests.append(request)
+        return Response(self.status_code, json={"code": 0, "errcode": 0})
+
+    def client(self) -> AsyncClient:
+        return AsyncClient(transport=MockTransport(self.handle))
 
 
 class DisabledJobRunner:
@@ -134,12 +149,24 @@ def fake_model_tester() -> FakeModelConnectivityTester:
 
 
 @pytest.fixture
-async def api_client(session_factory, fake_model_tester) -> AsyncIterator[AsyncClient]:
+def notification_endpoint() -> RecordingNotificationEndpoint:
+    return RecordingNotificationEndpoint()
+
+
+@pytest.fixture
+async def api_client(
+    session_factory,
+    fake_model_tester,
+    notification_endpoint,
+) -> AsyncIterator[AsyncClient]:
     async with session_factory() as session:
         await SettingsRepository(session).save(AppSettings())
         await session.commit()
     app.dependency_overrides[get_session_factory] = lambda: session_factory
     app.state.runtime.session_factory = session_factory
+    app.state.runtime.notification_http_client = notification_endpoint.client()
+    app.state.runtime.email_http_client = notification_endpoint.client()
+    app.state.runtime.notification_dispatcher = None
     app.state.runtime.model_connectivity_tester = fake_model_tester
     app.state.runtime.models_dev_catalog = FakeModelsDevCatalog()
     app.state.runtime.job_runner = FakeJobRunner(session_factory)

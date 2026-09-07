@@ -337,7 +337,7 @@ export function RunsPage() {
                 key={runsPage}
                 ref={runListRef}
                 data-testid="runs-scroll-list"
-                className="flex min-w-0 flex-1 [scrollbar-width:thin] items-center gap-1.5 overflow-x-auto overflow-y-hidden p-1 pb-2"
+                className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto overflow-y-hidden p-1 pb-2 [scrollbar-width:thin]"
               >
                 {runsPage > 0 ? (
                   <Button

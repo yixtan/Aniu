@@ -63,6 +63,14 @@ class RunAbortError(DomainError):
         self.run_id = run_id
 
 
+class NotificationChannelNotFoundError(DomainError):
+    """Raised when a push notification channel cannot be found."""
+
+    def __init__(self, channel_id: int):
+        super().__init__(f"notification channel not found: channel_id={channel_id}")
+        self.channel_id = channel_id
+
+
 class ServiceIntegrationError(DomainError):
     """Raised when an external service integration fails."""
 

@@ -32,6 +32,8 @@ from backend.infra.repositories.task_lease_repo import TaskLeaseRepository
 logger = logging.getLogger(__name__)
 MARKET_TIMEZONE = ZoneInfo("Asia/Shanghai")
 ACCOUNT_REFRESH_JOB_ID = "account-cache:market-hours"
+ACCOUNT_REFRESH_MINUTES = "*/30"
+"""Cron minute field for the account refresh; also bounds fill-notification lag."""
 MEMORY_DREAM_JOB_ID = "memory-dream:nightly"
 SCHEDULER_MEMORY_DREAM_LEASE_KEY = "scheduler:memory-dream"
 SCHEDULER_ACCOUNT_REFRESH_LEASE_KEY = "scheduler:account-refresh"
@@ -235,8 +237,17 @@ class JobRunner:
             self.refresh_account_cache_now,
             trigger=CronTrigger(
                 day_of_week="mon-fri",
-                hour="9-15",
-                minute="0",
+                # A-shares trade 9:30-11:30 and 13:00-15:00, so the midday hour
+                # can never produce a fill; skipping it drops six upstream
+                # round-trips a day. The runs past 15:00 are kept on purpose,
+                # to catch fills that settle just after the close.
+                hour="9-11,13-15",
+                # Fills are only observable through this refresh, so this
+                # cadence is also the fill notification's worst-case lag.
+                # Half-hourly trades some of that promptness for a much smaller
+                # upstream call budget; the handler still skips non-trading
+                # days, and the runs past 15:00 catch fills settling after close.
+                minute=ACCOUNT_REFRESH_MINUTES,
                 timezone=MARKET_TIMEZONE,
             ),
             id=ACCOUNT_REFRESH_JOB_ID,

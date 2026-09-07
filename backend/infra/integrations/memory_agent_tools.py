@@ -20,6 +20,17 @@ from backend.infra.repositories.memory_repo import MemoryRepository
 from backend.llm import AbortSignal, ProviderJsonObject, ToolDefinition
 
 _RUN_STAGES = ("Run",)
+ALL_MEMORY_OPERATIONS: frozenset[MemoryOperation] = frozenset(MemoryOperation)
+AUTHORING_OPERATIONS: frozenset[MemoryOperation] = frozenset(
+    {MemoryOperation.CREATE, MemoryOperation.UPDATE}
+)
+"""What a memory producer may do.
+
+Deleting is curation: it needs a view across days to tell a duplicate from a
+lesson that simply has not recurred yet, and a run only ever sees its own
+session. Pruning therefore belongs to the nightly dream, which reads every
+report for the day before deciding.
+"""
 _MATCH_MODES = tuple(item.value for item in MemoryMatchMode)
 logger = logging.getLogger(__name__)
 
@@ -149,14 +160,22 @@ class MemoryReadTool:
 class MemoryWriteTool:
     session_factory: async_sessionmaker[AsyncSession]
     name: str = "memory_write"
+    allowed_operations: frozenset[MemoryOperation] = ALL_MEMORY_OPERATIONS
     enabled_stages: tuple[str, ...] = field(default=_RUN_STAGES)
     side_effect_level: SideEffectLevel = SideEffectLevel.WRITE
     execution_mode: str = "sequential"
     requires_market_open: bool = False
 
+    def __post_init__(self) -> None:
+        if not self.allowed_operations:
+            raise ValueError("memory_write needs at least one allowed operation")
+
     def is_write_call(self, arguments: object) -> bool:
         del arguments
         return True
+
+    def _allows(self, operation: MemoryOperation) -> bool:
+        return operation in self.allowed_operations
 
     def to_tool_definition(self) -> ToolDefinition:
         content = {
@@ -177,45 +196,62 @@ class MemoryWriteTool:
             "minimum": 1,
             "description": "update/delete 必须填写最近读取到的记忆 version。",
         }
+        branches: list[ProviderJsonObject] = []
+        if self._allows(MemoryOperation.CREATE):
+            branches.append(
+                _schema(
+                    {
+                        "operation": {"const": MemoryOperation.CREATE.value},
+                        "content": content,
+                        "reason": reason,
+                    },
+                    ["operation", "content", "reason"],
+                )
+            )
+        if self._allows(MemoryOperation.UPDATE):
+            branches.append(
+                _schema(
+                    {
+                        "operation": {"const": MemoryOperation.UPDATE.value},
+                        "memory_id": memory_id,
+                        "expected_version": expected_version,
+                        "content": content,
+                        "reason": reason,
+                    },
+                    [
+                        "operation",
+                        "memory_id",
+                        "expected_version",
+                        "content",
+                        "reason",
+                    ],
+                )
+            )
+        if self._allows(MemoryOperation.DELETE):
+            branches.append(
+                _schema(
+                    {
+                        "operation": {"const": MemoryOperation.DELETE.value},
+                        "memory_id": memory_id,
+                        "expected_version": expected_version,
+                    },
+                    ["operation", "memory_id", "expected_version"],
+                )
+            )
+        # The schema and the description have to agree with what run_for_call
+        # accepts, or the model spends turns on a branch that always fails.
+        description = (
+            "创建、修改或软删除一条长期记忆。"
+            if self._allows(MemoryOperation.DELETE)
+            else (
+                "创建或修改一条长期记忆。"
+                "删除由夜间记忆整理任务统一执行，本阶段不可删除。"
+            )
+        )
         return {
             "name": self.name,
-            "description": "创建、修改或软删除一条长期记忆。",
-            "parameters": _one_of(
-                [
-                    _schema(
-                        {
-                            "operation": {"const": MemoryOperation.CREATE.value},
-                            "content": content,
-                            "reason": reason,
-                        },
-                        ["operation", "content", "reason"],
-                    ),
-                    _schema(
-                        {
-                            "operation": {"const": MemoryOperation.UPDATE.value},
-                            "memory_id": memory_id,
-                            "expected_version": expected_version,
-                            "content": content,
-                            "reason": reason,
-                        },
-                        [
-                            "operation",
-                            "memory_id",
-                            "expected_version",
-                            "content",
-                            "reason",
-                        ],
-                    ),
-                    _schema(
-                        {
-                            "operation": {"const": MemoryOperation.DELETE.value},
-                            "memory_id": memory_id,
-                            "expected_version": expected_version,
-                        },
-                        ["operation", "memory_id", "expected_version"],
-                    ),
-                ]
-            ),
+            "description": description,
+            "parameters": _one_of(branches),
         }
 
     async def run_for_call(
@@ -237,6 +273,12 @@ class MemoryWriteTool:
             parsed_operation = MemoryOperation(operation)
         except ValueError as exc:
             raise ValueError("unsupported memory operation") from exc
+        if not self._allows(parsed_operation):
+            # Enforced here as well as in the schema: a model can emit a branch
+            # the schema never offered, and this one has side effects.
+            raise ValueError(
+                f"memory operation is not permitted here: {parsed_operation.value}"
+            )
         command = MemoryWriteCommand(
             operation=parsed_operation,
             task_id=run_id,
@@ -254,4 +296,9 @@ class MemoryWriteTool:
         raise RuntimeError("memory_write requires trusted run call context")
 
 
-__all__ = ["MemoryReadTool", "MemoryWriteTool"]
+__all__ = [
+    "ALL_MEMORY_OPERATIONS",
+    "AUTHORING_OPERATIONS",
+    "MemoryReadTool",
+    "MemoryWriteTool",
+]

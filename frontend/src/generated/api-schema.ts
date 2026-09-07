@@ -245,6 +245,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/aniu/notifications/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Notification Channels */
+        get: operations["list_notification_channels_api_aniu_notifications_channels_get"];
+        put?: never;
+        /** Create Notification Channel */
+        post: operations["create_notification_channel_api_aniu_notifications_channels_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/aniu/notifications/channels/{channel_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Notification Channel */
+        put: operations["update_notification_channel_api_aniu_notifications_channels__channel_id__put"];
+        post?: never;
+        /** Delete Notification Channel */
+        delete: operations["delete_notification_channel_api_aniu_notifications_channels__channel_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/aniu/notifications/channels/{channel_id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Test Notification Channel */
+        post: operations["test_notification_channel_api_aniu_notifications_channels__channel_id__test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/aniu/notifications/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Notification Deliveries */
+        get: operations["list_notification_deliveries_api_aniu_notifications_deliveries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/aniu/report-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Report Email Settings */
+        get: operations["get_report_email_settings_api_aniu_report_email_get"];
+        /** Save Report Email Settings */
+        put: operations["save_report_email_settings_api_aniu_report_email_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/aniu/report-email/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Email Run Report */
+        post: operations["email_run_report_api_aniu_report_email_runs__run_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/aniu/runs": {
         parameters: {
             query?: never;
@@ -779,6 +884,35 @@ export interface components {
              */
             sort_order: number;
         };
+        /** CreateNotificationChannelRequest */
+        CreateNotificationChannelRequest: {
+            /** Body Template */
+            body_template?: string | null;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "webhook" | "serverchan" | "wecom_bot";
+            /** Name */
+            name: string;
+            /** Secret */
+            secret: string;
+            /**
+             * Subscribed Events
+             * @default [
+             *       "order_placed",
+             *       "order_cancelled",
+             *       "order_filled",
+             *       "run_failed"
+             *     ]
+             */
+            subscribed_events: ("order_placed" | "order_cancelled" | "order_filled" | "run_failed")[];
+        };
         /**
          * CreateScheduleRequest
          * @description Create one market-analysis schedule.
@@ -1174,6 +1308,89 @@ export interface components {
             /** Api Key Last Four */
             api_key_last_four?: string | null;
         };
+        /** NotificationChannelResponse */
+        NotificationChannelResponse: {
+            /** Body Template */
+            body_template: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Id */
+            id: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "webhook" | "serverchan" | "wecom_bot";
+            /** Name */
+            name: string;
+            /** Subscribed Events */
+            subscribed_events: ("order_placed" | "order_cancelled" | "order_filled" | "run_failed")[];
+            /** Target Hint */
+            target_hint: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** NotificationDeliveryPageResponse */
+        NotificationDeliveryPageResponse: {
+            /** Items */
+            items: components["schemas"]["NotificationDeliveryResponse"][];
+            /** Total */
+            total: number;
+        };
+        /** NotificationDeliveryResponse */
+        NotificationDeliveryResponse: {
+            /** Channel Id */
+            channel_id: number | null;
+            /**
+             * Channel Kind
+             * @enum {string}
+             */
+            channel_kind: "webhook" | "serverchan" | "wecom_bot";
+            /** Channel Name */
+            channel_name: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Error Message */
+            error_message: string | null;
+            /**
+             * Event Kind
+             * @enum {string}
+             */
+            event_kind: "order_placed" | "order_cancelled" | "order_filled" | "run_failed";
+            /** Event Label */
+            event_label: string;
+            /** Id */
+            id: number;
+            /** Is Test */
+            is_test: boolean;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "delivered" | "failed";
+            /** Title */
+            title: string;
+        };
+        /** NotificationTestResultResponse */
+        NotificationTestResultResponse: {
+            /** Channel Id */
+            channel_id: number;
+            /** Delivered */
+            delivered: boolean;
+            /** Message */
+            message: string;
+        };
         /** OpenAICompatibilityFields */
         OpenAICompatibilityFields: {
             /** @default auto */
@@ -1258,6 +1475,34 @@ export interface components {
             summary: string;
             /** Tool Name */
             tool_name: string;
+        };
+        /** ReportEmailSettingsResponse */
+        ReportEmailSettingsResponse: {
+            /** Api Key Configured */
+            api_key_configured: boolean;
+            /** Api Key Last Four */
+            api_key_last_four: string | null;
+            /** Configured */
+            configured: boolean;
+            /** Created At */
+            created_at: string | null;
+            /** Enabled */
+            enabled: boolean;
+            /** Recipient */
+            recipient: string;
+            /** Sender */
+            sender: string;
+            /** Updated At */
+            updated_at: string | null;
+        };
+        /** ReportMailResultResponse */
+        ReportMailResultResponse: {
+            /** Delivered */
+            delivered: boolean;
+            /** Message */
+            message: string;
+            /** Run Id */
+            run_id: number;
         };
         /** RunDetailResponse */
         RunDetailResponse: {
@@ -1375,6 +1620,17 @@ export interface components {
             schema_version: 3;
             /** Stages */
             stages: components["schemas"]["TraceStageResponse"][];
+        };
+        /** SaveReportEmailSettingsRequest */
+        SaveReportEmailSettingsRequest: {
+            /** Api Key */
+            api_key?: string | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Recipient */
+            recipient?: string | null;
+            /** Sender */
+            sender?: string | null;
         };
         /** SelectedModelRequest */
         SelectedModelRequest: {
@@ -1754,6 +2010,19 @@ export interface components {
              * @default 0
              */
             sort_order: number;
+        };
+        /** UpdateNotificationChannelRequest */
+        UpdateNotificationChannelRequest: {
+            /** Body Template */
+            body_template?: string | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Name */
+            name?: string | null;
+            /** Secret */
+            secret?: string | null;
+            /** Subscribed Events */
+            subscribed_events?: ("order_placed" | "order_cancelled" | "order_filled" | "run_failed")[] | null;
         };
         /** UpdateScheduleRequest */
         UpdateScheduleRequest: {
@@ -2780,6 +3049,495 @@ export interface operations {
             };
             /** @description Request validation failed */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_notification_channels_api_aniu_notifications_channels_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationChannelResponse"][];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_notification_channel_api_aniu_notifications_channels_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateNotificationChannelRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationChannelResponse"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_notification_channel_api_aniu_notifications_channels__channel_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channel_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateNotificationChannelRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationChannelResponse"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_notification_channel_api_aniu_notifications_channels__channel_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channel_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    test_notification_channel_api_aniu_notifications_channels__channel_id__test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channel_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationTestResultResponse"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_notification_deliveries_api_aniu_notifications_deliveries_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationDeliveryPageResponse"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_report_email_settings_api_aniu_report_email_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportEmailSettingsResponse"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    save_report_email_settings_api_aniu_report_email_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveReportEmailSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportEmailSettingsResponse"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    email_run_report_api_aniu_report_email_runs__run_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportMailResultResponse"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

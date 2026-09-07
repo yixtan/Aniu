@@ -215,3 +215,82 @@ def test_logging_config_rejects_symbolic_link_target(tmp_path: Path) -> None:
 
     assert "rotating_file" not in config["handlers"]
     assert target.read_text(encoding="utf-8") == "unchanged"
+
+
+SERVERCHAN_KEY = "SCT999999FAKEKEYFORTESTING"
+WECOM_KEY = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+
+
+def test_redacts_a_credential_carried_in_a_url_path() -> None:
+    """Server酱 puts its SendKey in the path, where header rules cannot see it."""
+
+    text = f"https://sctapi.ftqq.com/{SERVERCHAN_KEY}.send"
+
+    assert redact_text(text) == "https://sctapi.ftqq.com/[REDACTED].send"
+
+
+def test_redacts_a_credential_carried_in_a_key_query_parameter() -> None:
+    """企业微信 group bots authenticate with a bare `key` query parameter."""
+
+    text = f"https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key={WECOM_KEY}"
+
+    assert redact_text(text) == (
+        "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=[REDACTED]"
+    )
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "https://api.example.com/v1/quotes?symbol=600519",
+        "https://sctapi.ftqq.com/docs",
+        "http://127.0.0.1:8125/hook",
+        "GET /api/aniu/runs 200",
+    ],
+)
+def test_ordinary_urls_are_left_alone(text: str) -> None:
+    assert redact_text(text) == text
+
+
+def test_redacts_a_url_object_passed_as_a_log_argument() -> None:
+    """httpx logs request.url as an httpx.URL, not a str."""
+
+    import httpx
+
+    record = _record(
+        name="httpx",
+        message='HTTP Request: %s %s "%s %d %s"',
+        args=(
+            "POST",
+            httpx.URL(f"https://sctapi.ftqq.com/{SERVERCHAN_KEY}.send"),
+            "HTTP/1.1",
+            200,
+            "OK",
+        ),
+    )
+
+    assert RedactionFilter().filter(record) is True
+    assert SERVERCHAN_KEY not in record.getMessage()
+    assert "[REDACTED]" in record.getMessage()
+
+
+def test_redacts_a_preformatted_message_without_args() -> None:
+    """A message built with an f-string carries its own secret."""
+
+    record = _record(message=f"posting to https://sctapi.ftqq.com/{SERVERCHAN_KEY}.send")
+
+    assert RedactionFilter().filter(record) is True
+    assert SERVERCHAN_KEY not in record.getMessage()
+
+
+def test_non_string_scalars_keep_their_type_through_redaction() -> None:
+    record = _record(
+        message="run finished",
+        extra={"run_id": 42, "duration_ms": 1.5, "ok": True, "missing": None},
+    )
+
+    assert RedactionFilter().filter(record) is True
+    assert record.run_id == 42
+    assert record.duration_ms == 1.5
+    assert record.ok is True
+    assert record.missing is None

@@ -17,6 +17,7 @@ from backend.infra.integrations.aggregate_stock_agent_tools import (
 )
 from backend.infra.integrations.kline_agent_tool import QueryKlineTool
 from backend.infra.integrations.memory_agent_tools import (
+    AUTHORING_OPERATIONS,
     MemoryReadTool,
     MemoryWriteTool,
 )
@@ -55,7 +56,12 @@ class AgentRuntimeFactory:
         registry = ToolRegistry()
         if self._session_factory is not None:
             registry.register(MemoryReadTool(self._session_factory))
-            registry.register(MemoryWriteTool(self._session_factory))
+            registry.register(
+                MemoryWriteTool(
+                    self._session_factory,
+                    allowed_operations=AUTHORING_OPERATIONS,
+                )
+            )
         if self._public_stock_data is not None:
             register_public_stock_tools(registry, service=self._public_stock_data)
             registry.register(QueryKlineTool(public_service=self._public_stock_data))

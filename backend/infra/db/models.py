@@ -532,3 +532,108 @@ class AuthSessionModel(Base):
     last_seen_at: Mapped[str] = mapped_column(Text, nullable=False, default=utc_now_iso)
     revoked_at: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[str] = mapped_column(Text, nullable=False, default=utc_now_iso)
+
+
+class NotificationChannelModel(Base):
+    """One configured push target; the endpoint lives in ``secret_store``."""
+
+    __tablename__ = "notification_channels"
+    __table_args__ = (
+        UniqueConstraint("name", name="uq_notification_channels_name"),
+        Index("idx_notification_channels_enabled", "enabled"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    subscribed_events: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    body_template: Mapped[str | None] = mapped_column(Text, nullable=True)
+    target_hint: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    created_at: Mapped[str] = mapped_column(Text, nullable=False, default=utc_now_iso)
+    updated_at: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default=utc_now_iso,
+        onupdate=utc_now_iso,
+    )
+
+
+class NotificationFillWatermarkModel(Base):
+    """Filled quantity already announced for one upstream order.
+
+    The account order cache is deleted and rebuilt on every refresh, so the
+    watermark cannot live there or every refresh would re-notify the same fill.
+    """
+
+    __tablename__ = "notification_fill_watermarks"
+    __table_args__ = (
+        UniqueConstraint("order_id", name="uq_notification_fill_watermarks_order"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    order_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    announced_quantity: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    updated_at: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default=utc_now_iso,
+        onupdate=utc_now_iso,
+    )
+
+
+class NotificationDeliveryModel(Base):
+    """One recorded push attempt.
+
+    Channel name and kind are snapshotted instead of joined so the history
+    survives deletion of the channel it went through; ``channel_id`` is kept
+    only as a weak reference and carries no foreign key.
+    """
+
+    __tablename__ = "notification_deliveries"
+    __table_args__ = (
+        Index("idx_notification_deliveries_created", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    channel_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    channel_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    channel_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    event_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_test: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    created_at: Mapped[str] = mapped_column(Text, nullable=False, default=utc_now_iso)
+
+
+class EmailDeliverySettingsModel(Base):
+    """Singleton run-report email configuration (always primary key 1)."""
+
+    __tablename__ = "email_delivery_settings"
+    __table_args__ = (
+        CheckConstraint("id = 1", name="ck_email_delivery_settings_singleton"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    sender: Mapped[str] = mapped_column(String(254), nullable=False)
+    recipient: Mapped[str] = mapped_column(String(254), nullable=False)
+    enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    api_key_last_four: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    created_at: Mapped[str] = mapped_column(Text, nullable=False, default=utc_now_iso)
+    updated_at: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default=utc_now_iso,
+        onupdate=utc_now_iso,
+    )

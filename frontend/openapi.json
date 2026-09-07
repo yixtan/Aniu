@@ -536,6 +536,76 @@
         "title": "CreateModelChannelWithModelsRequest",
         "type": "object"
       },
+      "CreateNotificationChannelRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "body_template": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body Template"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "kind": {
+            "enum": [
+              "webhook",
+              "serverchan",
+              "wecom_bot"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "secret": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Secret",
+            "type": "string"
+          },
+          "subscribed_events": {
+            "default": [
+              "order_placed",
+              "order_cancelled",
+              "order_filled",
+              "run_failed"
+            ],
+            "items": {
+              "enum": [
+                "order_placed",
+                "order_cancelled",
+                "order_filled",
+                "run_failed"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Subscribed Events",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "secret"
+        ],
+        "title": "CreateNotificationChannelRequest",
+        "type": "object"
+      },
       "CreateScheduleRequest": {
         "additionalProperties": false,
         "description": "Create one market-analysis schedule.",
@@ -1605,6 +1675,223 @@
         "title": "MxSettingsResponse",
         "type": "object"
       },
+      "NotificationChannelResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "body_template": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body Template"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "webhook",
+              "serverchan",
+              "wecom_bot"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "subscribed_events": {
+            "items": {
+              "enum": [
+                "order_placed",
+                "order_cancelled",
+                "order_filled",
+                "run_failed"
+              ],
+              "type": "string"
+            },
+            "title": "Subscribed Events",
+            "type": "array"
+          },
+          "target_hint": {
+            "title": "Target Hint",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "enabled",
+          "subscribed_events",
+          "body_template",
+          "target_hint",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "NotificationChannelResponse",
+        "type": "object"
+      },
+      "NotificationDeliveryPageResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NotificationDeliveryResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "NotificationDeliveryPageResponse",
+        "type": "object"
+      },
+      "NotificationDeliveryResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "channel_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Id"
+          },
+          "channel_kind": {
+            "enum": [
+              "webhook",
+              "serverchan",
+              "wecom_bot"
+            ],
+            "title": "Channel Kind",
+            "type": "string"
+          },
+          "channel_name": {
+            "title": "Channel Name",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "event_kind": {
+            "enum": [
+              "order_placed",
+              "order_cancelled",
+              "order_filled",
+              "run_failed"
+            ],
+            "title": "Event Kind",
+            "type": "string"
+          },
+          "event_label": {
+            "title": "Event Label",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_test": {
+            "title": "Is Test",
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "delivered",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "channel_id",
+          "channel_name",
+          "channel_kind",
+          "event_kind",
+          "event_label",
+          "title",
+          "status",
+          "error_message",
+          "is_test",
+          "created_at"
+        ],
+        "title": "NotificationDeliveryResponse",
+        "type": "object"
+      },
+      "NotificationTestResultResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "channel_id": {
+            "title": "Channel Id",
+            "type": "integer"
+          },
+          "delivered": {
+            "title": "Delivered",
+            "type": "boolean"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel_id",
+          "delivered",
+          "message"
+        ],
+        "title": "NotificationTestResultResponse",
+        "type": "object"
+      },
       "OpenAICompatibilityFields": {
         "additionalProperties": false,
         "properties": {
@@ -1881,6 +2168,102 @@
         "title": "PublicStockToolResponse",
         "type": "object"
       },
+      "ReportEmailSettingsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "api_key_configured": {
+            "title": "Api Key Configured",
+            "type": "boolean"
+          },
+          "api_key_last_four": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key Last Four"
+          },
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "recipient": {
+            "title": "Recipient",
+            "type": "string"
+          },
+          "sender": {
+            "title": "Sender",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "configured",
+          "enabled",
+          "sender",
+          "recipient",
+          "api_key_configured",
+          "api_key_last_four",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ReportEmailSettingsResponse",
+        "type": "object"
+      },
+      "ReportMailResultResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "delivered": {
+            "title": "Delivered",
+            "type": "boolean"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_id",
+          "delivered",
+          "message"
+        ],
+        "title": "ReportMailResultResponse",
+        "type": "object"
+      },
       "RunDetailResponse": {
         "additionalProperties": false,
         "properties": {
@@ -2141,6 +2524,60 @@
           "stages"
         ],
         "title": "RunTraceResponse",
+        "type": "object"
+      },
+      "SaveReportEmailSettingsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "api_key": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "recipient": {
+            "anyOf": [
+              {
+                "maxLength": 254,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recipient"
+          },
+          "sender": {
+            "anyOf": [
+              {
+                "maxLength": 254,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sender"
+          }
+        },
+        "title": "SaveReportEmailSettingsRequest",
         "type": "object"
       },
       "SelectedModelRequest": {
@@ -3392,6 +3829,82 @@
           "expected_revision"
         ],
         "title": "UpdateModelChannelWithModelsRequest",
+        "type": "object"
+      },
+      "UpdateNotificationChannelRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "body_template": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body Template"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "secret": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secret"
+          },
+          "subscribed_events": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "order_placed",
+                    "order_cancelled",
+                    "order_filled",
+                    "run_failed"
+                  ],
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subscribed Events"
+          }
+        },
+        "title": "UpdateNotificationChannelRequest",
         "type": "object"
       },
       "UpdateScheduleRequest": {
@@ -4823,6 +5336,650 @@
         "summary": "Get Memory Dream",
         "tags": [
           "MemoryDreams"
+        ]
+      }
+    },
+    "/api/aniu/notifications/channels": {
+      "get": {
+        "operationId": "list_notification_channels_api_aniu_notifications_channels_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/NotificationChannelResponse"
+                  },
+                  "title": "Response List Notification Channels Api Aniu Notifications Channels Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed"
+          }
+        },
+        "security": [
+          {
+            "AniuSessionCookie": []
+          }
+        ],
+        "summary": "List Notification Channels",
+        "tags": [
+          "Notifications"
+        ]
+      },
+      "post": {
+        "operationId": "create_notification_channel_api_aniu_notifications_channels_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateNotificationChannelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationChannelResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed"
+          }
+        },
+        "security": [
+          {
+            "AniuSessionCookie": []
+          }
+        ],
+        "summary": "Create Notification Channel",
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/api/aniu/notifications/channels/{channel_id}": {
+      "delete": {
+        "operationId": "delete_notification_channel_api_aniu_notifications_channels__channel_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "channel_id",
+            "required": true,
+            "schema": {
+              "title": "Channel Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed"
+          }
+        },
+        "security": [
+          {
+            "AniuSessionCookie": []
+          }
+        ],
+        "summary": "Delete Notification Channel",
+        "tags": [
+          "Notifications"
+        ]
+      },
+      "put": {
+        "operationId": "update_notification_channel_api_aniu_notifications_channels__channel_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "channel_id",
+            "required": true,
+            "schema": {
+              "title": "Channel Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateNotificationChannelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationChannelResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed"
+          }
+        },
+        "security": [
+          {
+            "AniuSessionCookie": []
+          }
+        ],
+        "summary": "Update Notification Channel",
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/api/aniu/notifications/channels/{channel_id}/test": {
+      "post": {
+        "operationId": "test_notification_channel_api_aniu_notifications_channels__channel_id__test_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "channel_id",
+            "required": true,
+            "schema": {
+              "title": "Channel Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationTestResultResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed"
+          }
+        },
+        "security": [
+          {
+            "AniuSessionCookie": []
+          }
+        ],
+        "summary": "Test Notification Channel",
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/api/aniu/notifications/deliveries": {
+      "get": {
+        "operationId": "list_notification_deliveries_api_aniu_notifications_deliveries_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationDeliveryPageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed"
+          }
+        },
+        "security": [
+          {
+            "AniuSessionCookie": []
+          }
+        ],
+        "summary": "List Notification Deliveries",
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/api/aniu/report-email": {
+      "get": {
+        "operationId": "get_report_email_settings_api_aniu_report_email_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportEmailSettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed"
+          }
+        },
+        "security": [
+          {
+            "AniuSessionCookie": []
+          }
+        ],
+        "summary": "Get Report Email Settings",
+        "tags": [
+          "Report email"
+        ]
+      },
+      "put": {
+        "operationId": "save_report_email_settings_api_aniu_report_email_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveReportEmailSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportEmailSettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed"
+          }
+        },
+        "security": [
+          {
+            "AniuSessionCookie": []
+          }
+        ],
+        "summary": "Save Report Email Settings",
+        "tags": [
+          "Report email"
+        ]
+      }
+    },
+    "/api/aniu/report-email/runs/{run_id}": {
+      "post": {
+        "operationId": "email_run_report_api_aniu_report_email_runs__run_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportMailResultResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          }
+        },
+        "security": [
+          {
+            "AniuSessionCookie": []
+          }
+        ],
+        "summary": "Email Run Report",
+        "tags": [
+          "Report email"
         ]
       }
     },

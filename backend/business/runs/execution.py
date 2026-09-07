@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from backend.business.runs import StrategyRun, StrategySnapshot
+from backend.business.shared.trading import is_successful_trade_call
 from backend.llm import AbortSignal
 
 ToolLoopEventSink = Callable[[str, object, dict[str, object]], Awaitable[None]]
@@ -43,22 +44,6 @@ def _summarize_text(text: str) -> str:
     return text.strip()[:160]
 
 
-def _is_successful_trade_order(activity: dict[str, object]) -> bool:
-    if activity.get("status") != "ok" or activity.get("tool_name") != "trade":
-        return False
-    content = activity.get("content")
-    if not isinstance(content, dict):
-        return False
-    data = content.get("data")
-    nested = data if isinstance(data, dict) else {}
-    return (
-        bool(content.get("success"))
-        or str(content.get("code") or "") == "200"
-        or bool(content.get("orderId"))
-        or bool(nested.get("orderId"))
-    )
-
-
 @dataclass(frozen=True, slots=True)
 class RunReport:
     """Markdown result and raw evidence produced by the Run agent."""
@@ -76,7 +61,11 @@ class RunReport:
             self.content_key: self.content,
             **_summarize_tool_activity(self.tool_activity),
             "trade_count": sum(
-                _is_successful_trade_order(dict(activity))
+                is_successful_trade_call(
+                    tool_name=str(activity.get("tool_name") or ""),
+                    status=str(activity.get("status") or ""),
+                    content=activity.get("content"),
+                )
                 for activity in self.tool_activity
             ),
             "tool_activity": [dict(item) for item in self.tool_activity],

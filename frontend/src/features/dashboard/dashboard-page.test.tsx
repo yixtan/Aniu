@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -196,9 +196,19 @@ describe("DashboardPage", () => {
 
     expect(await screen.findByText("投资总览")).toBeInTheDocument();
     expect((await screen.findAllByText("浦发银行")).length).toBeGreaterThan(0);
-    expect(screen.getByText("当日盈亏")).toBeInTheDocument();
     expect(screen.getByText("¥150.50")).toBeInTheDocument();
     expect(screen.getByText("买入")).toBeInTheDocument();
+
+    // Cost and account share are per holding, so scope the assertions to the
+    // positions table rather than the whole page.
+    const positionsTable = within(screen.getAllByRole("table")[0]!);
+    expect(positionsTable.getByText("现价/成本")).toBeInTheDocument();
+    expect(positionsTable.getByText("持仓市值")).toBeInTheDocument();
+    expect(positionsTable.getByText("当日盈亏")).toBeInTheDocument();
+    expect(positionsTable.getByText("¥9.00")).toBeInTheDocument();
+    expect(positionsTable.getByText("+11.11%")).toBeInTheDocument();
+    expect(positionsTable.getByText("+1.53%")).toBeInTheDocument();
+    expect(positionsTable.getByText("8.33%")).toBeInTheDocument();
 
     const refreshTimePattern = /^最近刷新：\d{2}-\d{2} \d{2}:\d{2}$/;
     const refreshTimeClasses = [

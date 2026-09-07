@@ -1,9 +1,53 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { toast } from "sonner";
 
 import type { RunDetail, TraceStage } from "@/lib/api-types";
 
 import { StageTimeline } from "./stage-timeline";
+
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+
+const api = vi.hoisted(() => ({ emailRunReport: vi.fn() }));
+vi.mock("@/lib/api", () => api);
+
+const MARKDOWN_REPORT = "## 运行报告\n\n- 买入 600519";
+
+/** The Run stage carries the Markdown the Summary stage later turns into HTML. */
+function runStageWithReport(): TraceStage {
+  return {
+    ...runStage,
+    steps: [
+      {
+        step_id: "result",
+        type: "result",
+        title: "生成 Markdown 运行报告",
+        status: "completed",
+        summary: "调用工具 3 次",
+        content: MARKDOWN_REPORT,
+        tool_call: null,
+        started_at: null,
+        ended_at: null,
+      },
+    ],
+  };
+}
+
+function mockClipboard() {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText },
+  });
+  return writeText;
+}
+
+afterEach(() => {
+  vi.clearAllMocks();
+  Reflect.deleteProperty(navigator, "clipboard");
+});
 
 const runStage: TraceStage = {
   stage_id: "run:na",
@@ -51,8 +95,14 @@ function makeRun(overrides: Partial<RunDetail> = {}): RunDetail {
 }
 
 function renderTimeline(run: RunDetail) {
+  // The email button issues a mutation, so the tree needs a query client.
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
   return render(
-    <StageTimeline run={run} now={new Date("2026-07-25T10:00:30Z")} liveStepDeltaByStepId={{}} />,
+    <QueryClientProvider client={queryClient}>
+      <StageTimeline run={run} now={new Date("2026-07-25T10:00:30Z")} liveStepDeltaByStepId={{}} />
+    </QueryClientProvider>,
   );
 }
 
@@ -297,5 +347,92 @@ describe("StageTimeline", () => {
 
     expect(screen.getByText("已中止")).toBeInTheDocument();
     expect(screen.queryByText("执行中")).toBeNull();
+  });
+
+  it("copies the Markdown source rather than the rendered HTML", async () => {
+    const writeText = mockClipboard();
+    renderTimeline(
+      makeRun({
+        summary: "<section><h2>执行总结</h2></section>",
+        summary_render_mode: "html",
+        trace: {
+          schema_version: 3,
+          event_seq: 4,
+          current_stage_id: null,
+          stages: [runStageWithReport(), summaryStage],
+        },
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /复制 Markdown/ }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(MARKDOWN_REPORT));
+    expect(await screen.findByRole("button", { name: /已复制/ })).toBeInTheDocument();
+  });
+
+  it("falls back to the summary when the report was never rendered to HTML", async () => {
+    const writeText = mockClipboard();
+    renderTimeline(makeRun({ summary: MARKDOWN_REPORT, summary_render_mode: "markdown" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /复制 Markdown/ }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(MARKDOWN_REPORT));
+  });
+
+  it("hides the button when the page has no Clipboard API", () => {
+    // Plain HTTP is not a secure context, so navigator.clipboard is absent.
+    renderTimeline(makeRun({ summary: MARKDOWN_REPORT, summary_render_mode: "markdown" }));
+
+    expect(screen.queryByRole("button", { name: /复制 Markdown/ })).toBeNull();
+  });
+
+  it("reports a refused clipboard write", async () => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: vi.fn().mockRejectedValue(new Error("文档未获得焦点")) },
+    });
+    renderTimeline(makeRun({ summary: MARKDOWN_REPORT, summary_render_mode: "markdown" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /复制 Markdown/ }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("文档未获得焦点"));
+  });
+
+  it("offers no copy button when an HTML-only report has no Markdown source", () => {
+    mockClipboard();
+    renderTimeline(
+      makeRun({ summary: "<section><h2>执行总结</h2></section>", summary_render_mode: "html" }),
+    );
+
+    expect(screen.queryByRole("button", { name: /复制 Markdown/ })).toBeNull();
+  });
+
+  it("mails the report and reports what the server said", async () => {
+    api.emailRunReport.mockResolvedValue({
+      run_id: 20260725101,
+      delivered: true,
+      message: "报告已发送至 me@example.com",
+    });
+    renderTimeline(makeRun({ summary: MARKDOWN_REPORT, summary_render_mode: "markdown" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /发送到邮箱/ }));
+
+    await waitFor(() => expect(api.emailRunReport).toHaveBeenCalledWith(20260725101));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("报告已发送至 me@example.com"));
+  });
+
+  it("surfaces a refused delivery as an error", async () => {
+    api.emailRunReport.mockResolvedValue({
+      run_id: 20260725101,
+      delivered: false,
+      message: "发送失败：邮件服务拒绝了请求（HTTP 403）",
+    });
+    renderTimeline(makeRun({ summary: MARKDOWN_REPORT, summary_render_mode: "markdown" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /发送到邮箱/ }));
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith("发送失败：邮件服务拒绝了请求（HTTP 403）"),
+    );
   });
 });

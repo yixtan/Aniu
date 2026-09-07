@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -34,6 +34,7 @@ from backend.infra.repositories import (
     SettingsRepository,
 )
 from backend.infra.scheduler import JobRunner
+from backend.infra.scheduler.job_runner import ACCOUNT_REFRESH_JOB_ID
 from backend.stock_api.mx import MxMoniClient
 
 
@@ -332,3 +333,46 @@ async def test_job_runner_refreshes_account_cache_on_trading_day(
     ]
     assert snapshot is not None
     assert snapshot.total_asset == 7800.0
+
+
+@pytest.mark.asyncio
+async def test_account_refresh_runs_every_thirty_minutes_through_the_session(
+    session_factory,
+) -> None:
+    """Fills are only visible via this refresh, so its cadence is the alert lag."""
+
+    runner = _make_runner(session_factory)
+    await runner.sync_account_refresh_job()
+    job = runner._scheduler.get_job(ACCOUNT_REFRESH_JOB_ID)
+    await runner.shutdown()
+
+    assert job is not None
+    fields = {field.name: str(field) for field in job.trigger.fields}
+    assert fields["minute"] == "*/30"
+    assert fields["hour"] == "9-11,13-15"
+    assert fields["day_of_week"] == "mon-fri"
+
+
+@pytest.mark.asyncio
+async def test_account_refresh_fire_times_bound_the_fill_notification_lag(
+    session_factory,
+) -> None:
+    runner = _make_runner(session_factory)
+    await runner.sync_account_refresh_job()
+    job = runner._scheduler.get_job(ACCOUNT_REFRESH_JOB_ID)
+    await runner.shutdown()
+
+    assert job is not None
+    # Walk a mid-session Thursday and confirm the cadence stays even.
+    moment = datetime(2026, 7, 30, 13, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
+    fire_times = []
+    for _ in range(4):
+        moment = job.trigger.get_next_fire_time(None, moment)
+        fire_times.append(moment.astimezone(ZoneInfo("Asia/Shanghai")))
+        moment = moment + timedelta(seconds=1)
+
+    gaps = {
+        int((later - earlier).total_seconds() // 60)
+        for earlier, later in zip(fire_times, fire_times[1:], strict=False)
+    }
+    assert gaps == {30}

@@ -101,6 +101,13 @@ SENSITIVE_ASSIGNMENT_PREFIX = (
     rf"(?P<key_quote>(?:[\\]?[\"'])?)(?P<key>\b(?:{TEXT_SENSITIVE_KEY_PATTERN})\b)"
     rf"(?P=key_quote)(?P<separator>\s*[:=]\s*)"
 )
+# Push providers carry their credential inside the URL itself, where the header
+# and `key: value` rules cannot see it: Server酱 uses a path segment ending in
+# `.send`, 企业微信 group bots use a bare `key` query parameter.
+URL_PATH_CREDENTIAL_PATTERN = re.compile(
+    r"(?i)(https?://[^\s/]+/)[A-Za-z0-9_-]{12,}(\.send\b)"
+)
+URL_KEY_QUERY_PATTERN = re.compile(r"(?i)([?&]key=)[^&\s\"'\\]+")
 AUTHORIZATION_HEADER_PATTERN = re.compile(
     r"(?i)\b(authorization)(\s*[:=]\s*)([^\r\n,]+)"
 )
@@ -180,6 +187,8 @@ def redact_text(value: str) -> str:
     )
     redacted = _redact_sensitive_assignments(redacted)
     redacted = BEARER_PATTERN.sub(f"Bearer {REDACTED}", redacted)
+    redacted = URL_PATH_CREDENTIAL_PATTERN.sub(rf"\1{REDACTED}\2", redacted)
+    redacted = URL_KEY_QUERY_PATTERN.sub(rf"\1{REDACTED}", redacted)
     return OPENAI_KEY_PATTERN.sub(REDACTED, redacted)
 
 
@@ -235,7 +244,15 @@ def redact_value(value: object, *, key: object | None = None) -> object:
         return [redact_value(item) for item in value]
     if isinstance(value, set):
         return [redact_value(item) for item in sorted(value, key=str)]
-    return value
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    # Anything else reaches the log through its __str__ — httpx passes an
+    # httpx.URL, whose text can carry a credential in the path or query. Redact
+    # that text form, and keep the original object when nothing was removed so
+    # ordinary values keep their type.
+    text = str(value)
+    redacted_text = redact_text(text)
+    return redacted_text if redacted_text != text else value
 
 
 class RedactionFilter(logging.Filter):
@@ -244,6 +261,12 @@ class RedactionFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         if not isinstance(record.msg, str):
             record.msg = redact_value(record.msg)
+        elif not record.args:
+            # With no args the message is final text rather than a format
+            # string, so a secret interpolated by an f-string lives here and
+            # nowhere else. Format strings must be left alone: redacting them
+            # would eat the `%s` placeholders their args still need.
+            record.msg = redact_text(record.msg)
         if isinstance(record.args, dict):
             record.args = {
                 key: redact_value(value, key=key) for key, value in record.args.items()

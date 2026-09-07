@@ -15,6 +15,7 @@ from backend.business.shared import (
     ConcurrentRunError,
     ConfigurationConflictError,
     DomainError,
+    NotificationChannelNotFoundError,
     RunAbortError,
     RunDeletionNotAllowedError,
     RunNotFoundError,
@@ -62,7 +63,14 @@ async def _domain_error_handler(request: Request, exc: DomainError) -> JSONRespo
         status_code = status.HTTP_401_UNAUTHORIZED
     elif isinstance(exc, ForbiddenError):
         status_code = status.HTTP_403_FORBIDDEN
-    elif isinstance(exc, (RunNotFoundError, ScheduleNotFoundError)):
+    elif isinstance(
+        exc,
+        (
+            NotificationChannelNotFoundError,
+            RunNotFoundError,
+            ScheduleNotFoundError,
+        ),
+    ):
         status_code = status.HTTP_404_NOT_FOUND
     elif isinstance(
         exc,

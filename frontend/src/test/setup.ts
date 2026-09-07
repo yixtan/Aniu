@@ -60,6 +60,18 @@ if (!HTMLElement.prototype.scrollIntoView) {
   });
 }
 
+// jsdom ships no ResizeObserver, which Radix measures triggers with.
+if (!("ResizeObserver" in globalThis)) {
+  Object.defineProperty(globalThis, "ResizeObserver", {
+    configurable: true,
+    value: class {
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    },
+  });
+}
+
 afterEach(() => {
   cleanup();
 });

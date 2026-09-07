@@ -8,8 +8,11 @@ import type {
   MemoryDreamDetail,
   MemoryDreamList,
   CreateModelChannelPayload,
+  CreateNotificationChannelPayload,
   CreateSchedulePayload,
   UpdateModelChannelPayload,
+  SaveReportEmailSettingsPayload,
+  UpdateNotificationChannelPayload,
   UpdateSchedulePayload,
   UpdateSettingsPayload,
   StockApiLogToolSource,
@@ -426,6 +429,67 @@ export async function updateSchedule(scheduleId: number, payload: UpdateSchedule
   const result = await openapiClient.PUT("/api/aniu/schedules/{schedule_id}", {
     params: { path: { schedule_id: scheduleId } },
     body: payload,
+  });
+  return getResponseData(result);
+}
+
+export async function listNotificationChannels() {
+  const result = await openapiClient.GET("/api/aniu/notifications/channels");
+  return getResponseData(result);
+}
+
+export async function createNotificationChannel(payload: CreateNotificationChannelPayload) {
+  const result = await openapiClient.POST("/api/aniu/notifications/channels", {
+    body: payload,
+  });
+  return getResponseData(result);
+}
+
+export async function updateNotificationChannel(
+  channelId: number,
+  payload: UpdateNotificationChannelPayload,
+) {
+  const result = await openapiClient.PUT("/api/aniu/notifications/channels/{channel_id}", {
+    params: { path: { channel_id: channelId } },
+    body: payload,
+  });
+  return getResponseData(result);
+}
+
+export async function deleteNotificationChannel(channelId: number) {
+  const result = await openapiClient.DELETE("/api/aniu/notifications/channels/{channel_id}", {
+    params: { path: { channel_id: channelId } },
+  });
+  return getResponseData(result);
+}
+
+export async function testNotificationChannel(channelId: number) {
+  const result = await openapiClient.POST("/api/aniu/notifications/channels/{channel_id}/test", {
+    params: { path: { channel_id: channelId } },
+  });
+  return getResponseData(result);
+}
+
+export async function listNotificationDeliveries({ limit = 20, offset = 0 } = {}) {
+  const result = await openapiClient.GET("/api/aniu/notifications/deliveries", {
+    params: { query: { limit, offset } },
+  });
+  return getResponseData(result);
+}
+
+export async function getReportEmailSettings() {
+  const result = await openapiClient.GET("/api/aniu/report-email");
+  return getResponseData(result);
+}
+
+export async function saveReportEmailSettings(payload: SaveReportEmailSettingsPayload) {
+  const result = await openapiClient.PUT("/api/aniu/report-email", { body: payload });
+  return getResponseData(result);
+}
+
+export async function emailRunReport(runId: number) {
+  const result = await openapiClient.POST("/api/aniu/report-email/runs/{run_id}", {
+    params: { path: { run_id: runId } },
   });
   return getResponseData(result);
 }
