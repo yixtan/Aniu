@@ -200,12 +200,13 @@ describe("DashboardPage", () => {
     expect(screen.getByText("¥150.50")).toBeInTheDocument();
     expect(screen.getByText("买入")).toBeInTheDocument();
 
-    // Cost, unrealised profit and account share are derived per holding, so
-    // scope the assertions to the positions table rather than the whole page.
+    // Cost and account share are per holding, so scope the assertions to the
+    // positions table rather than the whole page.
     const positionsTable = within(screen.getAllByRole("table")[0]!);
     expect(positionsTable.getByText("现价/成本")).toBeInTheDocument();
+    expect(positionsTable.getByText("市值/盈亏比")).toBeInTheDocument();
     expect(positionsTable.getByText("¥9.00")).toBeInTheDocument();
-    expect(positionsTable.getByText("¥1,000.00")).toBeInTheDocument();
+    expect(positionsTable.getByText("+11.11%")).toBeInTheDocument();
     expect(positionsTable.getByText("+1.53%")).toBeInTheDocument();
     expect(positionsTable.getByText("8.33%")).toBeInTheDocument();
 

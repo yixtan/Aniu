@@ -527,11 +527,6 @@ function AccountOverview({
 
 type Position = DashboardData["positions"][number];
 
-/** Unrealised profit on one holding, in currency. */
-function holdingProfit(position: Position) {
-  return (position.current_price - position.avg_cost) * position.quantity;
-}
-
 /** Today's move as a ratio of yesterday's closing value for this holding.
  *
  * The upstream portfolio feed has no such field, so it is derived from the
@@ -599,10 +594,10 @@ function PositionTable({
             <Table className="table-fixed" containerClassName="overflow-visible">
               <TableHeader className="bg-card sticky top-0 z-10">
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-[16%] px-1.5 text-center">股票</TableHead>
-                  <TableHead className="w-[11%] px-1.5 text-center">数量</TableHead>
-                  <TableHead className="w-[16%] px-1.5 text-center">现价/成本</TableHead>
-                  <TableHead className="w-[22%] px-1.5 text-center">持仓市值/持仓盈亏</TableHead>
+                  <TableHead className="w-[18%] px-1.5 text-center">股票</TableHead>
+                  <TableHead className="w-[13%] px-1.5 text-center">数量</TableHead>
+                  <TableHead className="w-[17%] px-1.5 text-center">现价/成本</TableHead>
+                  <TableHead className="w-[17%] px-1.5 text-center">市值/盈亏比</TableHead>
                   <TableHead className="w-[21%] px-1.5 text-center">当日盈亏/当日盈亏比</TableHead>
                   <TableHead className="w-[14%] px-1.5 text-center">仓位比例</TableHead>
                 </TableRow>
@@ -630,12 +625,7 @@ function PositionTable({
                     <TableCell className="px-1.5 py-1 text-center">
                       <StackedCell
                         primary={formatCurrency(position.market_value)}
-                        secondary={
-                          <>
-                            {formatCurrency(holdingProfit(position))}
-                            <span className="ps-1">{formatPercent(position.profit_ratio)}</span>
-                          </>
-                        }
+                        secondary={formatPercent(position.profit_ratio)}
                         secondaryClassName={getChangeTone(position.profit_ratio)}
                       />
                     </TableCell>
