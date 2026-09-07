@@ -165,6 +165,7 @@ async def api_client(
     app.dependency_overrides[get_session_factory] = lambda: session_factory
     app.state.runtime.session_factory = session_factory
     app.state.runtime.notification_http_client = notification_endpoint.client()
+    app.state.runtime.email_http_client = notification_endpoint.client()
     app.state.runtime.notification_dispatcher = None
     app.state.runtime.model_connectivity_tester = fake_model_tester
     app.state.runtime.models_dev_catalog = FakeModelsDevCatalog()

@@ -14,6 +14,7 @@ from backend.business.dreams.service import DreamService
 from backend.business.market import MarketOverviewQueryPort
 from backend.business.memories.service import MemoryService
 from backend.business.notifications.service import NotificationService
+from backend.business.reports.service import ReportMailService
 from backend.business.runs.service import RunService
 from backend.business.schedules.service import ScheduleAppService
 from backend.business.settings.channels import ModelChannelService
@@ -37,6 +38,10 @@ class ApiRuntimePort(Protocol):
     def notification_service(
         self, session: AsyncSession
     ) -> NotificationService: ...
+
+    def report_mail_service(
+        self, session: AsyncSession
+    ) -> ReportMailService: ...
 
     def dream_query_service(self, session: AsyncSession) -> DreamService: ...
 
@@ -143,3 +148,10 @@ def get_notification_service(
     runtime: Annotated[ApiRuntimePort, Depends(get_runtime)],
 ) -> NotificationService:
     return runtime.notification_service(session)
+
+
+def get_report_mail_service(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    runtime: Annotated[ApiRuntimePort, Depends(get_runtime)],
+) -> ReportMailService:
+    return runtime.report_mail_service(session)

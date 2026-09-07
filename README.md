@@ -49,6 +49,7 @@ Aniu（Aniubot）是一个本地优先的股票交易智能体系统。它以 A 
 | **阶段与模型配置** | 为不同运行阶段配置提示词、模型渠道、模型参数和选择策略。                                    |
 | **任务调度**       | 配置交易时段内的自动运行计划，以及账户刷新和记忆整理任务。                                  |
 | **推送通知**       | 下单、撤单、成交与运行失败时推送到 Webhook、Server酱 或企业微信机器人，并留存推送历史。     |
+| **报告邮件**       | 把运行报告的 HTML 页面通过 Resend 投递到邮箱。                                              |
 | **本地优先**       | Token 登录、SQLite 持久化、敏感配置管理和 Docker 数据卷均以单机部署为默认路径。             |
 
 ### 一条完整工作流
@@ -306,6 +307,18 @@ Compose 的基础模板位于 [<code>.env.example</code>](./.env.example)，真�
 
 设置页底部显示最近的推送记录，包含时间、通道、事件、成功与否，失败时附带原因。记录会快照通道名称，删除通道后历史依然可读。历史是运维辅助信息而非审计账本，只保留最近 500 条，超出后自动丢弃最旧的。
 
+## 报告邮件
+
+在「主要设置 → 报告邮件」填入 [Resend](https://resend.com) 的 API Key、发件地址和收件地址后，「任务运行」页面每次已完成运行的报告标题旁会出现「发送到邮箱」按钮，把 Summary 阶段生成的 HTML 页面作为邮件正文寄出。
+
+这和推送通知是两件事：推送是事件驱动的短消息（下单了就推），邮件是按需投递一整份报告。所以邮件不作为推送通道出现，避免一份 20 KB 的 HTML 被推到微信里。
+
+若该次运行的 Summary 阶段降级成了 Markdown，正文会转成转义后的预格式化块，而不是把 Markdown 当作标记语言发出去。
+
+> Resend 在未验证自有域名时，只允许使用它提供的测试发件地址，且收件人必须是账号注册邮箱。把报告寄给自己刚好不受这个限制影响。
+
+API Key 加密保存在本地密钥库，接口只返回尾号，编辑时留空表示保持原值。
+
 ## API 入口
 
 后端 API 统一使用 <code>/api/aniu</code> 前缀，所有业务接口都要求已认证会话。
@@ -334,6 +347,10 @@ PUT    /api/aniu/notifications/channels/{channel_id}
 DELETE /api/aniu/notifications/channels/{channel_id}
 POST   /api/aniu/notifications/channels/{channel_id}/test
 GET    /api/aniu/notifications/deliveries
+
+GET    /api/aniu/report-email
+PUT    /api/aniu/report-email
+POST   /api/aniu/report-email/runs/{run_id}
 ```
 
 任务详情通过 SSE 推送运行事件；完整请求/响应模型可在服务启动后打开 <http://127.0.0.1:8000/docs> 查看。
@@ -391,6 +408,7 @@ Aniu/
 - 不要通过 <code>VITE_*</code> 变量传递后端秘密；这类变量会进入前端开发或构建环境。
 - LAN 模式可配置精确的 <code>ANIU_ALLOWED_HOSTS</code>，或在可信内网显式设置为 <code>*</code>；外网访问应通过 HTTPS 反向代理或 SSH 隧道保护登录流量。
 - 推送通道的地址本身就是凭证：任何拿到它的人都能向你的手机或群聊发消息，请当作密钥对待。
+- 邮件服务的 API Key 同理：泄露后他人可以用你的账号发信，发现暴露就立刻在服务商后台吊销重建。
 - 妙想及行情服务受其自身额度、稳定性和使用条款约束；账户刷新在交易时段内每 30 分钟一次。
 - 项目用于研究与模拟交易，不提供投资建议；请在充分验证后决定是否采用任何分析结果。
 

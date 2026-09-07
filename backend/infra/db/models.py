@@ -613,3 +613,27 @@ class NotificationDeliveryModel(Base):
         Boolean, nullable=False, default=False, server_default="0"
     )
     created_at: Mapped[str] = mapped_column(Text, nullable=False, default=utc_now_iso)
+
+
+class EmailDeliverySettingsModel(Base):
+    """Singleton run-report email configuration (always primary key 1)."""
+
+    __tablename__ = "email_delivery_settings"
+    __table_args__ = (
+        CheckConstraint("id = 1", name="ck_email_delivery_settings_singleton"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    sender: Mapped[str] = mapped_column(String(254), nullable=False)
+    recipient: Mapped[str] = mapped_column(String(254), nullable=False)
+    enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    api_key_last_four: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    created_at: Mapped[str] = mapped_column(Text, nullable=False, default=utc_now_iso)
+    updated_at: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default=utc_now_iso,
+        onupdate=utc_now_iso,
+    )

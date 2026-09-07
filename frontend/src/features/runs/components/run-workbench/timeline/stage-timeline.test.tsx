@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -8,6 +9,9 @@ import type { RunDetail, TraceStage } from "@/lib/api-types";
 import { StageTimeline } from "./stage-timeline";
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+
+const api = vi.hoisted(() => ({ emailRunReport: vi.fn() }));
+vi.mock("@/lib/api", () => api);
 
 const MARKDOWN_REPORT = "## 运行报告\n\n- 买入 600519";
 
@@ -91,8 +95,14 @@ function makeRun(overrides: Partial<RunDetail> = {}): RunDetail {
 }
 
 function renderTimeline(run: RunDetail) {
+  // The email button issues a mutation, so the tree needs a query client.
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
   return render(
-    <StageTimeline run={run} now={new Date("2026-07-25T10:00:30Z")} liveStepDeltaByStepId={{}} />,
+    <QueryClientProvider client={queryClient}>
+      <StageTimeline run={run} now={new Date("2026-07-25T10:00:30Z")} liveStepDeltaByStepId={{}} />
+    </QueryClientProvider>,
   );
 }
 
@@ -395,5 +405,34 @@ describe("StageTimeline", () => {
     );
 
     expect(screen.queryByRole("button", { name: /复制 Markdown/ })).toBeNull();
+  });
+
+  it("mails the report and reports what the server said", async () => {
+    api.emailRunReport.mockResolvedValue({
+      run_id: 20260725101,
+      delivered: true,
+      message: "报告已发送至 me@example.com",
+    });
+    renderTimeline(makeRun({ summary: MARKDOWN_REPORT, summary_render_mode: "markdown" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /发送到邮箱/ }));
+
+    await waitFor(() => expect(api.emailRunReport).toHaveBeenCalledWith(20260725101));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("报告已发送至 me@example.com"));
+  });
+
+  it("surfaces a refused delivery as an error", async () => {
+    api.emailRunReport.mockResolvedValue({
+      run_id: 20260725101,
+      delivered: false,
+      message: "发送失败：邮件服务拒绝了请求（HTTP 403）",
+    });
+    renderTimeline(makeRun({ summary: MARKDOWN_REPORT, summary_render_mode: "markdown" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /发送到邮箱/ }));
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith("发送失败：邮件服务拒绝了请求（HTTP 403）"),
+    );
   });
 });

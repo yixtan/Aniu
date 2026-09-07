@@ -18,6 +18,7 @@ from backend.business.dreams.service import DreamService
 from backend.business.market import MarketOverviewQueryPort
 from backend.business.memories.service import MemoryService
 from backend.business.notifications.service import NotificationService
+from backend.business.reports.service import ReportMailService
 from backend.business.runs.abort_registry import ActiveRunAbortRegistry
 from backend.business.runs.executor import RunExecutor
 from backend.business.runs.service import RunService
@@ -31,6 +32,8 @@ from backend.infra.calendar import TradingCalendar2026, is_market_session_open
 from backend.infra.integrations.agent_runner import AgentRunnerFactoryAdapter
 from backend.infra.integrations.agent_runtime import AgentRuntimeFactory
 from backend.infra.integrations.dream_agent import DreamAgentRunner
+from backend.infra.integrations.email import ResendReportMailer
+from backend.infra.integrations.email.run_report_query import RunReportQuery
 from backend.infra.integrations.notifications import (
     RoutingNotificationSender,
     TradeNotificationDispatcher,
@@ -54,6 +57,7 @@ from backend.infra.repositories.auth_repo import (
     AuthSessionRepository,
     LocalIdentityRepository,
 )
+from backend.infra.repositories.email_settings_repo import EmailSettingsRepository
 from backend.infra.security.password_hasher import hash_password, verify_password
 from backend.stock_api import MxClients
 from backend.stock_api.public import PublicMarketOverviewQuery, StockMarketDataService
@@ -93,6 +97,7 @@ class AppRuntime:
     public_stock_http_client: httpx.AsyncClient | None = None
     public_stock_data: StockMarketDataService | None = None
     notification_http_client: httpx.AsyncClient | None = None
+    email_http_client: httpx.AsyncClient | None = None
     notification_dispatcher: TradeNotificationDispatcher | None = None
     stock_api_log_write_lock: asyncio.Lock = field(
         default_factory=asyncio.Lock,
@@ -207,6 +212,16 @@ class AppRuntime:
             channel_repo=NotificationChannelRepository(session),
             sender=self.require_notification_sender(),
             delivery_repo=NotificationDeliveryRepository(session),
+            committer=session,
+        )
+
+    def report_mail_service(self, session: AsyncSession) -> ReportMailService:
+        if self.email_http_client is None:
+            raise RuntimeError("email HTTP client is not initialized")
+        return ReportMailService(
+            settings_repo=EmailSettingsRepository(session),
+            run_report_query=RunReportQuery(RunRepository(session)),
+            mailer=ResendReportMailer(self.email_http_client),
             committer=session,
         )
 

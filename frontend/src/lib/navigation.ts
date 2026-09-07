@@ -5,6 +5,7 @@ import {
   LayoutDashboardIcon,
   MessageSquareTextIcon,
   BellRingIcon,
+  MailIcon,
   MoonStarIcon,
   NetworkIcon,
   Settings2Icon,
@@ -19,7 +20,8 @@ type NavigationItem = {
   icon: LucideIcon;
 };
 
-export type MainSettingsTabId = "mx" | "channels-models" | "trading-schedule" | "notifications";
+export type MainSettingsTabId =
+  "mx" | "channels-models" | "trading-schedule" | "notifications" | "report-email";
 
 type MainSettingsNavigationItem = Omit<NavigationItem, "to"> & {
   id: MainSettingsTabId;
@@ -76,6 +78,12 @@ export const mainSettingsNavigationItems: MainSettingsNavigationItem[] = [
     title: "推送通知",
     description: "下单、撤单与成交时推送到 Webhook、Server酱 或企业微信机器人",
     icon: BellRingIcon,
+  },
+  {
+    id: "report-email",
+    title: "报告邮件",
+    description: "把运行报告的 HTML 页面通过 Resend 投递到你的邮箱",
+    icon: MailIcon,
   },
 ];
 

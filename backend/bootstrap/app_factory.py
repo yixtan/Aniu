@@ -29,6 +29,7 @@ from backend.api.routes import (
     memories,
     memory_dreams,
     notifications,
+    report_email,
     runs,
     schedules,
     settings,
@@ -185,6 +186,7 @@ async def _initialize_runtime(application: FastAPI, config: RuntimeConfig) -> No
     runtime.mx_http_client = httpx.AsyncClient(timeout=15.0)
     runtime.public_stock_http_client = httpx.AsyncClient(timeout=15.0)
     runtime.notification_http_client = httpx.AsyncClient(timeout=15.0)
+    runtime.email_http_client = httpx.AsyncClient(timeout=25.0)
 
     runtime.require_mx_clients()
     runtime.require_public_stock_data()
@@ -285,6 +287,9 @@ async def _shutdown_runtime(application: FastAPI) -> None:
             "notification_http_client", runtime.notification_http_client.aclose
         )
         runtime.notification_http_client = None
+    if runtime.email_http_client is not None:
+        await cleanup("email_http_client", runtime.email_http_client.aclose)
+        runtime.email_http_client = None
     if runtime.mx_clients is not None:
         await cleanup("mx_clients", runtime.mx_clients.aclose)
         runtime.mx_clients = None
@@ -421,6 +426,7 @@ def create_app(config: RuntimeConfig | None = None) -> FastAPI:
     application.include_router(market.router)
     application.include_router(memory_dreams.router)
     application.include_router(notifications.router)
+    application.include_router(report_email.router)
     application.include_router(stream_hub.router)
 
     @application.get("/health")

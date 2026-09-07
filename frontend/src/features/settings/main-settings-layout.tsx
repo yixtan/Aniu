@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { MxSettingsPage } from "@/features/settings/components/mx-settings-section";
 import { ModelChannelsSettingsPage } from "@/features/settings/model-channels-settings-page";
 import { NotificationsSettingsPage } from "@/features/settings/notifications-settings-page";
+import { ReportEmailSettingsPage } from "@/features/settings/report-email-settings-page";
 import { TradingSchedulesPage } from "@/features/settings/schedules-page";
 import { mainSettingsNavigationItems, type MainSettingsTabId } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
@@ -18,6 +19,7 @@ export function MainSettingsLayout() {
     "channels-models": <ModelChannelsSettingsPage />,
     "trading-schedule": <TradingSchedulesPage />,
     notifications: <NotificationsSettingsPage />,
+    "report-email": <ReportEmailSettingsPage />,
   }[activeTab];
 
   return (

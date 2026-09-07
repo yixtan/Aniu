@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { CheckIcon, ChevronRightIcon, CircleAlertIcon, CopyIcon } from "lucide-react";
+import { useMutation } from "@tanstack/react-query";
+import { CheckIcon, ChevronRightIcon, CircleAlertIcon, CopyIcon, MailIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
-import { formatRunDuration } from "@/lib/format";
+import { emailRunReport } from "@/lib/api";
+import { formatRunDuration, getErrorMessage } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { RunDetail } from "@/lib/api-types";
 
@@ -19,6 +21,39 @@ import { StageNode } from "./stage-node";
  */
 function clipboardAvailable() {
   return typeof navigator !== "undefined" && Boolean(navigator.clipboard);
+}
+
+/** Mail this run's report to the configured address.
+ *
+ * Always offered, unlike the copy button: a missing configuration is something
+ * the operator can fix, and the error says where to fix it.
+ */
+function EmailReportButton({ runId }: { runId: number }) {
+  const sendMutation = useMutation({
+    mutationFn: () => emailRunReport(runId),
+    onSuccess: (result) => {
+      if (result.delivered) {
+        toast.success(result.message);
+      } else {
+        toast.error(result.message);
+      }
+    },
+    onError: (error: unknown) => toast.error(getErrorMessage(error)),
+  });
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="h-7 gap-1.5 px-2 text-xs"
+      disabled={sendMutation.isPending}
+      onClick={() => sendMutation.mutate()}
+    >
+      <MailIcon className="size-3.5" />
+      {sendMutation.isPending ? "发送中…" : "发送到邮箱"}
+    </Button>
+  );
 }
 
 /** Copy the report's Markdown source so it can be pasted into an editor. */
@@ -208,9 +243,12 @@ export function StageTimeline({
             <h2 className="text-foreground font-sans text-base font-semibold tracking-[-0.01em]">
               最终运行报告
             </h2>
-            {markdownReport && clipboardAvailable() ? (
-              <CopyReportButton markdown={markdownReport} />
-            ) : null}
+            <div className="flex shrink-0 items-center gap-2">
+              {markdownReport && clipboardAvailable() ? (
+                <CopyReportButton markdown={markdownReport} />
+              ) : null}
+              <EmailReportButton runId={run.run_id} />
+            </div>
           </div>
           <StreamingContent
             content={finalReportContent}

@@ -11,6 +11,7 @@ import type {
   CreateNotificationChannelPayload,
   CreateSchedulePayload,
   UpdateModelChannelPayload,
+  SaveReportEmailSettingsPayload,
   UpdateNotificationChannelPayload,
   UpdateSchedulePayload,
   UpdateSettingsPayload,
@@ -472,6 +473,23 @@ export async function testNotificationChannel(channelId: number) {
 export async function listNotificationDeliveries({ limit = 20, offset = 0 } = {}) {
   const result = await openapiClient.GET("/api/aniu/notifications/deliveries", {
     params: { query: { limit, offset } },
+  });
+  return getResponseData(result);
+}
+
+export async function getReportEmailSettings() {
+  const result = await openapiClient.GET("/api/aniu/report-email");
+  return getResponseData(result);
+}
+
+export async function saveReportEmailSettings(payload: SaveReportEmailSettingsPayload) {
+  const result = await openapiClient.PUT("/api/aniu/report-email", { body: payload });
+  return getResponseData(result);
+}
+
+export async function emailRunReport(runId: number) {
+  const result = await openapiClient.POST("/api/aniu/report-email/runs/{run_id}", {
+    params: { path: { run_id: runId } },
   });
   return getResponseData(result);
 }
