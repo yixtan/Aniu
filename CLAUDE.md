@@ -112,6 +112,11 @@ Summary  把报告渲染成 HTML
 
 README 里「研究、决策、交易、总结等阶段」是旧描述，这四件事现在都在 Run 内部完成。`Dream`（夜间记忆整理）是独立任务，不在这条 FSM 里。
 
+**记忆的写入与修剪是分开的。** Run 阶段的 `memory_write` 只有 `create`/`update`，
+删除权限只给夜间的 Dream（`AUTHORING_OPERATIONS` vs `ALL_MEMORY_OPERATIONS`，见
+[`memory_agent_tools.py`](backend/infra/integrations/memory_agent_tools.py)）。判断一条经验是重复的还是「尚未复现」，
+需要跨天的视角，而一次运行只看得见自己。工具描述会随权限变化，schema 和运行时双重拦截。
+
 **下单 ≠ 成交。** `trade` 工具返回 `orderId` 只代表委托被受理，限价单可能永远不成交。成交只能从 `account_orders_cache` 的 `filled_quantity` 观测，所以：
 
 - 下单/撤单 → 工具调用回调里实时发现

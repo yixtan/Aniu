@@ -19,6 +19,8 @@ from backend.infra.integrations.agent_runner import (
 from backend.infra.integrations.agent_runtime import AgentRuntimeFactory
 from backend.infra.integrations.dream_agent_tools import DreamReportReadTool
 from backend.infra.integrations.memory_agent_tools import (
+    ALL_MEMORY_OPERATIONS,
+    AUTHORING_OPERATIONS,
     MemoryReadTool,
     MemoryWriteTool,
 )
@@ -233,3 +235,83 @@ async def test_run_allows_memory_write_closed_market_and_hides_tools_from_summar
         invocation_session_factory=session_factory,
     )
     assert summary_registry.list_tools() == []
+
+
+def _operations(tool: MemoryWriteTool) -> list[str]:
+    branches = tool.to_tool_definition()["parameters"]["oneOf"]  # type: ignore[index]
+    return [branch["properties"]["operation"]["const"] for branch in branches]
+
+
+def test_a_producer_is_not_offered_the_delete_branch(session_factory) -> None:
+    """Pruning needs a cross-day view a single run does not have."""
+
+    tool = MemoryWriteTool(session_factory, allowed_operations=AUTHORING_OPERATIONS)
+
+    assert _operations(tool) == ["create", "update"]
+    assert "不可删除" in tool.to_tool_definition()["description"]
+
+
+def test_the_curator_keeps_every_operation(session_factory) -> None:
+    tool = MemoryWriteTool(session_factory, allowed_operations=ALL_MEMORY_OPERATIONS)
+
+    assert _operations(tool) == ["create", "update", "delete"]
+
+
+@pytest.mark.asyncio
+async def test_a_producer_deleting_anyway_is_refused(session_factory) -> None:
+    """A model can emit a branch the schema never offered, and this one writes."""
+
+    writer = MemoryWriteTool(session_factory)
+    created = await writer.run_for_call(
+        run_id=1,
+        tool_call_id="call-1",
+        operation="create",
+        content="顺势加仓优于逆势抄底",
+        reason="多次验证",
+    )
+    memory_id = created["item"]["id"]  # type: ignore[index]
+
+    producer = MemoryWriteTool(session_factory, allowed_operations=AUTHORING_OPERATIONS)
+    with pytest.raises(ValueError, match="not permitted"):
+        await producer.run_for_call(
+            run_id=2,
+            tool_call_id="call-2",
+            operation="delete",
+            memory_id=memory_id,
+            expected_version=1,
+        )
+
+    # The memory must still be there for the nightly curator to judge.
+    reader = MemoryReadTool(session_factory)
+    found = await reader.run_for_call(
+        run_id=3, tool_call_id="call-3", keywords="加仓"
+    )
+    assert found["items"]  # type: ignore[index]
+
+
+@pytest.mark.asyncio
+async def test_the_curator_may_still_delete(session_factory) -> None:
+    writer = MemoryWriteTool(session_factory)
+    created = await writer.run_for_call(
+        run_id=1,
+        tool_call_id="call-1",
+        operation="create",
+        content="重复的经验",
+        reason="待清理",
+    )
+
+    curator = MemoryWriteTool(session_factory, allowed_operations=ALL_MEMORY_OPERATIONS)
+    result = await curator.run_for_call(
+        run_id=20260907401,
+        tool_call_id="call-2",
+        operation="delete",
+        memory_id=created["item"]["id"],  # type: ignore[index]
+        expected_version=created["item"]["version"],  # type: ignore[index]
+    )
+
+    assert result["status"] == "ok"  # type: ignore[index]
+
+
+def test_a_tool_with_no_operations_is_rejected(session_factory) -> None:
+    with pytest.raises(ValueError, match="at least one"):
+        MemoryWriteTool(session_factory, allowed_operations=frozenset())
