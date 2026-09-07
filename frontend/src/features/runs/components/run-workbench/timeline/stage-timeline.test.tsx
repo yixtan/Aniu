@@ -369,17 +369,27 @@ describe("StageTimeline", () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(MARKDOWN_REPORT));
   });
 
-  it("explains that a plain-HTTP page has no clipboard", async () => {
+  it("hides the button when the page has no Clipboard API", () => {
+    // Plain HTTP is not a secure context, so navigator.clipboard is absent.
+    renderTimeline(makeRun({ summary: MARKDOWN_REPORT, summary_render_mode: "markdown" }));
+
+    expect(screen.queryByRole("button", { name: /复制 Markdown/ })).toBeNull();
+  });
+
+  it("reports a refused clipboard write", async () => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: vi.fn().mockRejectedValue(new Error("文档未获得焦点")) },
+    });
     renderTimeline(makeRun({ summary: MARKDOWN_REPORT, summary_render_mode: "markdown" }));
 
     fireEvent.click(screen.getByRole("button", { name: /复制 Markdown/ }));
 
-    await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith("当前连接不支持剪贴板，请使用 HTTPS 或本机访问"),
-    );
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("文档未获得焦点"));
   });
 
   it("offers no copy button when an HTML-only report has no Markdown source", () => {
+    mockClipboard();
     renderTimeline(
       makeRun({ summary: "<section><h2>执行总结</h2></section>", summary_render_mode: "html" }),
     );

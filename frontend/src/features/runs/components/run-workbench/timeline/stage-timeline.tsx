@@ -11,6 +11,16 @@ import type { RunDetail } from "@/lib/api-types";
 import { StreamingContent } from "../streaming";
 import { StageNode } from "./stage-node";
 
+/** Whether the browser exposes the Clipboard API at all.
+ *
+ * It only exists in a secure context, so an installation served over plain
+ * HTTP — a public host without TLS, or a LAN address — has none. The button is
+ * hidden in that case rather than offered and then failing.
+ */
+function clipboardAvailable() {
+  return typeof navigator !== "undefined" && Boolean(navigator.clipboard);
+}
+
 /** Copy the report's Markdown source so it can be pasted into an editor. */
 function CopyReportButton({ markdown }: { markdown: string }) {
   const [copied, setCopied] = useState(false);
@@ -23,14 +33,11 @@ function CopyReportButton({ markdown }: { markdown: string }) {
 
   const copy = async () => {
     try {
-      // Only available over HTTPS or on localhost; a LAN deployment over plain
-      // HTTP has no clipboard, so say so instead of failing silently.
-      if (!navigator.clipboard) {
-        throw new Error("当前连接不支持剪贴板，请使用 HTTPS 或本机访问");
-      }
       await navigator.clipboard.writeText(markdown);
       setCopied(true);
     } catch (error) {
+      // A secure context can still refuse the write, e.g. when the document is
+      // not focused or the permission was denied.
       toast.error(error instanceof Error ? error.message : "复制失败");
     }
   };
@@ -201,7 +208,9 @@ export function StageTimeline({
             <h2 className="text-foreground font-sans text-base font-semibold tracking-[-0.01em]">
               最终运行报告
             </h2>
-            {markdownReport ? <CopyReportButton markdown={markdownReport} /> : null}
+            {markdownReport && clipboardAvailable() ? (
+              <CopyReportButton markdown={markdownReport} />
+            ) : null}
           </div>
           <StreamingContent
             content={finalReportContent}
