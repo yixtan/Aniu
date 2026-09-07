@@ -10,9 +10,9 @@ import pytest
 from backend.business.notifications import (
     NotificationChannel,
     NotificationChannelKind,
+    NotificationEvent,
+    NotificationEventKind,
     TradeDirection,
-    TradeEventKind,
-    TradeNotificationEvent,
 )
 from backend.business.shared import ServiceIntegrationError
 from backend.infra.integrations.notifications import (
@@ -23,8 +23,8 @@ from backend.infra.integrations.notifications import (
     render_body_template,
 )
 
-EVENT = TradeNotificationEvent(
-    kind=TradeEventKind.ORDER_PLACED,
+EVENT = NotificationEvent(
+    kind=NotificationEventKind.ORDER_PLACED,
     run_id=12,
     stage_name="Run",
     instruction="买入 600519 1700 100",

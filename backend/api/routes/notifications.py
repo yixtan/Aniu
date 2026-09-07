@@ -1,12 +1,13 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends, status
+from fastapi import APIRouter, Body, Depends, Query, status
 
 from backend.api.deps import get_notification_service
 from backend.api.schemas.error import error_responses
 from backend.api.schemas.notification import (
     CreateNotificationChannelRequest,
     NotificationChannelResponse,
+    NotificationDeliveryPageResponse,
     NotificationTestResultResponse,
     UpdateNotificationChannelRequest,
 )
@@ -100,3 +101,12 @@ async def test_notification_channel(
     service: Annotated[NotificationService, Depends(get_notification_service)],
 ) -> object:
     return await service.send_test(channel_id)
+
+
+@router.get("/deliveries", response_model=NotificationDeliveryPageResponse)
+async def list_notification_deliveries(
+    service: Annotated[NotificationService, Depends(get_notification_service)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> object:
+    return await service.list_deliveries(limit=limit, offset=offset)

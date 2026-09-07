@@ -5,22 +5,27 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import UTC, datetime
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.business.notifications import (
+    DeliveryStatus,
     NotificationChannel,
     NotificationChannelKind,
-    TradeEventKind,
+    NotificationDelivery,
+    NotificationEventKind,
 )
 from backend.infra.db.models import (
     NotificationChannelModel,
+    NotificationDeliveryModel,
     NotificationFillWatermarkModel,
 )
 from backend.infra.repositories.secret_store_repo import SecretStoreRepository
 from backend.infra.security import SecretCodec
 
 SECRET_NAMESPACE = "notification_channel"
+MAX_DELIVERY_ROWS = 500
+"""历史是运维辅助信息，不是审计账本，超出上限就丢弃最旧的。"""
 SECRET_NAME = "endpoint"
 
 
@@ -59,7 +64,7 @@ class NotificationChannelRepository:
         name: str,
         kind: NotificationChannelKind,
         enabled: bool,
-        subscribed_events: frozenset[TradeEventKind],
+        subscribed_events: frozenset[NotificationEventKind],
         body_template: str | None,
         target_hint: str,
         secret: str,
@@ -86,7 +91,7 @@ class NotificationChannelRepository:
         *,
         name: str,
         enabled: bool,
-        subscribed_events: frozenset[TradeEventKind],
+        subscribed_events: frozenset[NotificationEventKind],
         body_template: str | None,
         target_hint: str,
         secret: str | None,
@@ -132,11 +137,11 @@ class NotificationChannelRepository:
             kind=NotificationChannelKind(model.kind),
             enabled=bool(model.enabled),
             subscribed_events=frozenset(
-                TradeEventKind(value)
+                NotificationEventKind(value)
                 for value in (model.subscribed_events or [])
-                if value in frozenset(item.value for item in TradeEventKind)
+                if value in frozenset(item.value for item in NotificationEventKind)
             )
-            or frozenset(TradeEventKind),
+            or frozenset(NotificationEventKind),
             body_template=model.body_template,
             target_hint=model.target_hint or "",
             created_at=_parse_datetime(model.created_at),
@@ -193,8 +198,87 @@ class NotificationFillWatermarkRepository:
 
 
 __all__ = [
+    "MAX_DELIVERY_ROWS",
     "SECRET_NAME",
     "SECRET_NAMESPACE",
     "NotificationChannelRepository",
+    "NotificationDeliveryRepository",
     "NotificationFillWatermarkRepository",
 ]
+
+
+class NotificationDeliveryRepository:
+    """Append-only push history with a bounded row count."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def append(self, delivery: NotificationDelivery) -> NotificationDelivery:
+        model = NotificationDeliveryModel(
+            channel_id=delivery.channel_id,
+            channel_name=delivery.channel_name,
+            channel_kind=delivery.channel_kind.value,
+            event_kind=delivery.event_kind.value,
+            title=delivery.title,
+            status=delivery.status.value,
+            error_message=delivery.error_message,
+            is_test=delivery.is_test,
+            created_at=delivery.created_at.isoformat(),
+        )
+        self._session.add(model)
+        await self._session.flush()
+        await self._prune()
+        return self._to_entity(model)
+
+    async def list_page(
+        self, *, limit: int, offset: int
+    ) -> list[NotificationDelivery]:
+        statement = (
+            select(NotificationDeliveryModel)
+            .order_by(NotificationDeliveryModel.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        rows = (await self._session.scalars(statement)).all()
+        return [self._to_entity(row) for row in rows]
+
+    async def count(self) -> int:
+        total = await self._session.scalar(
+            select(func.count()).select_from(NotificationDeliveryModel)
+        )
+        return int(total or 0)
+
+    async def _prune(self) -> None:
+        """Drop the oldest rows once the table grows past its cap."""
+
+        total = await self.count()
+        if total <= MAX_DELIVERY_ROWS:
+            return
+        cutoff = await self._session.scalar(
+            select(NotificationDeliveryModel.id)
+            .order_by(NotificationDeliveryModel.id.desc())
+            .limit(1)
+            .offset(MAX_DELIVERY_ROWS - 1)
+        )
+        if cutoff is None:
+            return
+        await self._session.execute(
+            delete(NotificationDeliveryModel).where(
+                NotificationDeliveryModel.id < cutoff
+            )
+        )
+        await self._session.flush()
+
+    def _to_entity(self, model: NotificationDeliveryModel) -> NotificationDelivery:
+        return NotificationDelivery(
+            id=model.id,
+            channel_id=model.channel_id,
+            channel_name=model.channel_name,
+            channel_kind=NotificationChannelKind(model.channel_kind),
+            event_kind=NotificationEventKind(model.event_kind),
+            title=model.title,
+            status=DeliveryStatus(model.status),
+            error_message=model.error_message,
+            is_test=bool(model.is_test),
+            created_at=_parse_datetime(model.created_at),
+        )

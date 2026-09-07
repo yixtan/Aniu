@@ -7,12 +7,14 @@ from datetime import datetime
 from urllib.parse import urlparse
 
 from backend.business.notifications.models import (
+    DeliveryStatus,
     NotificationChannel,
     NotificationChannelKind,
-    TradeEventKind,
+    NotificationDelivery,
+    NotificationEventKind,
 )
 
-_EVENT_ORDER: tuple[TradeEventKind, ...] = tuple(TradeEventKind)
+_EVENT_ORDER: tuple[NotificationEventKind, ...] = tuple(NotificationEventKind)
 
 
 def mask_secret(secret: str) -> str:
@@ -39,11 +41,50 @@ class NotificationChannelDTO:
     name: str
     kind: NotificationChannelKind
     enabled: bool
-    subscribed_events: tuple[TradeEventKind, ...]
+    subscribed_events: tuple[NotificationEventKind, ...]
     body_template: str | None
     target_hint: str
     created_at: datetime
     updated_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class NotificationDeliveryDTO:
+    id: int
+    channel_id: int | None
+    channel_name: str
+    channel_kind: NotificationChannelKind
+    event_kind: NotificationEventKind
+    event_label: str
+    title: str
+    status: DeliveryStatus
+    error_message: str | None
+    is_test: bool
+    created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class NotificationDeliveryPageDTO:
+    items: tuple[NotificationDeliveryDTO, ...]
+    total: int
+
+
+def to_notification_delivery_dto(
+    delivery: NotificationDelivery,
+) -> NotificationDeliveryDTO:
+    return NotificationDeliveryDTO(
+        id=delivery.id,
+        channel_id=delivery.channel_id,
+        channel_name=delivery.channel_name,
+        channel_kind=delivery.channel_kind,
+        event_kind=delivery.event_kind,
+        event_label=delivery.event_kind.label,
+        title=delivery.title,
+        status=delivery.status,
+        error_message=delivery.error_message,
+        is_test=delivery.is_test,
+        created_at=delivery.created_at,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,7 +114,10 @@ def to_notification_channel_dto(
 
 __all__ = [
     "NotificationChannelDTO",
+    "NotificationDeliveryDTO",
+    "NotificationDeliveryPageDTO",
     "NotificationTestResultDTO",
     "mask_secret",
     "to_notification_channel_dto",
+    "to_notification_delivery_dto",
 ]

@@ -9,8 +9,9 @@ from backend.business.notifications.fill_tracker import OrderFillObservation
 from backend.business.notifications.models import (
     NotificationChannel,
     NotificationChannelKind,
-    TradeEventKind,
-    TradeNotificationEvent,
+    NotificationDelivery,
+    NotificationEvent,
+    NotificationEventKind,
 )
 
 
@@ -25,7 +26,7 @@ class NotificationChannelRepositoryPort(Protocol):
         name: str,
         kind: NotificationChannelKind,
         enabled: bool,
-        subscribed_events: frozenset[TradeEventKind],
+        subscribed_events: frozenset[NotificationEventKind],
         body_template: str | None,
         target_hint: str,
         secret: str,
@@ -37,7 +38,7 @@ class NotificationChannelRepositoryPort(Protocol):
         *,
         name: str,
         enabled: bool,
-        subscribed_events: frozenset[TradeEventKind],
+        subscribed_events: frozenset[NotificationEventKind],
         body_template: str | None,
         target_hint: str,
         secret: str | None,
@@ -46,6 +47,16 @@ class NotificationChannelRepositoryPort(Protocol):
     async def delete(self, channel_id: int) -> bool: ...
 
     async def get_secret(self, channel_id: int) -> str | None: ...
+
+
+class NotificationDeliveryRepositoryPort(Protocol):
+    async def append(self, delivery: NotificationDelivery) -> NotificationDelivery: ...
+
+    async def list_page(
+        self, *, limit: int, offset: int
+    ) -> list[NotificationDelivery]: ...
+
+    async def count(self) -> int: ...
 
 
 class FillWatermarkRepositoryPort(Protocol):
@@ -64,7 +75,7 @@ class NotificationSenderPort(Protocol):
         *,
         channel: NotificationChannel,
         secret: str,
-        event: TradeNotificationEvent,
+        event: NotificationEvent,
     ) -> None: ...
 
 
@@ -80,20 +91,21 @@ class OrderFillNotifierPort(Protocol):
     ) -> None: ...
 
 
-class TradeNotificationPort(Protocol):
+class NotificationPublisherPort(Protocol):
     """What the run and account features call to announce a trade moment.
 
     Implementations must never let a delivery problem surface into the caller:
     a failed push may not fail a run or an account refresh.
     """
 
-    async def publish(self, event: TradeNotificationEvent) -> None: ...
+    async def publish(self, event: NotificationEvent) -> None: ...
 
 
 __all__ = [
     "FillWatermarkRepositoryPort",
     "NotificationChannelRepositoryPort",
+    "NotificationDeliveryRepositoryPort",
     "OrderFillNotifierPort",
     "NotificationSenderPort",
-    "TradeNotificationPort",
+    "NotificationPublisherPort",
 ]

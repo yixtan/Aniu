@@ -41,6 +41,7 @@ from backend.infra.repositories import (
     MemoryRepository,
     ModelProfileRepository,
     NotificationChannelRepository,
+    NotificationDeliveryRepository,
     RunJobRepository,
     RunRepository,
     ScheduleRepository,
@@ -205,6 +206,7 @@ class AppRuntime:
         return NotificationService(
             channel_repo=NotificationChannelRepository(session),
             sender=self.require_notification_sender(),
+            delivery_repo=NotificationDeliveryRepository(session),
             committer=session,
         )
 
@@ -333,5 +335,5 @@ class AppRuntime:
             agent_runner_factory=agent_factory,
             market_session_is_open=is_market_session_open,
             abort_registry=self.abort_registry,
-            trade_notifier=self.optional_notification_dispatcher(),
+            notifier=self.optional_notification_dispatcher(),
         )

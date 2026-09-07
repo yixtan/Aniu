@@ -468,3 +468,10 @@ export async function testNotificationChannel(channelId: number) {
   });
   return getResponseData(result);
 }
+
+export async function listNotificationDeliveries({ limit = 20, offset = 0 } = {}) {
+  const result = await openapiClient.GET("/api/aniu/notifications/deliveries", {
+    params: { query: { limit, offset } },
+  });
+  return getResponseData(result);
+}

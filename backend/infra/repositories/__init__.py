@@ -7,6 +7,7 @@ from backend.infra.repositories.memory_repo import MemoryRepository
 from backend.infra.repositories.model_profile_repo import ModelProfileRepository
 from backend.infra.repositories.notification_channel_repo import (
     NotificationChannelRepository,
+    NotificationDeliveryRepository,
     NotificationFillWatermarkRepository,
 )
 from backend.infra.repositories.run_job_repo import RunJobRepository
@@ -28,6 +29,7 @@ __all__ = [
     "MemoryRepository",
     "ModelProfileRepository",
     "NotificationChannelRepository",
+    "NotificationDeliveryRepository",
     "NotificationFillWatermarkRepository",
     "RunJobRepository",
     "RunRepository",

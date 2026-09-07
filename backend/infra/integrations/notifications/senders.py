@@ -12,7 +12,7 @@ import httpx
 from backend.business.notifications import (
     NotificationChannel,
     NotificationChannelKind,
-    TradeNotificationEvent,
+    NotificationEvent,
 )
 from backend.business.shared import ServiceIntegrationError
 from backend.infra.integrations.notifications.rendering import (
@@ -94,7 +94,7 @@ class WebhookSender:
         *,
         channel: NotificationChannel,
         secret: str,
-        event: TradeNotificationEvent,
+        event: NotificationEvent,
     ) -> None:
         url = _require_url(secret, channel_name=channel.name)
         if channel.body_template is None:
@@ -125,7 +125,7 @@ class ServerChanSender:
         *,
         channel: NotificationChannel,
         secret: str,
-        event: TradeNotificationEvent,
+        event: NotificationEvent,
     ) -> None:
         key = secret.strip()
         url = key if _is_url(key) else SERVERCHAN_ENDPOINT.format(key=quote(key))
@@ -155,7 +155,7 @@ class WeComBotSender:
         *,
         channel: NotificationChannel,
         secret: str,
-        event: TradeNotificationEvent,
+        event: NotificationEvent,
     ) -> None:
         key = secret.strip()
         url = key if _is_url(key) else WECOM_ENDPOINT.format(key=quote(key))
@@ -199,7 +199,7 @@ class RoutingNotificationSender:
         *,
         channel: NotificationChannel,
         secret: str,
-        event: TradeNotificationEvent,
+        event: NotificationEvent,
     ) -> None:
         if channel.kind is NotificationChannelKind.WEBHOOK:
             sender: Any = self.webhook

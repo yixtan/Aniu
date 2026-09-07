@@ -298,6 +298,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/aniu/notifications/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Notification Deliveries */
+        get: operations["list_notification_deliveries_api_aniu_notifications_deliveries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/aniu/runs": {
         parameters: {
             query?: never;
@@ -855,10 +872,11 @@ export interface components {
              * @default [
              *       "order_placed",
              *       "order_cancelled",
-             *       "order_filled"
+             *       "order_filled",
+             *       "run_failed"
              *     ]
              */
-            subscribed_events: ("order_placed" | "order_cancelled" | "order_filled")[];
+            subscribed_events: ("order_placed" | "order_cancelled" | "order_filled" | "run_failed")[];
         };
         /**
          * CreateScheduleRequest
@@ -1276,7 +1294,7 @@ export interface components {
             /** Name */
             name: string;
             /** Subscribed Events */
-            subscribed_events: ("order_placed" | "order_cancelled" | "order_filled")[];
+            subscribed_events: ("order_placed" | "order_cancelled" | "order_filled" | "run_failed")[];
             /** Target Hint */
             target_hint: string;
             /**
@@ -1284,6 +1302,50 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** NotificationDeliveryPageResponse */
+        NotificationDeliveryPageResponse: {
+            /** Items */
+            items: components["schemas"]["NotificationDeliveryResponse"][];
+            /** Total */
+            total: number;
+        };
+        /** NotificationDeliveryResponse */
+        NotificationDeliveryResponse: {
+            /** Channel Id */
+            channel_id: number | null;
+            /**
+             * Channel Kind
+             * @enum {string}
+             */
+            channel_kind: "webhook" | "serverchan" | "wecom_bot";
+            /** Channel Name */
+            channel_name: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Error Message */
+            error_message: string | null;
+            /**
+             * Event Kind
+             * @enum {string}
+             */
+            event_kind: "order_placed" | "order_cancelled" | "order_filled" | "run_failed";
+            /** Event Label */
+            event_label: string;
+            /** Id */
+            id: number;
+            /** Is Test */
+            is_test: boolean;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "delivered" | "failed";
+            /** Title */
+            title: string;
         };
         /** NotificationTestResultResponse */
         NotificationTestResultResponse: {
@@ -1886,7 +1948,7 @@ export interface components {
             /** Secret */
             secret?: string | null;
             /** Subscribed Events */
-            subscribed_events?: ("order_placed" | "order_cancelled" | "order_filled")[] | null;
+            subscribed_events?: ("order_placed" | "order_cancelled" | "order_filled" | "run_failed")[] | null;
         };
         /** UpdateScheduleRequest */
         UpdateScheduleRequest: {
@@ -3178,6 +3240,56 @@ export interface operations {
             };
             /** @description Resource not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_notification_deliveries_api_aniu_notifications_deliveries_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationDeliveryPageResponse"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

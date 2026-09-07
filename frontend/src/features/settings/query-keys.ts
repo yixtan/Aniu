@@ -4,4 +4,5 @@ export const stockApiKeys = {
 
 export const notificationKeys = {
   channels: ["notification-channels"] as const,
+  deliveries: ["notification-deliveries"] as const,
 };

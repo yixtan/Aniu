@@ -13,14 +13,15 @@ from collections.abc import Coroutine, Sequence
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from backend.business.notifications import (
+    NotificationEvent,
     NotificationSenderPort,
     NotificationService,
     OrderFillObservation,
-    TradeNotificationEvent,
     detect_fill_events,
 )
 from backend.infra.repositories.notification_channel_repo import (
     NotificationChannelRepository,
+    NotificationDeliveryRepository,
     NotificationFillWatermarkRepository,
 )
 
@@ -44,7 +45,7 @@ class TradeNotificationDispatcher:
         self._max_pending = max_pending
         self._pending: set[asyncio.Task[None]] = set()
 
-    async def publish(self, event: TradeNotificationEvent) -> None:
+    async def publish(self, event: NotificationEvent) -> None:
         self._spawn(self._deliver(event), label=event.kind.value)
 
     async def announce_fills(
@@ -84,7 +85,7 @@ class TradeNotificationDispatcher:
         self._pending.add(task)
         task.add_done_callback(self._pending.discard)
 
-    async def _deliver(self, event: TradeNotificationEvent) -> None:
+    async def _deliver(self, event: NotificationEvent) -> None:
         try:
             async with self._session_factory() as session:
                 await self._service(session).publish(event)
@@ -126,6 +127,7 @@ class TradeNotificationDispatcher:
         return NotificationService(
             channel_repo=NotificationChannelRepository(session),
             sender=self._sender,
+            delivery_repo=NotificationDeliveryRepository(session),
             committer=session,
         )
 

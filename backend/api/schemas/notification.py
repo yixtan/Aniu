@@ -6,7 +6,13 @@ from pydantic import BaseModel, ConfigDict, Field
 from backend.api.schemas.common import ApiModel
 
 ChannelKind = Literal["webhook", "serverchan", "wecom_bot"]
-TradeEvent = Literal["order_placed", "order_cancelled", "order_filled"]
+TradeEvent = Literal[
+    "order_placed",
+    "order_cancelled",
+    "order_filled",
+    "run_failed"
+]
+DeliveryStatusLiteral = Literal["delivered", "failed"]
 
 
 class NotificationChannelResponse(ApiModel):
@@ -36,7 +42,7 @@ class CreateNotificationChannelRequest(BaseModel):
     """Webhook URL for ``webhook``; the sendkey or bot key otherwise."""
     enabled: bool = True
     subscribed_events: list[TradeEvent] = Field(
-        default=["order_placed", "order_cancelled", "order_filled"],
+        default=["order_placed", "order_cancelled", "order_filled", "run_failed"],
         min_length=1,
     )
     body_template: str | None = Field(default=None, max_length=4000)
@@ -51,3 +57,22 @@ class UpdateNotificationChannelRequest(BaseModel):
     body_template: str | None = Field(default=None, max_length=4000)
     secret: str | None = Field(default=None, max_length=2000)
     """Leave empty to keep the stored endpoint; clients never receive it back."""
+
+
+class NotificationDeliveryResponse(ApiModel):
+    id: int
+    channel_id: int | None
+    channel_name: str
+    channel_kind: ChannelKind
+    event_kind: TradeEvent
+    event_label: str
+    title: str
+    status: DeliveryStatusLiteral
+    error_message: str | None
+    is_test: bool
+    created_at: datetime
+
+
+class NotificationDeliveryPageResponse(ApiModel):
+    items: list[NotificationDeliveryResponse]
+    total: int

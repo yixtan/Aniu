@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 
-from backend.business.notifications import TradeNotificationEvent
+from backend.business.notifications import NotificationEvent
 
 _PLACEHOLDER = re.compile(r"\{\{\s*(?P<key>[a-z_][a-z0-9_]*)\s*\}\}")
 MAX_RENDERED_BODY_BYTES = 64_000
@@ -20,7 +20,7 @@ def _escaped(value: object) -> str:
     return json.dumps(text, ensure_ascii=False)[1:-1]
 
 
-def render_body_template(template: str, event: TradeNotificationEvent) -> object:
+def render_body_template(template: str, event: NotificationEvent) -> object:
     """Substitute ``{{field}}`` placeholders and parse the result as JSON.
 
     Values are escaped for a JSON string context, so a template writes
@@ -42,7 +42,7 @@ def render_body_template(template: str, event: TradeNotificationEvent) -> object
         raise ValueError(f"body template did not render valid JSON: {exc}") from exc
 
 
-def default_body(event: TradeNotificationEvent) -> dict[str, object]:
+def default_body(event: NotificationEvent) -> dict[str, object]:
     return event.as_mapping()
 
 

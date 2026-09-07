@@ -586,3 +586,30 @@ class NotificationFillWatermarkModel(Base):
         default=utc_now_iso,
         onupdate=utc_now_iso,
     )
+
+
+class NotificationDeliveryModel(Base):
+    """One recorded push attempt.
+
+    Channel name and kind are snapshotted instead of joined so the history
+    survives deletion of the channel it went through; ``channel_id`` is kept
+    only as a weak reference and carries no foreign key.
+    """
+
+    __tablename__ = "notification_deliveries"
+    __table_args__ = (
+        Index("idx_notification_deliveries_created", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    channel_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    channel_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    channel_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    event_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_test: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    created_at: Mapped[str] = mapped_column(Text, nullable=False, default=utc_now_iso)

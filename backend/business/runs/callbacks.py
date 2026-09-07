@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from backend.business.notifications import (
-    TradeNotificationPort,
+    NotificationPublisherPort,
     trade_event_from_tool_payload,
 )
 from backend.business.runs import RunEventType, StrategyRun
@@ -68,11 +68,11 @@ class RunExecutionCallbacks:
         *,
         runtime: RunRuntimeState,
         publish_trace_step_delta: TraceStepDeltaPublisher | None = None,
-        trade_notifier: TradeNotificationPort | None = None,
+        notifier: NotificationPublisherPort | None = None,
     ) -> None:
         self._runtime = runtime
         self._publish_trace_step_delta = publish_trace_step_delta
-        self._trade_notifier = trade_notifier
+        self._trade_notifier = notifier
         self._compaction_counts: dict[str, int] = {}
 
     def bind_runtime(self, runtime: RunRuntimeState) -> None:

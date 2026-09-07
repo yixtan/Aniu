@@ -6,9 +6,9 @@ import re
 from collections.abc import Mapping
 
 from backend.business.notifications.models import (
+    NotificationEvent,
+    NotificationEventKind,
     TradeDirection,
-    TradeEventKind,
-    TradeNotificationEvent,
 )
 from backend.business.shared.trading import (
     TRADE_TOOL_NAME,
@@ -96,7 +96,7 @@ def trade_event_from_tool_payload(
     run_id: int,
     stage_name: str,
     payload: Mapping[str, object],
-) -> TradeNotificationEvent | None:
+) -> NotificationEvent | None:
     """Return an event for an accepted ``trade`` or ``cancel`` tool call.
 
     The upstream transport raises on business-error envelopes, so a completed
@@ -117,15 +117,15 @@ def trade_event_from_tool_payload(
     if tool_name == TRADE_TOOL_NAME:
         if not is_successful_trade_payload(content):
             return None
-        return TradeNotificationEvent(
-            kind=TradeEventKind.ORDER_PLACED,
+        return NotificationEvent(
+            kind=NotificationEventKind.ORDER_PLACED,
             order_id=trade_order_id(content),
             **common,  # type: ignore[arg-type]
             **parse_trade_instruction_details(instruction),  # type: ignore[arg-type]
         )
     if tool_name == CANCEL_TOOL_NAME:
-        return TradeNotificationEvent(
-            kind=TradeEventKind.ORDER_CANCELLED,
+        return NotificationEvent(
+            kind=NotificationEventKind.ORDER_CANCELLED,
             **common,  # type: ignore[arg-type]
             **parse_cancel_instruction_details(instruction),  # type: ignore[arg-type]
         )

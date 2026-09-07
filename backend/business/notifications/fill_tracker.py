@@ -12,9 +12,9 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
 from backend.business.notifications.models import (
+    NotificationEvent,
+    NotificationEventKind,
     TradeDirection,
-    TradeEventKind,
-    TradeNotificationEvent,
 )
 
 _DIRECTIONS: dict[str, TradeDirection] = {
@@ -50,7 +50,7 @@ class OrderFillObservation:
 
 @dataclass(frozen=True, slots=True)
 class FillDetectionResult:
-    events: tuple[TradeNotificationEvent, ...]
+    events: tuple[NotificationEvent, ...]
     watermarks: dict[str, int]
     """Filled quantity announced per order id, to persist for the next refresh."""
 
@@ -72,7 +72,7 @@ def detect_fill_events(
     notification per historical order in the upstream window.
     """
 
-    events: list[TradeNotificationEvent] = []
+    events: list[NotificationEvent] = []
     watermarks: dict[str, int] = {}
     for order in observations:
         if not order.order_id:
@@ -83,8 +83,8 @@ def detect_fill_events(
         if cold_start or filled <= previous:
             continue
         events.append(
-            TradeNotificationEvent(
-                kind=TradeEventKind.ORDER_FILLED,
+            NotificationEvent(
+                kind=NotificationEventKind.ORDER_FILLED,
                 order_id=order.order_id,
                 stock_code=order.symbol,
                 stock_name=order.stock_name,

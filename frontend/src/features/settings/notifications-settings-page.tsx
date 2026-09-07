@@ -1,6 +1,13 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BellRingIcon, PlusIcon, SendIcon, Trash2Icon } from "lucide-react";
+import {
+  BellRingIcon,
+  CheckCircle2Icon,
+  PlusIcon,
+  SendIcon,
+  Trash2Icon,
+  XCircleIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { QueryErrorState, QueryLoadingState } from "@/components/query-state";
@@ -45,13 +52,14 @@ import {
   createNotificationChannel,
   deleteNotificationChannel,
   listNotificationChannels,
+  listNotificationDeliveries,
   testNotificationChannel,
   updateNotificationChannel,
 } from "@/lib/api";
 import type {
   NotificationChannel,
   NotificationChannelKind,
-  TradeNotificationEvent,
+  NotificationEvent,
 } from "@/lib/api-types";
 import { getErrorMessage } from "@/lib/format";
 
@@ -68,7 +76,7 @@ const SECRET_HINTS: Record<NotificationChannelKind, string> = {
   wecom_bot: "群机器人 Webhook 的 key 参数（也可直接粘贴完整地址）",
 };
 
-const EVENTS: { id: TradeNotificationEvent; label: string; description: string }[] = [
+const EVENTS: { id: NotificationEvent; label: string; description: string }[] = [
   {
     id: "order_placed",
     label: "下单",
@@ -84,18 +92,24 @@ const EVENTS: { id: TradeNotificationEvent; label: string; description: string }
     label: "成交",
     description: "账户刷新时发现委托有新增成交量（含部分成交）",
   },
+  {
+    id: "run_failed",
+    label: "运行失败",
+    description: "任务运行以失败告终；手动中止不会推送",
+  },
 ];
 
-const DEFAULT_EVENTS: TradeNotificationEvent[] = [
+const DEFAULT_EVENTS: NotificationEvent[] = [
   "order_placed",
   "order_cancelled",
   "order_filled",
+  "run_failed",
 ];
 
 const TEMPLATE_PLACEHOLDER = `留空则推送完整事件 JSON。也可自定义，例如飞书：
 {"msg_type":"text","content":{"text":"{{title}}\\n{{text}}"}}`;
 
-function eventLabel(id: TradeNotificationEvent) {
+function eventLabel(id: NotificationEvent) {
   return EVENTS.find((event) => event.id === id)?.label ?? id;
 }
 
@@ -103,7 +117,7 @@ type ChannelDraft = {
   name: string;
   kind: NotificationChannelKind;
   secret: string;
-  events: TradeNotificationEvent[];
+  events: NotificationEvent[];
   bodyTemplate: string;
 };
 
@@ -123,10 +137,10 @@ function EventCheckboxes({
   idPrefix,
   onToggle,
 }: {
-  selected: TradeNotificationEvent[];
+  selected: NotificationEvent[];
   disabled?: boolean;
   idPrefix: string;
-  onToggle: (id: TradeNotificationEvent, checked: boolean) => void;
+  onToggle: (id: NotificationEvent, checked: boolean) => void;
 }) {
   return (
     <div className="space-y-2">
@@ -424,6 +438,70 @@ function ChannelRow({ channel }: { channel: NotificationChannel }) {
   );
 }
 
+function DeliveryHistory() {
+  const deliveriesQuery = useQuery({
+    queryKey: notificationKeys.deliveries,
+    queryFn: () => listNotificationDeliveries({ limit: 20 }),
+    // Pushes are produced by background work, so poll while this tab is open.
+    refetchInterval: 30_000,
+  });
+  const page = deliveriesQuery.data;
+
+  if (deliveriesQuery.isLoading) {
+    return <QueryLoadingState label="正在加载推送历史…" />;
+  }
+  if (!page) return null;
+
+  return (
+    <section className="space-y-2" aria-label="推送历史">
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 className="text-sm font-medium">推送历史</h3>
+        <span className="text-muted-foreground text-xs">
+          {page.total > 0 ? `最近 ${page.items.length} 条，共 ${page.total} 条` : null}
+        </span>
+      </div>
+
+      {page.items.length === 0 ? (
+        <p className="text-muted-foreground rounded-md border border-dashed p-4 text-center text-sm">
+          还没有推送记录。通道配好后，这里会显示每一次推送的结果。
+        </p>
+      ) : (
+        <ul className="divide-y rounded-md border">
+          {page.items.map((item) => (
+            <li key={item.id} className="flex items-start gap-2.5 p-2.5">
+              {item.status === "delivered" ? (
+                <CheckCircle2Icon className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+              ) : (
+                <XCircleIcon className="text-destructive mt-0.5 size-4 shrink-0" />
+              )}
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="truncate text-sm">{item.title}</span>
+                  {item.is_test ? (
+                    <Badge
+                      variant="outline"
+                      className="h-4 rounded-sm px-1 text-[10px] leading-none"
+                    >
+                      测试
+                    </Badge>
+                  ) : null}
+                </div>
+                <p className="text-muted-foreground text-xs">
+                  {item.channel_name} · {item.event_label} ·{" "}
+                  {new Date(item.created_at).toLocaleString("zh-CN")}
+                </p>
+                {item.error_message ? (
+                  <p className="text-destructive text-xs break-all">{item.error_message}</p>
+                ) : null}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 /** Manage where trade lifecycle events get pushed. */
 export function NotificationsSettingsPage() {
   const channelsQuery = useQuery({
@@ -478,6 +556,8 @@ export function NotificationsSettingsPage() {
           ))}
         </ul>
       )}
+
+      <DeliveryHistory />
     </section>
   );
 }

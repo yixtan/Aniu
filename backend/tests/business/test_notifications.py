@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from backend.business.notifications import (
     CreateChannelCommand,
+    DeliveryStatus,
     NotificationChannel,
     NotificationChannelKind,
+    NotificationDelivery,
+    NotificationEvent,
+    NotificationEventKind,
     NotificationService,
     OrderFillObservation,
     TradeDirection,
-    TradeEventKind,
-    TradeNotificationEvent,
     UpdateChannelCommand,
     detect_fill_events,
     mask_secret,
@@ -39,7 +43,7 @@ def _trade_payload(
 
 class FakeSender:
     def __init__(self, fail: bool = False) -> None:
-        self.sent: list[tuple[int, TradeEventKind]] = []
+        self.sent: list[tuple[int, NotificationEventKind]] = []
         self._fail = fail
 
     async def send(
@@ -47,7 +51,7 @@ class FakeSender:
         *,
         channel: NotificationChannel,
         secret: str,
-        event: TradeNotificationEvent,
+        event: NotificationEvent,
     ) -> None:
         del secret
         if self._fail:
@@ -105,14 +109,14 @@ def _channel(
     channel_id: int = 1,
     *,
     enabled: bool = True,
-    events: frozenset[TradeEventKind] | None = None,
+    events: frozenset[NotificationEventKind] | None = None,
 ) -> NotificationChannel:
     return NotificationChannel(
         id=channel_id,
         name=f"通道{channel_id}",
         kind=NotificationChannelKind.WEBHOOK,
         enabled=enabled,
-        subscribed_events=events or frozenset(TradeEventKind),
+        subscribed_events=events or frozenset(NotificationEventKind),
     )
 
 
@@ -122,7 +126,7 @@ def test_trade_tool_payload_becomes_an_order_placed_event() -> None:
     )
 
     assert event is not None
-    assert event.kind is TradeEventKind.ORDER_PLACED
+    assert event.kind is NotificationEventKind.ORDER_PLACED
     assert event.direction is TradeDirection.BUY
     assert event.stock_code == "600519"
     assert event.price == 1700.0
@@ -160,7 +164,7 @@ def test_cancel_tool_payload_becomes_an_order_cancelled_event() -> None:
     )
 
     assert event is not None
-    assert event.kind is TradeEventKind.ORDER_CANCELLED
+    assert event.kind is NotificationEventKind.ORDER_CANCELLED
     assert event.order_id == "262154600000047682"
     assert event.stock_code == "515880"
 
@@ -177,7 +181,7 @@ def test_cancel_all_notifies_without_order_details() -> None:
     )
 
     assert event is not None
-    assert event.kind is TradeEventKind.ORDER_CANCELLED
+    assert event.kind is NotificationEventKind.ORDER_CANCELLED
     assert event.order_id is None
     assert "已撤单" in event.title
 
@@ -220,7 +224,7 @@ def test_first_fill_notifies_and_sets_the_watermark() -> None:
     result = detect_fill_events([_observation(filled=100)], {})
 
     assert len(result.events) == 1
-    assert result.events[0].kind is TradeEventKind.ORDER_FILLED
+    assert result.events[0].kind is NotificationEventKind.ORDER_FILLED
     assert result.events[0].filled_quantity == 100
     assert result.watermarks == {"A1": 100}
 
@@ -294,8 +298,8 @@ def test_mask_secret_never_reveals_a_usable_credential(
 async def test_publish_only_reaches_subscribed_enabled_channels() -> None:
     repo = FakeChannelRepo(
         [
-            _channel(1, events=frozenset({TradeEventKind.ORDER_PLACED})),
-            _channel(2, events=frozenset({TradeEventKind.ORDER_FILLED})),
+            _channel(1, events=frozenset({NotificationEventKind.ORDER_PLACED})),
+            _channel(2, events=frozenset({NotificationEventKind.ORDER_FILLED})),
             _channel(3, enabled=False),
         ]
     )
@@ -303,11 +307,11 @@ async def test_publish_only_reaches_subscribed_enabled_channels() -> None:
     service = NotificationService(channel_repo=repo, sender=sender)
 
     delivered = await service.publish(
-        TradeNotificationEvent(kind=TradeEventKind.ORDER_PLACED, run_id=1)
+        NotificationEvent(kind=NotificationEventKind.ORDER_PLACED, run_id=1)
     )
 
     assert delivered == 1
-    assert sender.sent == [(1, TradeEventKind.ORDER_PLACED)]
+    assert sender.sent == [(1, NotificationEventKind.ORDER_PLACED)]
 
 
 @pytest.mark.asyncio
@@ -318,7 +322,7 @@ async def test_publish_swallows_delivery_failures() -> None:
 
     assert (
         await service.publish(
-            TradeNotificationEvent(kind=TradeEventKind.ORDER_PLACED, run_id=1)
+            NotificationEvent(kind=NotificationEventKind.ORDER_PLACED, run_id=1)
         )
         == 0
     )
@@ -339,7 +343,7 @@ async def test_create_channel_stores_a_masked_hint_only() -> None:
     )
 
     assert dto.target_hint == "…3456"
-    assert dto.subscribed_events == (TradeEventKind.ORDER_PLACED,)
+    assert dto.subscribed_events == (NotificationEventKind.ORDER_PLACED,)
     assert repo.secrets[dto.id] == "abcdef123456"
 
 
@@ -384,3 +388,147 @@ def test_body_template_is_rejected_for_vendor_channels() -> None:
             kind=NotificationChannelKind.SERVERCHAN,
             body_template='{"a": 1}',
         )
+
+
+class FakeDeliveryRepo:
+    def __init__(self) -> None:
+        self.rows: list[NotificationDelivery] = []
+
+    async def append(self, delivery: NotificationDelivery) -> NotificationDelivery:
+        stored = replace(delivery, id=len(self.rows) + 1)
+        self.rows.append(stored)
+        return stored
+
+    async def list_page(self, *, limit: int, offset: int):
+        return list(reversed(self.rows))[offset : offset + limit]
+
+    async def count(self) -> int:
+        return len(self.rows)
+
+
+def test_run_failure_event_reads_as_a_failure_not_a_trade() -> None:
+    event = NotificationEvent(
+        kind=NotificationEventKind.RUN_FAILED,
+        run_id=128,
+        stage_name="Run",
+        failure_reason="MX request failed: 余额不足",
+    )
+
+    assert event.title == "Aniu 运行失败 · 运行 #128"
+    text = event.as_text()
+    assert "失败阶段：Run" in text
+    assert "原因：MX request failed: 余额不足" in text
+    assert event.as_mapping()["event"] == "run_failed"
+
+
+def test_a_long_failure_reason_is_truncated() -> None:
+    event = NotificationEvent(
+        kind=NotificationEventKind.RUN_FAILED, run_id=1, failure_reason="x" * 900
+    )
+
+    assert event.failure_reason is not None
+    assert len(event.failure_reason) == 500
+    assert event.failure_reason.endswith("…")
+
+
+def test_a_blank_failure_reason_is_dropped() -> None:
+    assert (
+        NotificationEvent(
+            kind=NotificationEventKind.RUN_FAILED, run_id=1, failure_reason="   "
+        ).failure_reason
+        is None
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_successful_push_is_recorded_in_history() -> None:
+    deliveries = FakeDeliveryRepo()
+    service = NotificationService(
+        channel_repo=FakeChannelRepo([_channel(1)]),
+        sender=FakeSender(),
+        delivery_repo=deliveries,
+    )
+
+    await service.publish(
+        NotificationEvent(kind=NotificationEventKind.ORDER_PLACED, run_id=1)
+    )
+
+    assert len(deliveries.rows) == 1
+    row = deliveries.rows[0]
+    assert row.status is DeliveryStatus.DELIVERED
+    assert row.channel_name == "通道1"
+    assert row.event_kind is NotificationEventKind.ORDER_PLACED
+    assert row.error_message is None
+    assert row.is_test is False
+
+
+@pytest.mark.asyncio
+async def test_a_failed_push_is_recorded_with_its_error() -> None:
+    deliveries = FakeDeliveryRepo()
+    service = NotificationService(
+        channel_repo=FakeChannelRepo([_channel(1)]),
+        sender=FakeSender(fail=True),
+        delivery_repo=deliveries,
+    )
+
+    await service.publish(
+        NotificationEvent(kind=NotificationEventKind.RUN_FAILED, run_id=9)
+    )
+
+    assert len(deliveries.rows) == 1
+    assert deliveries.rows[0].status is DeliveryStatus.FAILED
+    assert "upstream refused" in (deliveries.rows[0].error_message or "")
+
+
+@pytest.mark.asyncio
+async def test_a_test_send_is_recorded_and_flagged_as_a_test() -> None:
+    deliveries = FakeDeliveryRepo()
+    service = NotificationService(
+        channel_repo=FakeChannelRepo([_channel(1)]),
+        sender=FakeSender(),
+        delivery_repo=deliveries,
+    )
+
+    await service.send_test(1)
+
+    assert len(deliveries.rows) == 1
+    assert deliveries.rows[0].is_test is True
+
+
+@pytest.mark.asyncio
+async def test_history_reads_back_newest_first_with_a_total() -> None:
+    deliveries = FakeDeliveryRepo()
+    service = NotificationService(
+        channel_repo=FakeChannelRepo([_channel(1)]),
+        sender=FakeSender(),
+        delivery_repo=deliveries,
+    )
+    for _ in range(3):
+        await service.publish(
+            NotificationEvent(kind=NotificationEventKind.ORDER_PLACED, run_id=1)
+        )
+
+    page = await service.list_deliveries(limit=2, offset=0)
+
+    assert page.total == 3
+    assert [item.id for item in page.items] == [3, 2]
+
+
+@pytest.mark.asyncio
+async def test_history_failures_never_break_the_push() -> None:
+    class ExplodingRepo(FakeDeliveryRepo):
+        async def append(self, delivery: NotificationDelivery) -> NotificationDelivery:
+            raise RuntimeError("history table is gone")
+
+    service = NotificationService(
+        channel_repo=FakeChannelRepo([_channel(1)]),
+        sender=FakeSender(),
+        delivery_repo=ExplodingRepo(),
+    )
+
+    assert (
+        await service.publish(
+            NotificationEvent(kind=NotificationEventKind.ORDER_PLACED, run_id=1)
+        )
+        == 1
+    )

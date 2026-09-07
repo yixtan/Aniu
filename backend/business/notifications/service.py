@@ -10,21 +10,26 @@ from backend.business.notifications.commands import (
 )
 from backend.business.notifications.dto import (
     NotificationChannelDTO,
+    NotificationDeliveryPageDTO,
     NotificationTestResultDTO,
     mask_secret,
     to_notification_channel_dto,
+    to_notification_delivery_dto,
 )
 from backend.business.notifications.models import (
+    DeliveryStatus,
     NotificationChannel,
+    NotificationDelivery,
+    NotificationEvent,
+    NotificationEventKind,
     TradeDirection,
-    TradeEventKind,
-    TradeNotificationEvent,
     normalize_body_template,
     normalize_channel_name,
     normalize_subscribed_events,
 )
 from backend.business.notifications.ports import (
     NotificationChannelRepositoryPort,
+    NotificationDeliveryRepositoryPort,
     NotificationSenderPort,
 )
 from backend.business.shared import CommitterPort, NotificationChannelNotFoundError
@@ -32,8 +37,8 @@ from backend.business.shared import CommitterPort, NotificationChannelNotFoundEr
 logger = logging.getLogger(__name__)
 
 # Shaped exactly like a real push so the test message is representative.
-_TEST_EVENT = TradeNotificationEvent(
-    kind=TradeEventKind.ORDER_PLACED,
+_TEST_EVENT = NotificationEvent(
+    kind=NotificationEventKind.ORDER_PLACED,
     instruction="买入 600519 1700 100",
     direction=TradeDirection.BUY,
     stock_code="600519",
@@ -59,10 +64,12 @@ class NotificationService:
         *,
         channel_repo: NotificationChannelRepositoryPort,
         sender: NotificationSenderPort,
+        delivery_repo: NotificationDeliveryRepositoryPort | None = None,
         committer: CommitterPort | None = None,
     ) -> None:
         self._channel_repo = channel_repo
         self._sender = sender
+        self._delivery_repo = delivery_repo
         self._committer = committer
 
     async def list_channels(self) -> list[NotificationChannelDTO]:
@@ -142,6 +149,13 @@ class NotificationService:
         channel = await self._require_channel(channel_id)
         secret = await self._channel_repo.get_secret(channel_id)
         if not secret:
+            await self._record(
+                channel,
+                _TEST_EVENT,
+                error="通道缺少地址或密钥，未发送。",
+                is_test=True,
+            )
+            await self._commit()
             return NotificationTestResultDTO(
                 channel_id=channel_id,
                 delivered=False,
@@ -154,18 +168,22 @@ class NotificationService:
                 "notification test delivery failed",
                 extra={"channel_id": channel_id, "channel_kind": channel.kind.value},
             )
+            await self._record(channel, _TEST_EVENT, error=str(exc), is_test=True)
+            await self._commit()
             return NotificationTestResultDTO(
                 channel_id=channel_id,
                 delivered=False,
                 message=f"发送失败：{exc}",
             )
+        await self._record(channel, _TEST_EVENT, is_test=True)
+        await self._commit()
         return NotificationTestResultDTO(
             channel_id=channel_id,
             delivered=True,
             message="测试消息已发送，请在对应客户端确认。",
         )
 
-    async def publish(self, event: TradeNotificationEvent) -> int:
+    async def publish(self, event: NotificationEvent) -> int:
         """Fan one event out to every subscribed channel.
 
         Delivery problems are logged and swallowed: a push must never fail the
@@ -188,9 +206,12 @@ class NotificationService:
                         "skipping notification channel without a stored endpoint",
                         extra={"channel_id": channel.id},
                     )
+                    await self._record(
+                        channel, event, error="通道缺少地址或密钥，未发送。"
+                    )
                     continue
                 await self._sender.send(channel=channel, secret=secret, event=event)
-            except Exception:
+            except Exception as exc:
                 logger.warning(
                     "notification delivery failed",
                     extra={
@@ -200,9 +221,62 @@ class NotificationService:
                     },
                     exc_info=True,
                 )
+                await self._record(channel, event, error=str(exc))
                 continue
+            await self._record(channel, event)
             delivered += 1
+        # History rows are written by this method, so the unit of work has to be
+        # closed here; the background dispatcher does not commit on its own.
+        await self._commit()
         return delivered
+
+    async def list_deliveries(
+        self, *, limit: int, offset: int
+    ) -> NotificationDeliveryPageDTO:
+        if self._delivery_repo is None:
+            return NotificationDeliveryPageDTO(items=(), total=0)
+        rows = await self._delivery_repo.list_page(limit=limit, offset=offset)
+        return NotificationDeliveryPageDTO(
+            items=tuple(to_notification_delivery_dto(row) for row in rows),
+            total=await self._delivery_repo.count(),
+        )
+
+    async def _record(
+        self,
+        channel: NotificationChannel,
+        event: NotificationEvent,
+        *,
+        error: str | None = None,
+        is_test: bool = False,
+    ) -> None:
+        """Append one history row. Never raises: history must not break a push."""
+
+        if self._delivery_repo is None:
+            return
+        try:
+            await self._delivery_repo.append(
+                NotificationDelivery(
+                    id=0,
+                    channel_id=channel.id,
+                    channel_name=channel.name,
+                    channel_kind=channel.kind,
+                    event_kind=event.kind,
+                    title=event.title,
+                    status=(
+                        DeliveryStatus.FAILED
+                        if error
+                        else DeliveryStatus.DELIVERED
+                    ),
+                    error_message=error,
+                    is_test=is_test,
+                )
+            )
+        except Exception:
+            logger.warning(
+                "failed to record notification delivery",
+                extra={"channel_id": channel.id, "event": event.kind.value},
+                exc_info=True,
+            )
 
     async def _require_channel(self, channel_id: int) -> NotificationChannel:
         channel = await self._channel_repo.get(channel_id)

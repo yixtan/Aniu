@@ -1,12 +1,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NotificationsSettingsPage } from "./notifications-settings-page";
 
 const api = vi.hoisted(() => ({
   listNotificationChannels: vi.fn(),
+  listNotificationDeliveries: vi.fn(),
   createNotificationChannel: vi.fn(),
   updateNotificationChannel: vi.fn(),
   deleteNotificationChannel: vi.fn(),
@@ -43,6 +44,10 @@ function renderPage() {
     </QueryClientProvider>,
   );
 }
+
+beforeEach(() => {
+  api.listNotificationDeliveries.mockResolvedValue({ items: [], total: 0 });
+});
 
 afterEach(() => vi.clearAllMocks());
 
@@ -85,7 +90,7 @@ describe("NotificationsSettingsPage", () => {
       kind: "webhook",
       secret: "https://hook.test/abcd1234",
       enabled: true,
-      subscribed_events: ["order_placed", "order_cancelled", "order_filled"],
+      subscribed_events: ["order_placed", "order_cancelled", "order_filled", "run_failed"],
       body_template: null,
     });
   });
@@ -133,5 +138,70 @@ describe("NotificationsSettingsPage", () => {
     await waitFor(() =>
       expect(api.updateNotificationChannel).toHaveBeenCalledWith(1, { enabled: false }),
     );
+  });
+  it("offers run failure as a subscribable event", async () => {
+    const user = userEvent.setup();
+    api.listNotificationChannels.mockResolvedValue([]);
+
+    renderPage();
+
+    await user.click(await screen.findByRole("button", { name: /新增通道/ }));
+
+    expect(screen.getByRole("checkbox", { name: /运行失败/ })).toBeChecked();
+    expect(screen.getByText("任务运行以失败告终；手动中止不会推送")).toBeInTheDocument();
+  });
+
+  it("subscribes a new channel to run failures by default", async () => {
+    const user = userEvent.setup();
+    api.listNotificationChannels.mockResolvedValue([]);
+    api.createNotificationChannel.mockResolvedValue(channel);
+
+    renderPage();
+
+    await user.click(await screen.findByRole("button", { name: /新增通道/ }));
+    await user.type(screen.getByLabelText("通道名称"), "手机");
+    await user.type(screen.getByLabelText("地址 / 密钥"), "https://hook.test/x");
+    await user.click(screen.getByRole("button", { name: "创建通道" }));
+
+    await waitFor(() => expect(api.createNotificationChannel).toHaveBeenCalledTimes(1));
+    expect(api.createNotificationChannel.mock.calls[0]?.[0].subscribed_events).toContain(
+      "run_failed",
+    );
+  });
+
+  it("shows delivery history with the failure detail", async () => {
+    api.listNotificationChannels.mockResolvedValue([channel]);
+    api.listNotificationDeliveries.mockResolvedValue({
+      total: 2,
+      items: [
+        {
+          id: 2,
+          channel_id: 1,
+          channel_name: "我的手机",
+          channel_kind: "serverchan",
+          event_kind: "run_failed",
+          event_label: "运行失败",
+          title: "Aniu 运行失败 · 运行 #128",
+          status: "failed",
+          error_message: "推送失败：HTTP 500",
+          is_test: false,
+          created_at: "2026-09-07T10:00:00Z",
+        },
+      ],
+    });
+
+    renderPage();
+
+    expect(await screen.findByText("Aniu 运行失败 · 运行 #128")).toBeInTheDocument();
+    expect(screen.getByText("推送失败：HTTP 500")).toBeInTheDocument();
+    expect(screen.getByText(/我的手机 · 运行失败/)).toBeInTheDocument();
+  });
+
+  it("explains an empty history instead of showing a blank area", async () => {
+    api.listNotificationChannels.mockResolvedValue([channel]);
+
+    renderPage();
+
+    expect(await screen.findByText(/还没有推送记录/)).toBeInTheDocument();
   });
 });

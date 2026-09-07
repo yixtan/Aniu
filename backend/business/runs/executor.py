@@ -7,7 +7,11 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from time import perf_counter
 
-from backend.business.notifications import TradeNotificationPort
+from backend.business.notifications import (
+    NotificationEvent,
+    NotificationEventKind,
+    NotificationPublisherPort,
+)
 from backend.business.runs import StrategyRun
 from backend.business.runs.abort_registry import ActiveRunAbortRegistry
 from backend.business.runs.agent_runner import AgentRunnerFactoryPort
@@ -49,7 +53,7 @@ class RunExecutor:
         trace_step_delta_publisher: TraceStepDeltaPublisher | None = None,
         now_provider: NowProvider | None = None,
         market_session_is_open: MarketSessionOpen | None = None,
-        trade_notifier: TradeNotificationPort | None = None,
+        notifier: NotificationPublisherPort | None = None,
     ) -> None:
         self._run_repo = run_repo
         self._committer = committer
@@ -60,10 +64,11 @@ class RunExecutor:
         self._now_provider = now_provider or (lambda: datetime.now(tz=UTC))
         self._market_session_is_open = market_session_is_open or (lambda _moment: False)
         self._runtime = RunRuntimeState()
+        self._notifier = notifier
         self._execution_callbacks = RunExecutionCallbacks(
             runtime=self._runtime,
             publish_trace_step_delta=trace_step_delta_publisher,
-            trade_notifier=trade_notifier,
+            notifier=notifier,
         )
         self._trace = RunTraceSupport(
             run_repo=run_repo,
@@ -222,9 +227,9 @@ class RunExecutor:
     ) -> None:
         if run.status is not RunStatus.RUNNING:
             return
+        failure_reason = str(exc).strip() or type(exc).__name__
         try:
             previous_state = run.current_state.value
-            failure_reason = str(exc).strip() or type(exc).__name__
             run.fail(failure_reason)
             await self._persist_run(run)
             await self._commit()
@@ -237,6 +242,30 @@ class RunExecutor:
             logger.exception(
                 "failed to persist run failure state",
                 extra={"run_id": run.run_id},
+            )
+        # Announced outside the block above so a persistence problem still
+        # reaches the operator. A user-requested abort is deliberately silent.
+        await self._notify_run_failed(run, failure_reason)
+
+    async def _notify_run_failed(self, run: StrategyRun, reason: str) -> None:
+        """Announce a failed run without letting the push affect the run."""
+
+        if self._notifier is None:
+            return
+        try:
+            await self._notifier.publish(
+                NotificationEvent(
+                    kind=NotificationEventKind.RUN_FAILED,
+                    run_id=run.run_id,
+                    stage_name=run.trace.current_stage_id or run.current_state.value,
+                    failure_reason=reason,
+                )
+            )
+        except Exception:
+            logger.warning(
+                "failed to publish run failure notification",
+                extra={"run_id": run.run_id},
+                exc_info=True,
             )
 
     async def _persist_run(self, run: StrategyRun) -> StrategyRun:

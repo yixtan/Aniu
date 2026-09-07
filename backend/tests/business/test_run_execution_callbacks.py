@@ -5,8 +5,8 @@ from types import SimpleNamespace
 import pytest
 
 from backend.business.notifications import (
-    TradeEventKind,
-    TradeNotificationEvent,
+    NotificationEvent,
+    NotificationEventKind,
 )
 from backend.business.runs import RunEventType
 from backend.business.runs.callbacks import (
@@ -45,10 +45,10 @@ def test_slim_result_data_can_drop_summary_for_summary_stage() -> None:
 
 class _RecordingNotifier:
     def __init__(self, fail: bool = False) -> None:
-        self.published: list[TradeNotificationEvent] = []
+        self.published: list[NotificationEvent] = []
         self._fail = fail
 
-    async def publish(self, event: TradeNotificationEvent) -> None:
+    async def publish(self, event: NotificationEvent) -> None:
         if self._fail:
             raise RuntimeError("dispatcher exploded")
         self.published.append(event)
@@ -68,7 +68,7 @@ def _callbacks(notifier: object) -> tuple[RunExecutionCallbacks, RunRuntimeState
     run = SimpleNamespace(run_id=42)
     runtime = RunRuntimeState(active_run=run)  # type: ignore[arg-type]
     runtime.trace_recorder = _StubRecorder()  # type: ignore[assignment]
-    callbacks = RunExecutionCallbacks(runtime=runtime, trade_notifier=notifier)  # type: ignore[arg-type]
+    callbacks = RunExecutionCallbacks(runtime=runtime, notifier=notifier)  # type: ignore[arg-type]
     return callbacks, runtime
 
 
@@ -100,7 +100,9 @@ async def test_completed_trade_call_publishes_an_order_placed_event() -> None:
 
     await _complete_tool_call(callbacks, tool_name="trade", content={"orderId": "77"})
 
-    assert [event.kind for event in notifier.published] == [TradeEventKind.ORDER_PLACED]
+    assert [event.kind for event in notifier.published] == [
+        NotificationEventKind.ORDER_PLACED
+    ]
     assert notifier.published[0].order_id == "77"
     assert notifier.published[0].run_id == 42
 
@@ -118,7 +120,7 @@ async def test_completed_cancel_call_publishes_an_order_cancelled_event() -> Non
     )
 
     assert [event.kind for event in notifier.published] == [
-        TradeEventKind.ORDER_CANCELLED
+        NotificationEventKind.ORDER_CANCELLED
     ]
 
 

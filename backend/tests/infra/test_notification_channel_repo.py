@@ -6,15 +6,21 @@ import pytest
 from sqlalchemy import select
 
 from backend.business.notifications import (
+    DeliveryStatus,
     NotificationChannelKind,
-    TradeEventKind,
+    NotificationDelivery,
+    NotificationEventKind,
 )
 from backend.infra.db.models import NotificationChannelModel, SecretStoreModel
 from backend.infra.repositories import (
     NotificationChannelRepository,
+    NotificationDeliveryRepository,
     NotificationFillWatermarkRepository,
 )
-from backend.infra.repositories.notification_channel_repo import SECRET_NAMESPACE
+from backend.infra.repositories.notification_channel_repo import (
+    MAX_DELIVERY_ROWS,
+    SECRET_NAMESPACE,
+)
 
 
 async def _create(repo: NotificationChannelRepository, **overrides: object):
@@ -22,7 +28,7 @@ async def _create(repo: NotificationChannelRepository, **overrides: object):
         "name": "我的 webhook",
         "kind": NotificationChannelKind.WEBHOOK,
         "enabled": True,
-        "subscribed_events": frozenset({TradeEventKind.ORDER_PLACED}),
+        "subscribed_events": frozenset({NotificationEventKind.ORDER_PLACED}),
         "body_template": None,
         "target_hint": "https://hook.test/…1234",
         "secret": "https://hook.test/abcd1234",
@@ -38,7 +44,7 @@ async def test_created_channel_round_trips_with_its_secret(session) -> None:
     channel = await _create(repo)
 
     assert channel.id > 0
-    assert channel.subscribed_events == frozenset({TradeEventKind.ORDER_PLACED})
+    assert channel.subscribed_events == frozenset({NotificationEventKind.ORDER_PLACED})
     assert await repo.get_secret(channel.id) == "https://hook.test/abcd1234"
 
 
@@ -72,7 +78,7 @@ async def test_update_without_a_secret_keeps_the_stored_endpoint(session) -> Non
         channel.id,
         name="改名了",
         enabled=False,
-        subscribed_events=frozenset(TradeEventKind),
+        subscribed_events=frozenset(NotificationEventKind),
         body_template=None,
         target_hint=channel.target_hint,
         secret=None,
@@ -107,7 +113,7 @@ async def test_a_row_without_usable_events_falls_back_to_every_event(session) ->
     reloaded = await repo.get(channel.id)
 
     assert reloaded is not None
-    assert reloaded.subscribed_events == frozenset(TradeEventKind)
+    assert reloaded.subscribed_events == frozenset(NotificationEventKind)
 
 
 @pytest.mark.asyncio
@@ -122,3 +128,77 @@ async def test_watermarks_persist_advance_and_prune(session) -> None:
 
     await repo.replace({})
     assert await repo.load() == {}
+
+
+def _delivery(title: str = "Aniu 已下单", failed: bool = False) -> NotificationDelivery:
+    return NotificationDelivery(
+        id=0,
+        channel_id=1,
+        channel_name="我的手机",
+        channel_kind=NotificationChannelKind.SERVERCHAN,
+        event_kind=NotificationEventKind.ORDER_PLACED,
+        title=title,
+        status=DeliveryStatus.FAILED if failed else DeliveryStatus.DELIVERED,
+        error_message="HTTP 500" if failed else None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_delivery_history_reads_back_newest_first(session) -> None:
+    repo = NotificationDeliveryRepository(session)
+    for index in range(3):
+        await repo.append(_delivery(title=f"第 {index} 条"))
+
+    page = await repo.list_page(limit=2, offset=0)
+
+    assert await repo.count() == 3
+    assert [row.title for row in page] == ["第 2 条", "第 1 条"]
+    assert page[0].channel_kind is NotificationChannelKind.SERVERCHAN
+
+
+@pytest.mark.asyncio
+async def test_delivery_history_keeps_the_failure_detail(session) -> None:
+    repo = NotificationDeliveryRepository(session)
+    await repo.append(_delivery(failed=True))
+
+    row = (await repo.list_page(limit=1, offset=0))[0]
+
+    assert row.status is DeliveryStatus.FAILED
+    assert row.error_message == "HTTP 500"
+
+
+@pytest.mark.asyncio
+async def test_delivery_history_is_capped(session) -> None:
+    """History is an operations aid, not an audit log; it must not grow forever."""
+
+    repo = NotificationDeliveryRepository(session)
+    for index in range(MAX_DELIVERY_ROWS + 5):
+        await repo.append(_delivery(title=f"第 {index} 条"))
+
+    assert await repo.count() == MAX_DELIVERY_ROWS
+    newest = (await repo.list_page(limit=1, offset=0))[0]
+    assert newest.title == f"第 {MAX_DELIVERY_ROWS + 4} 条"
+
+
+@pytest.mark.asyncio
+async def test_history_survives_deleting_the_channel_it_went_through(session) -> None:
+    channels = NotificationChannelRepository(session)
+    deliveries = NotificationDeliveryRepository(session)
+    channel = await _create(channels)
+    await deliveries.append(
+        NotificationDelivery(
+            id=0,
+            channel_id=channel.id,
+            channel_name=channel.name,
+            channel_kind=channel.kind,
+            event_kind=NotificationEventKind.ORDER_FILLED,
+            title="Aniu 已成交",
+            status=DeliveryStatus.DELIVERED,
+        )
+    )
+
+    await channels.delete(channel.id)
+
+    row = (await deliveries.list_page(limit=1, offset=0))[0]
+    assert row.channel_name == "我的 webhook"
+    assert row.title == "Aniu 已成交"
