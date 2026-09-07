@@ -70,6 +70,21 @@ npm --prefix frontend run api:generate
 
 ## 陷阱
 
+**模型的「最大输出」不能设成等于上下文窗口。** Summary 阶段的输入预算是
+`上下文窗口 − 最大输出 − 2000`（[`stages/summary_stage.py`](backend/business/runs/stages/summary_stage.py)）。两者相等时预算为负，
+`build_summary_stage_payload` 抛出 `summary input budget is empty`，编排器捕获后**静默降级**成
+Markdown：运行仍标记为 COMPLETED，只有 `summary_render_mode` 从 `html` 变成
+`markdown`，页面上看不出任何异常。本仓库曾因此连续 69 次运行都没生成过 HTML 总结。
+
+排查方法——正常应为 `html`：
+
+```sql
+SELECT summary_render_mode, COUNT(*) FROM strategy_runs
+WHERE summary IS NOT NULL GROUP BY 1;
+```
+
+降级原因记录在该次运行 `trace_json` 的 Summary 阶段里，step_id 为 `markdown_fallback`。
+
 **别在 `backend/` 下建虚拟环境。** 架构测试用 `rglob("*.py")` 遍历整个 `backend/`，会把 venv 里 pip 的 vendor 代码算进去，导致「超 1000 行」和「import 环」双双误报。venv 只放 `.aniu/local/.venv`。
 
 **改了定时任务要重启后端。** cron 在应用启动时注册，`--reload` 只热更新 Python 代码，不会重新排期。
