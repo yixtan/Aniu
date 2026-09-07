@@ -336,7 +336,7 @@ async def test_job_runner_refreshes_account_cache_on_trading_day(
 
 
 @pytest.mark.asyncio
-async def test_account_refresh_runs_every_ten_minutes_through_the_session(
+async def test_account_refresh_runs_every_thirty_minutes_through_the_session(
     session_factory,
 ) -> None:
     """Fills are only visible via this refresh, so its cadence is the alert lag."""
@@ -348,7 +348,7 @@ async def test_account_refresh_runs_every_ten_minutes_through_the_session(
 
     assert job is not None
     fields = {field.name: str(field) for field in job.trigger.fields}
-    assert fields["minute"] == "*/10"
+    assert fields["minute"] == "*/30"
     assert fields["hour"] == "9-11,13-15"
     assert fields["day_of_week"] == "mon-fri"
 
@@ -363,10 +363,10 @@ async def test_account_refresh_fire_times_bound_the_fill_notification_lag(
     await runner.shutdown()
 
     assert job is not None
-    # Walk a mid-session Thursday and confirm no gap exceeds ten minutes.
+    # Walk a mid-session Thursday and confirm the cadence stays even.
     moment = datetime(2026, 7, 30, 13, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
     fire_times = []
-    for _ in range(12):
+    for _ in range(4):
         moment = job.trigger.get_next_fire_time(None, moment)
         fire_times.append(moment.astimezone(ZoneInfo("Asia/Shanghai")))
         moment = moment + timedelta(seconds=1)
@@ -375,4 +375,4 @@ async def test_account_refresh_fire_times_bound_the_fill_notification_lag(
         int((later - earlier).total_seconds() // 60)
         for earlier, later in zip(fire_times, fire_times[1:], strict=False)
     }
-    assert gaps == {10}
+    assert gaps == {30}
