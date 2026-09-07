@@ -536,6 +536,74 @@
         "title": "CreateModelChannelWithModelsRequest",
         "type": "object"
       },
+      "CreateNotificationChannelRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "body_template": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body Template"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "kind": {
+            "enum": [
+              "webhook",
+              "serverchan",
+              "wecom_bot"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "secret": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Secret",
+            "type": "string"
+          },
+          "subscribed_events": {
+            "default": [
+              "order_placed",
+              "order_cancelled",
+              "order_filled"
+            ],
+            "items": {
+              "enum": [
+                "order_placed",
+                "order_cancelled",
+                "order_filled"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Subscribed Events",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "secret"
+        ],
+        "title": "CreateNotificationChannelRequest",
+        "type": "object"
+      },
       "CreateScheduleRequest": {
         "additionalProperties": false,
         "description": "Create one market-analysis schedule.",
@@ -1603,6 +1671,106 @@
           "api_key_configured"
         ],
         "title": "MxSettingsResponse",
+        "type": "object"
+      },
+      "NotificationChannelResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "body_template": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body Template"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "webhook",
+              "serverchan",
+              "wecom_bot"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "subscribed_events": {
+            "items": {
+              "enum": [
+                "order_placed",
+                "order_cancelled",
+                "order_filled"
+              ],
+              "type": "string"
+            },
+            "title": "Subscribed Events",
+            "type": "array"
+          },
+          "target_hint": {
+            "title": "Target Hint",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "enabled",
+          "subscribed_events",
+          "body_template",
+          "target_hint",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "NotificationChannelResponse",
+        "type": "object"
+      },
+      "NotificationTestResultResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "channel_id": {
+            "title": "Channel Id",
+            "type": "integer"
+          },
+          "delivered": {
+            "title": "Delivered",
+            "type": "boolean"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel_id",
+          "delivered",
+          "message"
+        ],
+        "title": "NotificationTestResultResponse",
         "type": "object"
       },
       "OpenAICompatibilityFields": {
@@ -3394,6 +3562,81 @@
         "title": "UpdateModelChannelWithModelsRequest",
         "type": "object"
       },
+      "UpdateNotificationChannelRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "body_template": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body Template"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "secret": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secret"
+          },
+          "subscribed_events": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "order_placed",
+                    "order_cancelled",
+                    "order_filled"
+                  ],
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subscribed Events"
+          }
+        },
+        "title": "UpdateNotificationChannelRequest",
+        "type": "object"
+      },
       "UpdateScheduleRequest": {
         "additionalProperties": false,
         "properties": {
@@ -4823,6 +5066,362 @@
         "summary": "Get Memory Dream",
         "tags": [
           "MemoryDreams"
+        ]
+      }
+    },
+    "/api/aniu/notifications/channels": {
+      "get": {
+        "operationId": "list_notification_channels_api_aniu_notifications_channels_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/NotificationChannelResponse"
+                  },
+                  "title": "Response List Notification Channels Api Aniu Notifications Channels Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed"
+          }
+        },
+        "security": [
+          {
+            "AniuSessionCookie": []
+          }
+        ],
+        "summary": "List Notification Channels",
+        "tags": [
+          "Notifications"
+        ]
+      },
+      "post": {
+        "operationId": "create_notification_channel_api_aniu_notifications_channels_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateNotificationChannelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationChannelResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed"
+          }
+        },
+        "security": [
+          {
+            "AniuSessionCookie": []
+          }
+        ],
+        "summary": "Create Notification Channel",
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/api/aniu/notifications/channels/{channel_id}": {
+      "delete": {
+        "operationId": "delete_notification_channel_api_aniu_notifications_channels__channel_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "channel_id",
+            "required": true,
+            "schema": {
+              "title": "Channel Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed"
+          }
+        },
+        "security": [
+          {
+            "AniuSessionCookie": []
+          }
+        ],
+        "summary": "Delete Notification Channel",
+        "tags": [
+          "Notifications"
+        ]
+      },
+      "put": {
+        "operationId": "update_notification_channel_api_aniu_notifications_channels__channel_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "channel_id",
+            "required": true,
+            "schema": {
+              "title": "Channel Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateNotificationChannelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationChannelResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed"
+          }
+        },
+        "security": [
+          {
+            "AniuSessionCookie": []
+          }
+        ],
+        "summary": "Update Notification Channel",
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/api/aniu/notifications/channels/{channel_id}/test": {
+      "post": {
+        "operationId": "test_notification_channel_api_aniu_notifications_channels__channel_id__test_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "channel_id",
+            "required": true,
+            "schema": {
+              "title": "Channel Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationTestResultResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed"
+          }
+        },
+        "security": [
+          {
+            "AniuSessionCookie": []
+          }
+        ],
+        "summary": "Test Notification Channel",
+        "tags": [
+          "Notifications"
         ]
       }
     },

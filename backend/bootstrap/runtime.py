@@ -17,6 +17,7 @@ from backend.business.auth.service import AuthAppService, AuthLoginThrottle
 from backend.business.dreams.service import DreamService
 from backend.business.market import MarketOverviewQueryPort
 from backend.business.memories.service import MemoryService
+from backend.business.notifications.service import NotificationService
 from backend.business.runs.abort_registry import ActiveRunAbortRegistry
 from backend.business.runs.executor import RunExecutor
 from backend.business.runs.service import RunService
@@ -30,11 +31,16 @@ from backend.infra.calendar import TradingCalendar2026, is_market_session_open
 from backend.infra.integrations.agent_runner import AgentRunnerFactoryAdapter
 from backend.infra.integrations.agent_runtime import AgentRuntimeFactory
 from backend.infra.integrations.dream_agent import DreamAgentRunner
+from backend.infra.integrations.notifications import (
+    RoutingNotificationSender,
+    TradeNotificationDispatcher,
+)
 from backend.infra.repositories import (
     AccountCacheRepository,
     MemoryDreamRepository,
     MemoryRepository,
     ModelProfileRepository,
+    NotificationChannelRepository,
     RunJobRepository,
     RunRepository,
     ScheduleRepository,
@@ -85,6 +91,8 @@ class AppRuntime:
     mx_clients: MxClients | None = None
     public_stock_http_client: httpx.AsyncClient | None = None
     public_stock_data: StockMarketDataService | None = None
+    notification_http_client: httpx.AsyncClient | None = None
+    notification_dispatcher: TradeNotificationDispatcher | None = None
     stock_api_log_write_lock: asyncio.Lock = field(
         default_factory=asyncio.Lock,
         repr=False,
@@ -168,6 +176,38 @@ class AppRuntime:
             )
         return self.public_stock_data
 
+    def require_notification_sender(self) -> RoutingNotificationSender:
+        if self.notification_http_client is None:
+            raise RuntimeError("notification HTTP client is not initialized")
+        return RoutingNotificationSender.create(self.notification_http_client)
+
+    def require_notification_dispatcher(self) -> TradeNotificationDispatcher:
+        if self.notification_dispatcher is None:
+            self.notification_dispatcher = TradeNotificationDispatcher(
+                session_factory=self.require_session_factory(),
+                sender=self.require_notification_sender(),
+            )
+        return self.notification_dispatcher
+
+    def optional_notification_dispatcher(self) -> TradeNotificationDispatcher | None:
+        """Dispatcher for callers that must still work without push wiring.
+
+        Account reads and run execution are useful on their own, so a runtime
+        assembled without the notification transport degrades to no pushes
+        instead of failing.
+        """
+
+        if self.session_factory is None or self.notification_http_client is None:
+            return None
+        return self.require_notification_dispatcher()
+
+    def notification_service(self, session: AsyncSession) -> NotificationService:
+        return NotificationService(
+            channel_repo=NotificationChannelRepository(session),
+            sender=self.require_notification_sender(),
+            committer=session,
+        )
+
     def market_overview_query(self) -> MarketOverviewQueryPort:
         return PublicMarketOverviewQuery(self.require_public_stock_data())
 
@@ -226,6 +266,7 @@ class AppRuntime:
             committer=session,
             trading_calendar=TradingCalendar2026(),
             refresh_gate=self.account_refresh_gate,
+            fill_notifier=self.optional_notification_dispatcher(),
         )
 
     def run_service(self, session: AsyncSession) -> RunService:
@@ -292,4 +333,5 @@ class AppRuntime:
             agent_runner_factory=agent_factory,
             market_session_is_open=is_market_session_open,
             abort_registry=self.abort_registry,
+            trade_notifier=self.optional_notification_dispatcher(),
         )

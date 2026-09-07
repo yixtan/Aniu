@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from backend.business.notifications import (
+    TradeNotificationPort,
+    trade_event_from_tool_payload,
+)
 from backend.business.runs import RunEventType, StrategyRun
 from backend.business.runs.pipeline_stages import (
     is_tool_capable_stage,
@@ -15,6 +20,8 @@ from backend.business.runs.runtime import RunRuntimeState
 from backend.business.runs.traces import RunTraceRecorder
 from backend.business.shared import RunNotFoundError
 from backend.business.shared.enums import RunState
+
+logger = logging.getLogger(__name__)
 
 TraceStepDeltaPublisher = Callable[..., Awaitable[None]]
 _RESULT_DATA_DROP_KEYS = frozenset({"tool_activity", "run_content", "content"})
@@ -61,9 +68,11 @@ class RunExecutionCallbacks:
         *,
         runtime: RunRuntimeState,
         publish_trace_step_delta: TraceStepDeltaPublisher | None = None,
+        trade_notifier: TradeNotificationPort | None = None,
     ) -> None:
         self._runtime = runtime
         self._publish_trace_step_delta = publish_trace_step_delta
+        self._trade_notifier = trade_notifier
         self._compaction_counts: dict[str, int] = {}
 
     def bind_runtime(self, runtime: RunRuntimeState) -> None:
@@ -246,6 +255,7 @@ class RunExecutionCallbacks:
                         stage_name,
                         f"调用工具 {self._runtime.stage_tool_calls} 次",
                     )
+                    await self._notify_trade_event(run_id, stage_name, payload)
                 return
         if event_type is RunEventType.SUMMARY_GENERATION_STARTED:
             await recorder.set_step(
@@ -321,6 +331,36 @@ class RunExecutionCallbacks:
             ),
             data=data,
         )
+
+    async def _notify_trade_event(
+        self,
+        run_id: int,
+        stage_name: str,
+        payload: dict[str, Any],
+    ) -> None:
+        """Announce an accepted write-tool call without risking the run."""
+
+        if self._trade_notifier is None:
+            return
+        try:
+            event = trade_event_from_tool_payload(
+                run_id=run_id,
+                stage_name=stage_name,
+                payload=payload,
+            )
+            if event is None:
+                return
+            await self._trade_notifier.publish(event)
+        except Exception:
+            logger.warning(
+                "failed to publish trade notification",
+                extra={
+                    "run_id": run_id,
+                    "stage_id": stage_name,
+                    "tool_name": str(payload.get("tool_name") or ""),
+                },
+                exc_info=True,
+            )
 
     async def _emit_step_delta(
         self,

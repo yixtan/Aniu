@@ -25,6 +25,10 @@ from backend.business.account.ports import (
     TradingCalendarPort,
 )
 from backend.business.account.runtime import AccountRefreshGate
+from backend.business.notifications import (
+    OrderFillNotifierPort,
+    OrderFillObservation,
+)
 from backend.business.shared import (
     AccountRefreshThrottledError,
     CommitterPort,
@@ -48,12 +52,14 @@ class AccountAppService:
         committer: CommitterPort | None = None,
         trading_calendar: TradingCalendarPort | None = None,
         refresh_gate: AccountRefreshGate | None = None,
+        fill_notifier: OrderFillNotifierPort | None = None,
     ) -> None:
         self._portfolio_client = portfolio_client
         self._account_cache_repo = account_cache_repo
         self._refresh_gate = refresh_gate or AccountRefreshGate()
         self._committer = committer
         self._trading_calendar = trading_calendar
+        self._fill_notifier = fill_notifier
 
     async def get_account_dashboard(self) -> AccountDashboardDTO:
         snapshot = await self._ensure_cache()
@@ -115,10 +121,38 @@ class AccountAppService:
             attempted_at=now,
         )
         await self._commit(execution_guard=execution_guard)
+        await self._announce_fills(orders)
         return to_account_refresh_result_dto(
             state=state,
             status="refreshed",
             message="已从妙想接口刷新并写入本地数据。",
+        )
+
+    async def _announce_fills(self, orders: list[PortfolioOrderSnapshot]) -> None:
+        """Hand the fresh order list to the notifier.
+
+        Fills are only visible here: an accepted limit order may never fill, so
+        the write tool's response cannot report one. The notifier owns the
+        already-announced watermark and never raises back into a refresh.
+        """
+
+        if self._fill_notifier is None:
+            return
+        await self._fill_notifier.announce_fills(
+            [
+                OrderFillObservation(
+                    order_id=order.order_id,
+                    symbol=order.symbol,
+                    stock_name=order.stock_name,
+                    direction=order.direction,
+                    status=order.status,
+                    quantity=order.quantity,
+                    filled_quantity=order.filled_quantity,
+                    order_price=order.order_price,
+                    filled_price=order.filled_price,
+                )
+                for order in orders
+            ]
         )
 
     async def _ensure_cache(self) -> AccountSnapshot:

@@ -27,6 +27,13 @@ export type CreateModelChannelPayload = Schemas["CreateModelChannelWithModelsReq
 export type UpdateModelChannelPayload = Schemas["UpdateModelChannelWithModelsRequest"];
 export type ModelCatalogFetchPayload = Schemas["FetchModelCatalogRequest"];
 export type SelectedModelPayload = Schemas["SelectedModelRequest"];
+export type NotificationChannel = Schemas["NotificationChannelResponse"];
+export type NotificationChannelKind = NotificationChannel["kind"];
+export type TradeNotificationEvent = NotificationChannel["subscribed_events"][number];
+export type NotificationTestResult = Schemas["NotificationTestResultResponse"];
+export type CreateNotificationChannelPayload = Schemas["CreateNotificationChannelRequest"];
+export type UpdateNotificationChannelPayload = Schemas["UpdateNotificationChannelRequest"];
+
 export type ModelProfilePayload = Omit<
   Schemas["CreateModelChannelWithModelsRequest"],
   "selected_models"

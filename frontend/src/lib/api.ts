@@ -8,8 +8,10 @@ import type {
   MemoryDreamDetail,
   MemoryDreamList,
   CreateModelChannelPayload,
+  CreateNotificationChannelPayload,
   CreateSchedulePayload,
   UpdateModelChannelPayload,
+  UpdateNotificationChannelPayload,
   UpdateSchedulePayload,
   UpdateSettingsPayload,
   StockApiLogToolSource,
@@ -426,6 +428,43 @@ export async function updateSchedule(scheduleId: number, payload: UpdateSchedule
   const result = await openapiClient.PUT("/api/aniu/schedules/{schedule_id}", {
     params: { path: { schedule_id: scheduleId } },
     body: payload,
+  });
+  return getResponseData(result);
+}
+
+export async function listNotificationChannels() {
+  const result = await openapiClient.GET("/api/aniu/notifications/channels");
+  return getResponseData(result);
+}
+
+export async function createNotificationChannel(payload: CreateNotificationChannelPayload) {
+  const result = await openapiClient.POST("/api/aniu/notifications/channels", {
+    body: payload,
+  });
+  return getResponseData(result);
+}
+
+export async function updateNotificationChannel(
+  channelId: number,
+  payload: UpdateNotificationChannelPayload,
+) {
+  const result = await openapiClient.PUT("/api/aniu/notifications/channels/{channel_id}", {
+    params: { path: { channel_id: channelId } },
+    body: payload,
+  });
+  return getResponseData(result);
+}
+
+export async function deleteNotificationChannel(channelId: number) {
+  const result = await openapiClient.DELETE("/api/aniu/notifications/channels/{channel_id}", {
+    params: { path: { channel_id: channelId } },
+  });
+  return getResponseData(result);
+}
+
+export async function testNotificationChannel(channelId: number) {
+  const result = await openapiClient.POST("/api/aniu/notifications/channels/{channel_id}/test", {
+    params: { path: { channel_id: channelId } },
   });
   return getResponseData(result);
 }

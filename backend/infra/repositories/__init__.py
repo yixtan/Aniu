@@ -5,6 +5,10 @@ from backend.infra.repositories.audit_log_repo import AuditLogRepository, AuditR
 from backend.infra.repositories.memory_dream_repo import MemoryDreamRepository
 from backend.infra.repositories.memory_repo import MemoryRepository
 from backend.infra.repositories.model_profile_repo import ModelProfileRepository
+from backend.infra.repositories.notification_channel_repo import (
+    NotificationChannelRepository,
+    NotificationFillWatermarkRepository,
+)
 from backend.infra.repositories.run_job_repo import RunJobRepository
 from backend.infra.repositories.run_repo import RunRepository
 from backend.infra.repositories.schedule_repo import ScheduleRepository
@@ -23,6 +27,8 @@ __all__ = [
     "MemoryDreamRepository",
     "MemoryRepository",
     "ModelProfileRepository",
+    "NotificationChannelRepository",
+    "NotificationFillWatermarkRepository",
     "RunJobRepository",
     "RunRepository",
     "ScheduleRepository",

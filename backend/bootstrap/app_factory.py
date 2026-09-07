@@ -28,6 +28,7 @@ from backend.api.routes import (
     market,
     memories,
     memory_dreams,
+    notifications,
     runs,
     schedules,
     settings,
@@ -183,6 +184,7 @@ async def _initialize_runtime(application: FastAPI, config: RuntimeConfig) -> No
     runtime.models_dev_catalog = ModelsDevCatalog()
     runtime.mx_http_client = httpx.AsyncClient(timeout=15.0)
     runtime.public_stock_http_client = httpx.AsyncClient(timeout=15.0)
+    runtime.notification_http_client = httpx.AsyncClient(timeout=15.0)
 
     runtime.require_mx_clients()
     runtime.require_public_stock_data()
@@ -274,6 +276,15 @@ async def _shutdown_runtime(application: FastAPI) -> None:
     if runtime.run_worker is not None:
         await cleanup("run_worker", runtime.run_worker.stop)
         runtime.run_worker = None
+    if runtime.notification_dispatcher is not None:
+        # Drain in-flight pushes before the HTTP client goes away.
+        await cleanup("notification_dispatcher", runtime.notification_dispatcher.aclose)
+        runtime.notification_dispatcher = None
+    if runtime.notification_http_client is not None:
+        await cleanup(
+            "notification_http_client", runtime.notification_http_client.aclose
+        )
+        runtime.notification_http_client = None
     if runtime.mx_clients is not None:
         await cleanup("mx_clients", runtime.mx_clients.aclose)
         runtime.mx_clients = None
@@ -409,6 +420,7 @@ def create_app(config: RuntimeConfig | None = None) -> FastAPI:
     application.include_router(memories.router)
     application.include_router(market.router)
     application.include_router(memory_dreams.router)
+    application.include_router(notifications.router)
     application.include_router(stream_hub.router)
 
     @application.get("/health")

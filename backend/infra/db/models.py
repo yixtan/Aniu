@@ -532,3 +532,57 @@ class AuthSessionModel(Base):
     last_seen_at: Mapped[str] = mapped_column(Text, nullable=False, default=utc_now_iso)
     revoked_at: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[str] = mapped_column(Text, nullable=False, default=utc_now_iso)
+
+
+class NotificationChannelModel(Base):
+    """One configured push target; the endpoint lives in ``secret_store``."""
+
+    __tablename__ = "notification_channels"
+    __table_args__ = (
+        UniqueConstraint("name", name="uq_notification_channels_name"),
+        Index("idx_notification_channels_enabled", "enabled"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    subscribed_events: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    body_template: Mapped[str | None] = mapped_column(Text, nullable=True)
+    target_hint: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    created_at: Mapped[str] = mapped_column(Text, nullable=False, default=utc_now_iso)
+    updated_at: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default=utc_now_iso,
+        onupdate=utc_now_iso,
+    )
+
+
+class NotificationFillWatermarkModel(Base):
+    """Filled quantity already announced for one upstream order.
+
+    The account order cache is deleted and rebuilt on every refresh, so the
+    watermark cannot live there or every refresh would re-notify the same fill.
+    """
+
+    __tablename__ = "notification_fill_watermarks"
+    __table_args__ = (
+        UniqueConstraint("order_id", name="uq_notification_fill_watermarks_order"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    order_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    announced_quantity: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    updated_at: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default=utc_now_iso,
+        onupdate=utc_now_iso,
+    )

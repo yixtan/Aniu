@@ -7,6 +7,7 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from time import perf_counter
 
+from backend.business.notifications import TradeNotificationPort
 from backend.business.runs import StrategyRun
 from backend.business.runs.abort_registry import ActiveRunAbortRegistry
 from backend.business.runs.agent_runner import AgentRunnerFactoryPort
@@ -48,6 +49,7 @@ class RunExecutor:
         trace_step_delta_publisher: TraceStepDeltaPublisher | None = None,
         now_provider: NowProvider | None = None,
         market_session_is_open: MarketSessionOpen | None = None,
+        trade_notifier: TradeNotificationPort | None = None,
     ) -> None:
         self._run_repo = run_repo
         self._committer = committer
@@ -61,6 +63,7 @@ class RunExecutor:
         self._execution_callbacks = RunExecutionCallbacks(
             runtime=self._runtime,
             publish_trace_step_delta=trace_step_delta_publisher,
+            trade_notifier=trade_notifier,
         )
         self._trace = RunTraceSupport(
             run_repo=run_repo,
