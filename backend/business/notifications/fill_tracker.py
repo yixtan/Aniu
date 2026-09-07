@@ -58,11 +58,18 @@ class FillDetectionResult:
 def detect_fill_events(
     observations: Iterable[OrderFillObservation],
     announced: Mapping[str, int],
+    *,
+    cold_start: bool = False,
 ) -> FillDetectionResult:
     """Return one event per order whose filled quantity grew since last time.
 
     Partial fills notify incrementally: each refresh reports only the quantity
     that is newly filled, and the watermark advances to the running total.
+
+    ``cold_start`` records the current quantities as the baseline and announces
+    nothing. Without it, the very first refresh after this feature is installed
+    cannot tell "just filled" from "filled last week", and would push one
+    notification per historical order in the upstream window.
     """
 
     events: list[TradeNotificationEvent] = []
@@ -73,7 +80,7 @@ def detect_fill_events(
         previous = max(int(announced.get(order.order_id, 0)), 0)
         filled = max(order.filled_quantity, 0)
         watermarks[order.order_id] = max(previous, filled)
-        if filled <= previous:
+        if cold_start or filled <= previous:
             continue
         events.append(
             TradeNotificationEvent(

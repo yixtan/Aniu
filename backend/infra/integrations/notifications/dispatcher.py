@@ -101,7 +101,13 @@ class TradeNotificationDispatcher:
         try:
             async with self._session_factory() as session:
                 watermarks = NotificationFillWatermarkRepository(session)
-                result = detect_fill_events(observations, await watermarks.load())
+                announced = await watermarks.load()
+                # No watermarks at all means this install has never observed an
+                # order list. Treat it as a baseline instead of announcing every
+                # historical fill still inside the upstream window.
+                result = detect_fill_events(
+                    observations, announced, cold_start=not announced
+                )
                 service = self._service(session)
                 for event in result.events:
                     await service.publish(event)

@@ -240,6 +240,32 @@ def test_partial_fill_reports_only_the_newly_filled_quantity() -> None:
     assert result.watermarks == {"A1": 300}
 
 
+def test_cold_start_records_a_baseline_without_announcing_history() -> None:
+    """The first refresh after install must not replay old fills."""
+
+    result = detect_fill_events(
+        [_observation("A1", filled=100), _observation("B2", filled=500, quantity=500)],
+        {},
+        cold_start=True,
+    )
+
+    assert result.events == ()
+    assert result.watermarks == {"A1": 100, "B2": 500}
+
+
+def test_fills_after_the_cold_start_baseline_do_notify() -> None:
+    baseline = detect_fill_events(
+        [_observation("A1", filled=100, quantity=500)], {}, cold_start=True
+    )
+
+    result = detect_fill_events(
+        [_observation("A1", filled=300, quantity=500)], baseline.watermarks
+    )
+
+    assert len(result.events) == 1
+    assert result.events[0].filled_quantity == 200
+
+
 def test_unfilled_orders_never_notify() -> None:
     assert detect_fill_events([_observation(filled=0)], {}).events == ()
 
