@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-readonly REPO_DEFAULT="https://github.com/AnacondaKC/Aniu.git"
+readonly REPO_DEFAULT="https://github.com/yixtan/Aniu.git"
 readonly BRANCH_DEFAULT="main"
 readonly HOME_DIR="${HOME:-}"
 readonly INSTALL_DIR_DEFAULT="${HOME_DIR}/Aniu"
@@ -27,8 +27,8 @@ Environment overrides:
   ANIU_INSTALL_DIR, ANIU_BRANCH, ANIU_REPO_URL
 
 Examples:
-  curl -fsSL https://raw.githubusercontent.com/AnacondaKC/Aniu/main/install-linux.sh | bash
-  curl -fsSL https://raw.githubusercontent.com/AnacondaKC/Aniu/main/install-linux.sh | bash -s -- --dir "$HOME/aniu"
+  curl -fsSL https://raw.githubusercontent.com/yixtan/Aniu/main/install-linux.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/yixtan/Aniu/main/install-linux.sh | bash -s -- --dir "$HOME/aniu"
 EOF
 }
 
@@ -39,7 +39,7 @@ require_command() {
 canonical_repo_url() {
   local value="${1%/}"
   case "$value" in
-    "https://github.com/AnacondaKC/Aniu"|"https://github.com/AnacondaKC/Aniu.git"|"git@github.com:AnacondaKC/Aniu.git"|"ssh://git@github.com/AnacondaKC/Aniu.git")
+    "https://github.com/yixtan/Aniu"|"https://github.com/yixtan/Aniu.git"|"git@github.com:yixtan/Aniu.git"|"ssh://git@github.com/yixtan/Aniu.git")
       printf '%s\n' "$REPO_DEFAULT"
       ;;
     *)
