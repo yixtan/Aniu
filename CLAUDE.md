@@ -136,7 +136,18 @@ README 里「研究、决策、交易、总结等阶段」是旧描述，这四�
 
 ## 这是 fork
 
-`origin` = 自己的 fork，`upstream` = 原作者。**功能开发一律开 feature 分支**，`main` 保持成上游的干净镜像。这样同步上游（`git merge upstream/main`）永远是 fast-forward，不会有合并冲突——一旦在 `main` 上直接改过代码，两条线就分叉了，之后每次同步都可能要手动解冲突。
+`origin` = 自己的 fork（`yixtan/Aniu`），`upstream` = 原作者（`AnacondaKC/Aniu`）。
+
+**功能开发一律开 feature 分支**，走 PR 合进 `main`。一个分支只装一件能独立回滚的事——判据是「做错了想不想整个撤掉」，不是按时间或按大小切。
+
+**`main` 是本仓库的开发主线，不是上游的镜像。** 它早就分叉了（2026-09-08 时领先上游 28 个提交），所以：
+
+- 同步上游（`git merge upstream/main`）**会产生真正的合并提交，不是 fast-forward**
+- 上游改到你改过的文件时，可能要手工解冲突
+
+这是 fork 长期演化的正常形态，不用试图恢复成镜像。代价是同步变麻烦，收益是克隆 `main` 就能拿到完整的东西——分享给别人时靠的就是这一点，所以 `main` 要保持随时可用。
+
+安装脚本已指向本 fork（`install-linux.sh` 的 `REPO_DEFAULT` 和 README 的 curl 地址两处都要一致，只改一处不起作用）。
 
 ## 修改前请先跑起来
 
