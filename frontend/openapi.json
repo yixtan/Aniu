@@ -1296,6 +1296,14 @@
             "title": "Reason",
             "type": "string"
           },
+          "replaces": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Replaces",
+            "type": "array"
+          },
           "updated_at": {
             "format": "date-time",
             "title": "Updated At",
@@ -4925,6 +4933,23 @@
                 }
               ],
               "title": "Activity Operation"
+            }
+          },
+          {
+            "in": "query",
+            "name": "activity_memory_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Activity Memory Id"
             }
           },
           {

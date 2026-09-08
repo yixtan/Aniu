@@ -107,6 +107,7 @@ class MemoryService:
         activity_offset: int = 0,
         activity_task_id: int | None = None,
         activity_operation: str | None = None,
+        activity_memory_id: int | None = None,
         item_limit: int = _DEFAULT_ITEM_LIMIT,
         item_offset: int = 0,
         item_keywords: str = "",
@@ -119,6 +120,8 @@ class MemoryService:
             raise ValueError("activity_task_id must be positive")
         if activity_operation not in {None, "read", "create", "update", "delete"}:
             raise ValueError("activity_operation is not supported")
+        if activity_memory_id is not None and activity_memory_id < 1:
+            raise ValueError("activity_memory_id must be positive")
         if item_limit < 1 or item_limit > _MAX_ITEM_LIMIT:
             raise ValueError("item_limit must be between 1 and 100")
         if item_offset < 0:
@@ -130,12 +133,14 @@ class MemoryService:
         activity_total = await self._repository.count_activities(
             task_id=activity_task_id,
             operation=activity_operation,
+            memory_id=activity_memory_id,
         )
         activities = await self._repository.list_activities(
             limit=activity_limit,
             offset=activity_offset,
             task_id=activity_task_id,
             operation=activity_operation,
+            memory_id=activity_memory_id,
         )
         item_total = await self._repository.count_items()
         item_match_total = (

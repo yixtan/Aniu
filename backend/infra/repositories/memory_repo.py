@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import UTC, datetime
 
@@ -157,6 +158,7 @@ class MemoryRepository:
         offset: int,
         task_id: int | None = None,
         operation: str | None = None,
+        memory_id: int | None = None,
     ) -> list[MemoryActivity]:
         statement = (
             select(MemoryActivityModel)
@@ -171,6 +173,8 @@ class MemoryRepository:
             statement = statement.where(MemoryActivityModel.task_id == task_id)
         if operation is not None:
             statement = statement.where(MemoryActivityModel.operation == operation)
+        if memory_id is not None:
+            statement = statement.where(MemoryActivityModel.memory_id == memory_id)
         rows = list((await self._session.scalars(statement)).all())
         return [_activity_from_row(row) for row in rows]
 
@@ -179,12 +183,15 @@ class MemoryRepository:
         *,
         task_id: int | None = None,
         operation: str | None = None,
+        memory_id: int | None = None,
     ) -> int:
         statement = select(func.count(MemoryActivityModel.id))
         if task_id is not None:
             statement = statement.where(MemoryActivityModel.task_id == task_id)
         if operation is not None:
             statement = statement.where(MemoryActivityModel.operation == operation)
+        if memory_id is not None:
+            statement = statement.where(MemoryActivityModel.memory_id == memory_id)
         result = await self._session.execute(statement)
         return int(result.scalar_one())
 
@@ -209,6 +216,7 @@ class MemoryRepository:
             created_task_id=command.task_id,
             updated_task_id=command.task_id,
             version=1,
+            replaces_json=_serialize_replaces(command.replaces),
             created_at=now,
             updated_at=now,
             deleted_at=None,
@@ -253,6 +261,26 @@ def _activity_from_row(row: MemoryActivityModel) -> MemoryActivity:
     )
 
 
+def _deserialize_replaces(value: str | None) -> tuple[int, ...]:
+    if not value:
+        return ()
+    try:
+        decoded = json.loads(value)
+    except json.JSONDecodeError:
+        return ()
+    if not isinstance(decoded, list):
+        return ()
+    return tuple(item for item in decoded if isinstance(item, int) and item > 0)
+
+
+def _serialize_replaces(replaces: tuple[int, ...]) -> str | None:
+    # Absent rather than "[]" so an ordinary memory reads as having no lineage
+    # at all, which is what every row written before this column existed is.
+    if not replaces:
+        return None
+    return json.dumps(list(replaces))
+
+
 def _item_from_row(row: MemoryItemModel) -> MemoryItem:
     return MemoryItem(
         id=row.id,
@@ -264,6 +292,7 @@ def _item_from_row(row: MemoryItemModel) -> MemoryItem:
         created_at=_as_datetime(row.created_at) or datetime.now(tz=UTC),
         updated_at=_as_datetime(row.updated_at) or datetime.now(tz=UTC),
         deleted_at=_as_datetime(row.deleted_at),
+        replaces=_deserialize_replaces(row.replaces_json),
     )
 
 

@@ -178,6 +178,8 @@ export function MemoryOverviewPage() {
   const [activityTaskIdInput, setActivityTaskIdInput] = useState("");
   const activityTaskId = parseActivityTaskId(activityTaskIdInput);
   const [activityOperation, setActivityOperation] = useState("all");
+  const [activityMemoryIdInput, setActivityMemoryIdInput] = useState("");
+  const activityMemoryId = parseActivityTaskId(activityMemoryIdInput);
 
   const [dialogMode, setDialogMode] = useState<DialogMode | null>(null);
   const [editingItem, setEditingItem] = useState<MemoryItem | null>(null);
@@ -197,6 +199,7 @@ export function MemoryOverviewPage() {
       activityPage,
       activityTaskId ?? undefined,
       activityOperation === "all" ? undefined : activityOperation,
+      activityMemoryId ?? undefined,
       memoryPage,
       memoryKeywords,
     ),
@@ -209,6 +212,7 @@ export function MemoryOverviewPage() {
           activityOperation === "all"
             ? null
             : (activityOperation as "read" | "create" | "update" | "delete"),
+        activityMemoryId: activityMemoryId ?? null,
         itemLimit: MEMORY_PAGE_SIZE,
         itemOffset: (memoryPage - 1) * MEMORY_PAGE_SIZE,
         itemKeywords: memoryKeywords,
@@ -605,6 +609,13 @@ export function MemoryOverviewPage() {
                     setEditingItem(item);
                     setDialogMode("edit");
                   }}
+                  onTrace={(memoryId) => {
+                    setActivityMemoryIdInput(String(memoryId));
+                    setActivityTaskIdInput("");
+                    setActivityOperation("all");
+                    setActivityPage(1);
+                    setActiveTab("activity");
+                  }}
                   onDelete={(item) => {
                     setEditingItem(item);
                     setDialogMode("delete");
@@ -672,6 +683,35 @@ export function MemoryOverviewPage() {
                       </Button>
                     ) : null}
                   </div>
+                  <div className="flex items-center gap-1">
+                    <Input
+                      type="number"
+                      min={1}
+                      placeholder="记忆编号"
+                      aria-label="记忆编号筛选"
+                      value={activityMemoryIdInput}
+                      onChange={(e) => {
+                        setActivityMemoryIdInput(e.target.value);
+                        setActivityPage(1);
+                      }}
+                      className="w-28"
+                    />
+                    {activityMemoryIdInput !== "" ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        title="清除记忆筛选"
+                        aria-label="清除记忆筛选"
+                        onClick={() => {
+                          setActivityMemoryIdInput("");
+                          setActivityPage(1);
+                        }}
+                      >
+                        <XIcon className="size-4" />
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             </CardHeader>
@@ -681,9 +721,11 @@ export function MemoryOverviewPage() {
                   <EmptyHeader>
                     <EmptyTitle>暂无记忆活动</EmptyTitle>
                     <EmptyDescription>
-                      {activityTaskId !== undefined
-                        ? `任务 #${activityTaskId} 没有产生记忆活动`
-                        : "暂无记忆读取、写入、修改或删除记录"}
+                      {activityMemoryId !== undefined
+                        ? `记忆 #${activityMemoryId} 没有变更记录`
+                        : activityTaskId !== undefined
+                          ? `任务 #${activityTaskId} 没有产生记忆活动`
+                          : "暂无记忆读取、写入、修改或删除记录"}
                     </EmptyDescription>
                   </EmptyHeader>
                 </Empty>
@@ -1114,6 +1156,7 @@ function MemoryList({
   onPageChange,
   onEdit,
   onDelete,
+  onTrace,
 }: {
   items: MemoryItem[];
   total: number;
@@ -1122,6 +1165,7 @@ function MemoryList({
   onPageChange: (page: number) => void;
   onEdit: (item: MemoryItem) => void;
   onDelete: (item: MemoryItem) => void;
+  onTrace: (memoryId: number) => void;
 }) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -1165,6 +1209,22 @@ function MemoryList({
                     v{item.version}
                   </span>
                 </div>
+                {item.replaces.length > 0 ? (
+                  <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-1 text-xs">
+                    <span>凝练自</span>
+                    {item.replaces.map((sourceId) => (
+                      <button
+                        key={sourceId}
+                        type="button"
+                        title={`查看记忆 #${sourceId} 的变更记录`}
+                        className="text-foreground hover:bg-muted rounded px-1 font-medium tabular-nums underline-offset-2 hover:underline"
+                        onClick={() => onTrace(sourceId)}
+                      >
+                        #{sourceId}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
                 <Button type="button" variant="outline" size="sm" onClick={() => onEdit(item)}>

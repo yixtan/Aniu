@@ -26,6 +26,7 @@ class MemoryItemResponse(ApiModel):
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None
+    replaces: list[int] = []
 
 
 class MemoryOverviewResponse(ApiModel):

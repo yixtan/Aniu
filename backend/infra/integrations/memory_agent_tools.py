@@ -65,6 +65,9 @@ def _item_payload(item: MemoryItem) -> dict[str, object]:
         "created_at": item.created_at.isoformat(),
         "updated_at": item.updated_at.isoformat(),
         "deleted_at": item.deleted_at.isoformat() if item.deleted_at else None,
+        # Shown to the model as well: a memory that already absorbed others
+        # should not be folded into a third one without that being visible.
+        "replaces": list(item.replaces),
     }
 
 
@@ -159,6 +162,25 @@ class MemoryReadTool:
         return payload
 
 
+def _normalized_replaces(value: object) -> tuple[int, ...]:
+    """Accept what a model plausibly sends, and keep only usable ids.
+
+    A malformed entry is dropped rather than refused: the lineage is a record
+    of what happened, and losing the whole write over one bad id would cost
+    more than the note is worth.
+    """
+
+    if not isinstance(value, list):
+        return ()
+    ids: list[int] = []
+    for item in value:
+        if isinstance(item, bool):
+            continue
+        if isinstance(item, int) and item > 0 and item not in ids:
+            ids.append(item)
+    return tuple(ids)
+
+
 @dataclass(slots=True)
 class MemoryWriteTool:
     session_factory: async_sessionmaker[AsyncSession]
@@ -199,6 +221,14 @@ class MemoryWriteTool:
             "minimum": 1,
             "description": "update/delete 必须填写最近读取到的记忆 version。",
         }
+        replaces = {
+            "type": "array",
+            "items": {"type": "integer", "minimum": 1},
+            "description": (
+                "合并多条旧记忆时，填写被这条取代的记忆 id。"
+                "只在 create 时有意义，用于日后追溯这条经验由哪些经验凝练而来。"
+            ),
+        }
         branches: list[ProviderJsonObject] = []
         if self._allows(MemoryOperation.CREATE):
             branches.append(
@@ -207,6 +237,7 @@ class MemoryWriteTool:
                         "operation": {"const": MemoryOperation.CREATE.value},
                         "content": content,
                         "reason": reason,
+                        "replaces": replaces,
                     },
                     ["operation", "content", "reason"],
                 )
@@ -268,6 +299,7 @@ class MemoryWriteTool:
         content: str | None = None,
         reason: str | None = None,
         expected_version: int | None = None,
+        replaces: list[int] | None = None,
     ) -> object:
         del tool_call_id
         if abort_signal is not None and abort_signal.aborted:
@@ -289,6 +321,7 @@ class MemoryWriteTool:
             content=content,
             reason=reason,
             expected_version=expected_version,
+            replaces=_normalized_replaces(replaces),
         )
         async with self.session_factory() as session:
             item = await MemoryService(MemoryRepository(session)).write(command)
