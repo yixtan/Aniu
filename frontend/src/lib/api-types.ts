@@ -128,6 +128,8 @@ export interface MemoryItem {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  /** Memories this one was consolidated from, empty for an ordinary write. */
+  replaces: number[];
 }
 
 export interface MemoryOverview {

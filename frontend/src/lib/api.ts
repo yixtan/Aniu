@@ -270,6 +270,7 @@ export async function getMemoryOverview({
   activityOffset = 0,
   activityTaskId,
   activityOperation,
+  activityMemoryId,
   itemLimit = 20,
   itemOffset = 0,
   itemKeywords = "",
@@ -278,6 +279,7 @@ export async function getMemoryOverview({
   activityOffset?: number;
   activityTaskId?: number | null;
   activityOperation?: "read" | "create" | "update" | "delete" | null;
+  activityMemoryId?: number | null;
   itemLimit?: number;
   itemOffset?: number;
   itemKeywords?: string;
@@ -289,6 +291,7 @@ export async function getMemoryOverview({
         activity_offset: activityOffset,
         activity_task_id: activityTaskId ?? null,
         activity_operation: activityOperation ?? null,
+        activity_memory_id: activityMemoryId ?? null,
         item_limit: itemLimit,
         item_offset: itemOffset,
         item_keywords: itemKeywords,

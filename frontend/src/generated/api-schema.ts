@@ -1195,6 +1195,11 @@ export interface components {
             /** Reason */
             reason: string;
             /**
+             * Replaces
+             * @default []
+             */
+            replaces: number[];
+            /**
              * Updated At
              * Format: date-time
              */
@@ -2777,6 +2782,7 @@ export interface operations {
                 activity_offset?: number;
                 activity_task_id?: number | null;
                 activity_operation?: ("read" | "create" | "update" | "delete") | null;
+                activity_memory_id?: number | null;
                 item_limit?: number;
                 item_offset?: number;
                 item_keywords?: string;

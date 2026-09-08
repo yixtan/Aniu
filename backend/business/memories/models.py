@@ -36,6 +36,8 @@ class MemoryItem:
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None = None
+    replaces: tuple[int, ...] = ()
+    """Memories this one was consolidated from, newest curation wins."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +69,7 @@ class MemoryWriteCommand:
     content: str | None = None
     reason: str | None = None
     expected_version: int | None = None
+    replaces: tuple[int, ...] = ()
 
 
 __all__ = [

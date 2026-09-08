@@ -122,7 +122,10 @@ async def test_memory_write_schema_matches_operation_requirements(
         "reason",
         "memory_id",
         "expected_version",
+        "replaces",
     }
+    # Lineage is optional: an ordinary new memory replaces nothing.
+    assert "replaces" not in parameters["required"]
     assert properties["operation"]["enum"] == ["create", "update", "delete"]
     # Only what every operation needs can be required of all of them.
     assert parameters["required"] == ["operation"]
@@ -318,3 +321,47 @@ async def test_the_curator_may_still_delete(session_factory) -> None:
 def test_a_tool_with_no_operations_is_rejected(session_factory) -> None:
     with pytest.raises(ValueError, match="at least one"):
         MemoryWriteTool(session_factory, allowed_operations=frozenset())
+
+
+@pytest.mark.asyncio
+async def test_a_merge_records_the_memories_it_replaced(session_factory) -> None:
+    tool = MemoryWriteTool(session_factory)
+
+    first = await tool.run_for_call(
+        run_id=1,
+        tool_call_id="call-1",
+        operation="create",
+        content="缩量反弹不追高。",
+        reason="盘中观察。",
+    )
+    merged = await tool.run_for_call(
+        run_id=20260908401,
+        tool_call_id="call-2",
+        operation="create",
+        content="不追高：缩量反弹与利好兑现日都等确认。",
+        reason="合并重复观察。",
+        replaces=[first["item"]["id"]],  # type: ignore[index]
+    )
+
+    assert merged["item"]["replaces"] == [first["item"]["id"]]  # type: ignore[index]
+
+
+@pytest.mark.asyncio
+async def test_unusable_ids_are_dropped_rather_than_failing_the_write(
+    session_factory,
+) -> None:
+    """The lineage is a note about what happened; one bad id must not cost the
+    memory itself."""
+
+    tool = MemoryWriteTool(session_factory)
+
+    created = await tool.run_for_call(
+        run_id=20260908401,
+        tool_call_id="call-1",
+        operation="create",
+        content="不追高。",
+        reason="合并。",
+        replaces=[7, "八", -1, 0, True, 7],
+    )
+
+    assert created["item"]["replaces"] == [7]  # type: ignore[index]

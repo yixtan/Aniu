@@ -275,6 +275,14 @@ def _upgrade_sqlite_schema(connection: Connection) -> None:
             )
         )
 
+    memory_item_columns = {
+        column["name"] for column in inspect(connection).get_columns("memory_items")
+    }
+    if "replaces_json" not in memory_item_columns:
+        connection.execute(
+            text("ALTER TABLE memory_items ADD COLUMN replaces_json TEXT")
+        )
+
     run_job_columns = {
         column["name"] for column in inspect(connection).get_columns("run_jobs")
     }

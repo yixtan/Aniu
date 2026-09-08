@@ -318,6 +318,10 @@ class MemoryItemModel(Base):
     created_task_id: Mapped[int] = mapped_column(Integer, nullable=False)
     updated_task_id: Mapped[int] = mapped_column(Integer, nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # Ids this memory was consolidated from, as a JSON array. The nightly
+    # curator deletes several memories and writes one in their place; without
+    # this the link between them exists only in the dream's prose.
+    replaces_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[str] = mapped_column(Text, nullable=False, default=utc_now_iso)
     updated_at: Mapped[str] = mapped_column(
         Text,

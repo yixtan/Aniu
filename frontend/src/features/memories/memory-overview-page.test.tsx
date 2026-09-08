@@ -57,6 +57,7 @@ const overview = {
       created_at: "2026-08-18T07:30:00Z",
       updated_at: "2026-08-18T07:30:00Z",
       deleted_at: null,
+      replaces: [],
     },
   ],
 };
@@ -101,6 +102,7 @@ describe("MemoryOverviewPage", () => {
       activityOffset: 0,
       activityTaskId: null,
       activityOperation: null,
+      activityMemoryId: null,
       itemLimit: 10,
       itemOffset: 0,
       itemKeywords: "",
@@ -258,6 +260,7 @@ describe("MemoryOverviewPage", () => {
         activityOffset: 0,
         activityTaskId: null,
         activityOperation: null,
+        activityMemoryId: null,
         itemLimit: 10,
         itemOffset: 0,
         itemKeywords: "收益",
@@ -351,5 +354,57 @@ describe("MemoryOverviewPage", () => {
       "active",
     );
     expect(screen.getByLabelText("任务编号筛选")).toHaveValue(dream.task_id);
+  });
+
+  it("shows what a consolidated memory was distilled from", async () => {
+    const user = userEvent.setup();
+    api.listMemoryDreams.mockResolvedValue({ items: [], total: 0 });
+    api.getMemoryOverview.mockResolvedValue({
+      ...overview,
+      items: [{ ...overview.items[0], id: 81, replaces: [69, 70] }],
+    });
+
+    renderPage();
+
+    await user.click(await screen.findByRole("tab", { name: /记忆仓库/ }));
+
+    expect(await screen.findByText("凝练自")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "#69" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "#70" })).toBeInTheDocument();
+  });
+
+  it("traces a source memory into its own change history", async () => {
+    const user = userEvent.setup();
+    api.listMemoryDreams.mockResolvedValue({ items: [], total: 0 });
+    api.getMemoryOverview.mockResolvedValue({
+      ...overview,
+      items: [{ ...overview.items[0], id: 81, replaces: [69] }],
+    });
+
+    renderPage();
+
+    await user.click(await screen.findByRole("tab", { name: /记忆仓库/ }));
+    await user.click(await screen.findByRole("button", { name: "#69" }));
+
+    await waitFor(() =>
+      expect(api.getMemoryOverview).toHaveBeenLastCalledWith(
+        expect.objectContaining({ activityMemoryId: 69 }),
+      ),
+    );
+    expect(screen.getByLabelText("记忆编号筛选")).toHaveValue(69);
+  });
+
+  it("says nothing about lineage for an ordinary memory", async () => {
+    const user = userEvent.setup();
+    api.listMemoryDreams.mockResolvedValue({ items: [], total: 0 });
+    api.getMemoryOverview.mockResolvedValue(overview);
+
+    renderPage();
+
+    await user.click(await screen.findByRole("tab", { name: /记忆仓库/ }));
+
+    // The fixture's text appears in both the activity log and the library.
+    await screen.findAllByText("弱市缩量反弹时不要追高。");
+    expect(screen.queryByText("凝练自")).not.toBeInTheDocument();
   });
 });

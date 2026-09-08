@@ -324,3 +324,71 @@ async def test_memory_rejects_invalid_write_commands(session) -> None:
                 content="新内容",
             )
         )
+
+
+@pytest.mark.asyncio
+async def test_a_consolidated_memory_records_what_it_replaced(session) -> None:
+    """Which memories a nightly merge came from is otherwise only in prose."""
+
+    service = MemoryService(MemoryRepository(session))
+    first = await service.write(_create_command())
+    second = await service.write(_create_command())
+
+    merged = await service.write(
+        MemoryWriteCommand(
+            operation=MemoryOperation.CREATE,
+            task_id=20260908401,
+            content="不追高：缩量反弹与利好兑现日都等确认再动。",
+            reason="合并两条重复的盘中观察。",
+            replaces=(first.id, second.id),
+        )
+    )
+    await session.commit()
+
+    assert merged.replaces == (first.id, second.id)
+    # Also read back through the ordinary listing, which is what the page uses.
+    listed = await MemoryRepository(session).list_items(limit=50, offset=0)
+    stored = next(item for item in listed if item.id == merged.id)
+    assert stored.replaces == (first.id, second.id)
+
+
+@pytest.mark.asyncio
+async def test_an_ordinary_memory_replaces_nothing(session) -> None:
+    """Rows written before the column existed read the same way as these."""
+
+    service = MemoryService(MemoryRepository(session))
+    item = await service.write(_create_command())
+    await session.commit()
+
+    assert item.replaces == ()
+
+
+@pytest.mark.asyncio
+async def test_activities_can_be_read_for_one_memory(session) -> None:
+    """Auditing drift means following a single memory, not the whole log."""
+
+    service = MemoryService(MemoryRepository(session))
+    repository = MemoryRepository(session)
+    watched = await service.write(_create_command())
+    other = await service.write(_create_command())
+    await service.write(
+        MemoryWriteCommand(
+            operation=MemoryOperation.UPDATE,
+            task_id=20260908401,
+            memory_id=watched.id,
+            content="弱市缩量反弹时不要追高，等成交量重回阈值。",
+            reason="梦境整理时补充了阈值条件。",
+            expected_version=watched.version,
+        )
+    )
+    await session.commit()
+
+    history = await repository.list_activities(
+        limit=50, offset=0, memory_id=watched.id
+    )
+    total = await repository.count_activities(memory_id=watched.id)
+
+    assert total == 2
+    assert [entry.operation.value for entry in history] == ["update", "create"]
+    assert all(entry.memory_id == watched.id for entry in history)
+    assert other.id not in {entry.memory_id for entry in history}

@@ -36,6 +36,7 @@ class MemoryRepositoryPort(Protocol):
         offset: int,
         task_id: int | None = None,
         operation: str | None = None,
+        memory_id: int | None = None,
     ) -> list[MemoryActivity]: ...
 
     async def count_activities(
@@ -43,6 +44,7 @@ class MemoryRepositoryPort(Protocol):
         *,
         task_id: int | None = None,
         operation: str | None = None,
+        memory_id: int | None = None,
     ) -> int: ...
 
     async def record_read(

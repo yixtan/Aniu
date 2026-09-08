@@ -4,6 +4,7 @@ export const memoryKeys = {
     activityPage: number,
     activityTaskId: number | undefined,
     activityOperation: string | undefined,
+    activityMemoryId: number | undefined,
     memoryPage: number,
     memoryKeywords: string,
   ) =>
@@ -13,6 +14,7 @@ export const memoryKeys = {
       activityPage,
       activityTaskId ?? null,
       activityOperation ?? "all",
+      activityMemoryId ?? null,
       memoryPage,
       memoryKeywords,
     ] as const,
