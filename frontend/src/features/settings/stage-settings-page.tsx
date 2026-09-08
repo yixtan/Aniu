@@ -96,13 +96,51 @@ const DREAM_SCHEDULE_TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 const DREAM_WINDOW_START_MINUTES = 16 * 60;
 const DREAM_WINDOW_END_MINUTES = 8 * 60;
 
-function isOutOfSession(value: string): boolean {
+function minutesOf(value: string): number | null {
   const match = /^(\d{2}):(\d{2})$/.exec(value);
+  if (match === null) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function isOutOfSession(value: string): boolean {
+  const total = minutesOf(value);
   // Anything unparseable is refused rather than defaulted, so a malformed
   // value cannot read as allowed.
-  if (match === null) return false;
-  const total = Number(match[1]) * 60 + Number(match[2]);
+  if (total === null) return false;
   return total >= DREAM_WINDOW_START_MINUTES || total <= DREAM_WINDOW_END_MINUTES;
+}
+
+/** Sorts the window as it reads: this afternoon through tomorrow morning. */
+function windowOrder(value: string): number {
+  const total = minutesOf(value) ?? 0;
+  return total >= DREAM_WINDOW_START_MINUTES ? total : total + 24 * 60;
+}
+
+function dreamTimeLabel(value: string): string {
+  const total = minutesOf(value) ?? 0;
+  return `${total >= DREAM_WINDOW_START_MINUTES ? "当天" : "次日"} ${value}`;
+}
+
+function formatMinutes(minutes: number): string {
+  const hours = String(Math.floor(minutes / 60)).padStart(2, "0");
+  return `${hours}:${String(minutes % 60).padStart(2, "0")}`;
+}
+
+const DREAM_TIME_CHOICES: string[] = [
+  ...Array.from({ length: (24 * 60 - DREAM_WINDOW_START_MINUTES) / 30 }, (_, index) =>
+    formatMinutes(DREAM_WINDOW_START_MINUTES + index * 30),
+  ),
+  ...Array.from({ length: DREAM_WINDOW_END_MINUTES / 30 + 1 }, (_, index) =>
+    formatMinutes(index * 30),
+  ),
+];
+
+/** The half-hour grid, plus whatever is currently saved if it is off-grid. */
+function dreamTimeChoices(current: string): string[] {
+  if (DREAM_TIME_CHOICES.includes(current) || !isOutOfSession(current)) {
+    return DREAM_TIME_CHOICES;
+  }
+  return [...DREAM_TIME_CHOICES, current].sort((a, b) => windowOrder(a) - windowOrder(b));
 }
 const GLOBAL_TAB_ID = "Global";
 /** Reserved select value: the currently effective (server-side) configuration. */
@@ -946,16 +984,23 @@ export function StageSettingsPage() {
                   <SectionLabel icon={<MoonIcon className="size-3.5" />}>运行时间</SectionLabel>
                   <Field className="max-w-xs">
                     <FieldLabel htmlFor="dream-schedule-time">每日执行时间</FieldLabel>
-                    <Input
-                      id="dream-schedule-time"
-                      type="time"
-                      step={60}
+                    <Select
                       value={effectiveStageDraft.dreamScheduleTime}
-                      onChange={(event) => updateDraft({ dreamScheduleTime: event.target.value })}
-                    />
+                      onValueChange={(value) => updateDraft({ dreamScheduleTime: value })}
+                    >
+                      <SelectTrigger id="dream-schedule-time" className="w-full">
+                        <SelectValue placeholder="选择执行时间" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {dreamTimeChoices(effectiveStageDraft.dreamScheduleTime).map((choice) => (
+                          <SelectItem key={choice} value={choice}>
+                            {dreamTimeLabel(choice)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FieldDescription>
-                      按上海时间每天执行一次，可选 16:00 至次日 08:00 ——
-                      收盘之后、开盘之前。每次会整理最近 3
+                      按上海时间每天执行一次。每次会整理最近 3
                       个有运行的交易日里尚未整理过的那些，因此错过一晚不会永久遗漏。
                     </FieldDescription>
                   </Field>
