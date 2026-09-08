@@ -66,40 +66,29 @@ def test_public_stock_tools_have_closed_schemas_without_source_controls() -> Non
         assert tool.enabled_stages == ("Run",)
 
 
-def test_schema_splits_incompatible_modes_and_keeps_symbol_contract() -> None:
+def test_the_flat_schema_names_which_fields_go_with_which_action() -> None:
+    """Branches keep incompatible fields apart; a flat schema has to say so.
+
+    The parameters are flattened because a top-level ``oneOf`` reaches the
+    model as an object with no fields at all. What the branches encoded moves
+    into the discriminator's description, which the model does see.
+    """
+
     registry, _ = _registry()
 
-    def branches(tool_name: str) -> list[dict[str, object]]:
+    def action_hint(tool_name: str) -> str:
         tool = next(tool for tool in registry.list_tools() if tool.name == tool_name)
-        return tool.to_tool_definition()["parameters"]["oneOf"]
+        parameters = tool.to_tool_definition()["parameters"]
+        assert "oneOf" not in parameters
+        return cast(str, parameters["properties"]["action"]["description"])
 
-    fundamentals = branches("stock_fundamentals")
-    valuation = next(
-        branch
-        for branch in fundamentals
-        if branch["properties"]["action"].get("const") == "valuation"
-    )
-    assert "mode" not in valuation["properties"]
-    assert not any(
-        branch["properties"]["action"].get("const") == "financials"
-        and branch["properties"].get("mode", {}).get("const") == "latest"
-        and "page" in branch["properties"]
-        for branch in fundamentals
-    )
+    fundamentals = action_hint("stock_fundamentals")
+    assert "action=valuation 时无其他参数" in fundamentals
+    assert "action=shareholders 时可选 page、limit" in fundamentals
 
-    research = branches("stock_research")
-    assert not any(
-        branch["properties"]["action"].get("const") == "forecast"
-        and branch["properties"].get("mode", {}).get("const") == "summary"
-        and "limit" in branch["properties"]
-        for branch in research
-    )
-    full_report = next(
-        branch
-        for branch in research
-        if branch["properties"].get("content", {}).get("const") == "full"
-    )
-    assert "report_id" in full_report["required"]
+    research = action_hint("stock_research")
+    assert "action=ratings 时必填 symbol" in research
+    assert "action=market_reports 时可选 category、days、top、index" in research
 
     symbol_pattern = next(
         tool for tool in registry.list_tools() if tool.name == "stock_intraday"
@@ -108,6 +97,55 @@ def test_schema_splits_incompatible_modes_and_keeps_symbol_contract() -> None:
     assert re.fullmatch(symbol_pattern, "000001")
     assert re.fullmatch(symbol_pattern, "000001.SZ")
     assert re.fullmatch(symbol_pattern, "000001.SH") is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("tool_name", "arguments", "message"),
+    [
+        (
+            "stock_fundamentals",
+            {"action": "valuation", "symbol": "600519", "mode": "latest"},
+            "不接受参数：mode",
+        ),
+        (
+            "stock_fundamentals",
+            {"action": "financials", "symbol": "600519", "mode": "latest", "page": 2},
+            "不接受参数：page",
+        ),
+        (
+            "stock_research",
+            {"action": "forecast", "symbol": "600519", "mode": "summary", "limit": 5},
+            "不接受参数：limit",
+        ),
+        (
+            "stock_research",
+            {"action": "stock_reports", "symbol": "600519", "content": "full"},
+            "report_id",
+        ),
+        (
+            "stock_quote",
+            {"symbols": [f"60{n:04d}" for n in range(21)], "detail": "full"},
+            "最多查询 20 个",
+        ),
+    ],
+)
+async def test_the_runtime_refuses_what_the_flat_schema_cannot_separate(
+    tool_name: str, arguments: dict[str, object], message: str
+) -> None:
+    """The flat schema admits these; the tool has to be the one that says no.
+
+    It also has to say why in terms the model can act on — the schema change
+    moves this from a shape the model cannot violate to a message it has to
+    understand.
+    """
+
+    registry, _ = _registry()
+
+    with pytest.raises(Exception) as caught:
+        await registry.call(tool_name, **arguments)
+
+    assert message in str(caught.value)
 
 
 def test_action_branches_and_provider_converters_preserve_the_same_schema() -> None:
@@ -125,10 +163,13 @@ def test_action_branches_and_provider_converters_preserve_the_same_schema() -> N
         }
     ]
     for definition in definitions:
-        branches = definition["parameters"]["oneOf"]
-        for branch in branches:
-            assert branch["properties"]["action"].get("const") is not None
-            assert branch["additionalProperties"] is False
+        parameters = definition["parameters"]
+        # Every action has to be listed where the model can read it, and the
+        # object stays closed so an invented field is refused rather than
+        # silently dropped.
+        assert parameters["properties"]["action"]["enum"]
+        assert "action" in parameters["required"]
+        assert parameters["additionalProperties"] is False
 
     quote = next(tool for tool in registry.list_tools() if tool.name == "stock_quote")
     quote_definition = quote.to_tool_definition()

@@ -111,27 +111,29 @@ async def test_memory_write_schema_matches_operation_requirements(
 ) -> None:
     definition = MemoryWriteTool(session_factory).to_tool_definition()
     parameters = definition["parameters"]
-    branches = parameters["oneOf"]
-    by_operation = {
-        branch["properties"]["operation"]["const"]: branch for branch in branches
-    }
+    properties = parameters["properties"]
 
-    assert set(by_operation) == {"create", "update", "delete"}
-    assert by_operation["create"]["required"] == ["operation", "content", "reason"]
-    assert by_operation["update"]["required"] == [
+    # Every field the tool accepts has to be visible. A schema that hides them
+    # behind branches reaches the model as an object with no fields, and it
+    # then invents them.
+    assert set(properties) == {
         "operation",
-        "memory_id",
-        "expected_version",
         "content",
         "reason",
-    ]
-    assert by_operation["delete"]["required"] == [
-        "operation",
         "memory_id",
         "expected_version",
-    ]
-    assert "content" not in by_operation["delete"]["properties"]
-    assert "reason" not in by_operation["delete"]["properties"]
+    }
+    assert properties["operation"]["enum"] == ["create", "update", "delete"]
+    # Only what every operation needs can be required of all of them.
+    assert parameters["required"] == ["operation"]
+
+    # What the flat schema cannot require, it has to say.
+    hint = properties["operation"]["description"]
+    assert "operation=create 时必填 content、reason" in hint
+    assert (
+        "operation=update 时必填 memory_id、expected_version、content、reason" in hint
+    )
+    assert "operation=delete 时必填 memory_id、expected_version" in hint
 
 
 @pytest.mark.asyncio
@@ -238,8 +240,9 @@ async def test_run_allows_memory_write_closed_market_and_hides_tools_from_summar
 
 
 def _operations(tool: MemoryWriteTool) -> list[str]:
-    branches = tool.to_tool_definition()["parameters"]["oneOf"]  # type: ignore[index]
-    return [branch["properties"]["operation"]["const"] for branch in branches]
+    parameters = tool.to_tool_definition()["parameters"]
+    operation = parameters["properties"]["operation"]  # type: ignore[index]
+    return list(operation["enum"])
 
 
 def test_a_producer_is_not_offered_the_delete_branch(session_factory) -> None:

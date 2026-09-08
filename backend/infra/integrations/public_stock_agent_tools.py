@@ -8,6 +8,7 @@ from typing import Any, cast
 
 from backend.agent.tools.registry import ToolRegistry
 from backend.infra.integrations.tool_policy import SideEffectLevel
+from backend.infra.integrations.tool_schema import merge_branches
 from backend.llm import AbortSignal, ProviderJsonObject, ToolDefinition
 from backend.stock_api.public import (
     AnnouncementsRequest,
@@ -67,7 +68,9 @@ def _schema(properties: dict[str, object], required: list[str]) -> ProviderJsonO
 
 
 def _one_of(branches: list[ProviderJsonObject]) -> ProviderJsonObject:
-    return cast(ProviderJsonObject, {"type": "object", "oneOf": branches})
+    # Flattened rather than emitted as `oneOf`: a branch-shaped schema reaches
+    # the model as an object with no fields at all. See tool_schema.
+    return merge_branches(branches)
 
 
 def _const(value: object) -> dict[str, object]:
