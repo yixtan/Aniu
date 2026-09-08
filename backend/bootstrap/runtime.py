@@ -14,6 +14,7 @@ from backend.bootstrap.runtime_config import RuntimeConfig
 from backend.business.account.runtime import AccountRefreshGate
 from backend.business.account.service import AccountAppService
 from backend.business.auth.service import AuthAppService, AuthLoginThrottle
+from backend.business.away import AwayModeService
 from backend.business.dreams.service import DreamService
 from backend.business.market import MarketOverviewQueryPort
 from backend.business.memories.service import MemoryService
@@ -57,6 +58,7 @@ from backend.infra.repositories.auth_repo import (
     AuthSessionRepository,
     LocalIdentityRepository,
 )
+from backend.infra.repositories.away_mode_repo import AwayModeRepository
 from backend.infra.repositories.email_settings_repo import EmailSettingsRepository
 from backend.infra.security.password_hasher import hash_password, verify_password
 from backend.stock_api import MxClients
@@ -225,6 +227,27 @@ class AppRuntime:
             committer=session,
         )
 
+    def optional_away_mode_service(
+        self, session: AsyncSession
+    ) -> AwayModeService | None:
+        """Away mode for callers that must still work without mail wiring.
+
+        A run executes perfectly well with no mail transport configured, so a
+        runtime assembled without one loses the automatic report and nothing
+        else.
+        """
+
+        if self.email_http_client is None:
+            return None
+        return self.away_mode_service(session)
+
+    def away_mode_service(self, session: AsyncSession) -> AwayModeService:
+        return AwayModeService(
+            repo=AwayModeRepository(session),
+            mailer=self.report_mail_service(session),
+            committer=session,
+        )
+
     def market_overview_query(self) -> MarketOverviewQueryPort:
         return PublicMarketOverviewQuery(self.require_public_stock_data())
 
@@ -351,4 +374,5 @@ class AppRuntime:
             market_session_is_open=is_market_session_open,
             abort_registry=self.abort_registry,
             notifier=self.optional_notification_dispatcher(),
+            run_completion_hook=self.optional_away_mode_service(session),
         )

@@ -25,6 +25,7 @@ from backend.api.errors import register_exception_handlers
 from backend.api.routes import (
     account,
     auth,
+    away_mode,
     market,
     memories,
     memory_dreams,
@@ -427,6 +428,7 @@ def create_app(config: RuntimeConfig | None = None) -> FastAPI:
     application.include_router(memory_dreams.router)
     application.include_router(notifications.router)
     application.include_router(report_email.router)
+    application.include_router(away_mode.router)
     application.include_router(stream_hub.router)
 
     @application.get("/health")

@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.api.db import get_db_session, get_session_factory
 from backend.business.account.service import AccountAppService
 from backend.business.auth.service import AuthAppService
+from backend.business.away import AwayModeService
 from backend.business.dreams.service import DreamService
 from backend.business.market import MarketOverviewQueryPort
 from backend.business.memories.service import MemoryService
@@ -42,6 +43,8 @@ class ApiRuntimePort(Protocol):
     def report_mail_service(
         self, session: AsyncSession
     ) -> ReportMailService: ...
+
+    def away_mode_service(self, session: AsyncSession) -> AwayModeService: ...
 
     def dream_query_service(self, session: AsyncSession) -> DreamService: ...
 
@@ -155,3 +158,10 @@ def get_report_mail_service(
     runtime: Annotated[ApiRuntimePort, Depends(get_runtime)],
 ) -> ReportMailService:
     return runtime.report_mail_service(session)
+
+
+def get_away_mode_service(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    runtime: Annotated[ApiRuntimePort, Depends(get_runtime)],
+) -> AwayModeService:
+    return runtime.away_mode_service(session)

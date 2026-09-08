@@ -637,3 +637,24 @@ class EmailDeliverySettingsModel(Base):
         default=utc_now_iso,
         onupdate=utc_now_iso,
     )
+
+
+class AwayModeModel(Base):
+    """Singleton away-mode switch (always primary key 1).
+
+    ``active_date`` holds the market day the switch was turned on for, as
+    ``YYYY-MM-DD``.  Storing the day instead of a flag is what makes away mode
+    expire at midnight without a job having to run.
+    """
+
+    __tablename__ = "away_mode"
+    __table_args__ = (CheckConstraint("id = 1", name="ck_away_mode_singleton"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    active_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    updated_at: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default=utc_now_iso,
+        onupdate=utc_now_iso,
+    )

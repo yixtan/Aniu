@@ -7,6 +7,7 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from time import perf_counter
 
+from backend.business.away import RunCompletionHookPort
 from backend.business.notifications import (
     NotificationEvent,
     NotificationEventKind,
@@ -54,6 +55,7 @@ class RunExecutor:
         now_provider: NowProvider | None = None,
         market_session_is_open: MarketSessionOpen | None = None,
         notifier: NotificationPublisherPort | None = None,
+        run_completion_hook: RunCompletionHookPort | None = None,
     ) -> None:
         self._run_repo = run_repo
         self._committer = committer
@@ -65,6 +67,7 @@ class RunExecutor:
         self._market_session_is_open = market_session_is_open or (lambda _moment: False)
         self._runtime = RunRuntimeState()
         self._notifier = notifier
+        self._run_completion_hook = run_completion_hook
         self._execution_callbacks = RunExecutionCallbacks(
             runtime=self._runtime,
             publish_trace_step_delta=trace_step_delta_publisher,
@@ -181,6 +184,7 @@ class RunExecutor:
         stored = await self._run_repo.get_by_id(run.run_id)
         if stored is None:
             raise RunNotFoundError(run.run_id)
+        await self._notify_run_completed(run.run_id)
         return to_run_detail_dto(stored)
 
     async def cancel(self, run_id: int, reason: str) -> None:
@@ -246,6 +250,20 @@ class RunExecutor:
         # Announced outside the block above so a persistence problem still
         # reaches the operator. A user-requested abort is deliberately silent.
         await self._notify_run_failed(run, failure_reason)
+
+    async def _notify_run_completed(self, run_id: int) -> None:
+        """Let away mode act on a finished run without affecting the run."""
+
+        if self._run_completion_hook is None:
+            return
+        try:
+            await self._run_completion_hook.on_run_completed(run_id)
+        except Exception:
+            logger.warning(
+                "run completion hook failed",
+                extra={"run_id": run_id},
+                exc_info=True,
+            )
 
     async def _notify_run_failed(self, run: StrategyRun, reason: str) -> None:
         """Announce a failed run without letting the push affect the run."""

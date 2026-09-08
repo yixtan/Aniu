@@ -58,7 +58,7 @@ export function AppLayout() {
           <div className="text-muted-foreground me-2 flex items-center gap-1">
             <Button asChild variant="ghost" size="icon">
               <a
-                href="https://github.com/AnacondaKC/Aniu"
+                href="https://github.com/yixtan/Aniu"
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="打开 Aniu GitHub 仓库"

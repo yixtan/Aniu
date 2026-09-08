@@ -477,6 +477,18 @@ export async function listNotificationDeliveries({ limit = 20, offset = 0 } = {}
   return getResponseData(result);
 }
 
+export async function getAwayMode() {
+  const result = await openapiClient.GET("/api/aniu/away-mode");
+  return getResponseData(result);
+}
+
+export async function setAwayMode(enabled: boolean) {
+  const result = await openapiClient.PUT("/api/aniu/away-mode", {
+    body: { enabled },
+  });
+  return getResponseData(result);
+}
+
 export async function getReportEmailSettings() {
   const result = await openapiClient.GET("/api/aniu/report-email");
   return getResponseData(result);
