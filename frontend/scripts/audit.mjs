@@ -9,7 +9,7 @@ const ALLOWED_ADVISORIES = new Map([
         "https://github.com/remix-run/react-router/security/advisories/GHSA-qwww-vcr4-c8h2",
       reason:
         "RSC APIs are not used by this Vite client-only application; the upstream advisory marks 7.18.2 as patched",
-      expiresOn: "2026-12-31",
+      expiresOn: "2027-12-31",
     },
   ],
 ]);
