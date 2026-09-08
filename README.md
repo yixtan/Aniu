@@ -428,12 +428,4 @@ Aniu/
 
 本项目采用 [Apache License 2.0](LICENSE) 开源。
 
-## Star History
-
-<p align="center">
-  <a href="https://star-history.com/#AnacondaKC/Aniu&Date">
-    <img src="https://api.star-history.com/svg?repos=AnacondaKC/Aniu&type=Date" alt="Star History Chart" width="760" />
-  </a>
-</p>
-
 <!-- LINK GROUP -->
