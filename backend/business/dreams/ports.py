@@ -30,8 +30,21 @@ class DreamRepositoryPort(Protocol):
     async def list_running(self) -> list[MemoryDream]: ...
 
 
+class RunDayQueryPort(Protocol):
+    """Which market days produced something worth reflecting on.
+
+    Declared here rather than imported from the runs feature so this module
+    stays independent of it, the same way the reports feature declares its own
+    read of a run.
+    """
+
+    async def recent_days_with_runs(self, *, limit: int) -> list[date]:
+        """Market days holding at least one completed run, newest first."""
+        ...
+
+
 class DreamAgentPort(Protocol):
     async def run(self, dream: MemoryDream) -> str: ...
 
 
-__all__ = ["DreamAgentPort", "DreamRepositoryPort"]
+__all__ = ["DreamAgentPort", "DreamRepositoryPort", "RunDayQueryPort"]

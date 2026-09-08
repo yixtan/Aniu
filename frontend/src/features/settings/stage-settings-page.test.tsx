@@ -192,23 +192,23 @@ describe("StageSettingsPage global settings", () => {
     api.updateSettings.mockResolvedValue({
       ...configuredSettings,
       revision: 4,
-      dream_schedule_time: "04:15",
+      dream_schedule_time: "04:00",
     });
 
     renderPage();
 
     await user.click(await screen.findByRole("tab", { name: "梦境阶段" }));
-    const timeInput = await screen.findByLabelText("每日执行时间");
-    expect(timeInput).toHaveValue("00:30");
-    await user.clear(timeInput);
-    await user.type(timeInput, "04:15");
+    const timePicker = await screen.findByLabelText("每日执行时间");
+    expect(timePicker).toHaveTextContent("次日 00:30");
+    fireEvent.click(timePicker);
+    fireEvent.click(await screen.findByRole("option", { name: "次日 04:00" }));
     await user.click(screen.getByRole("button", { name: "保存阶段设置" }));
 
     await waitFor(() => expect(api.updateSettings).toHaveBeenCalledTimes(1));
     expect(api.updateSettings.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
         expected_revision: 3,
-        dream_schedule_time: "04:15",
+        dream_schedule_time: "04:00",
       }),
     );
   });
@@ -299,6 +299,74 @@ describe("StageSettingsPage prompt configs", () => {
 
     await waitFor(() => expect(option).not.toBeInTheDocument());
     expect(api.updateSettings).not.toHaveBeenCalled();
+  });
+
+  it("offers only times outside the trading session, labelled by day", async () => {
+    const user = userEvent.setup();
+    const configuredSettings = {
+      ...settings,
+      stage_settings: settings.stage_settings.map((stage) =>
+        stage.stage_id === "Dream" ? { ...stage, model_selected_model_id: 1 } : stage,
+      ),
+    };
+    api.getSettings.mockResolvedValue(configuredSettings);
+    api.listModelChannels.mockResolvedValue([
+      {
+        name: "测试通道",
+        enabled: true,
+        selected_models: [{ selected_model_id: 1, model_name: "测试模型", thinking_efforts: [] }],
+      },
+    ]);
+
+    renderPage();
+
+    await user.click(await screen.findByRole("tab", { name: "梦境阶段" }));
+    fireEvent.click(await screen.findByLabelText("每日执行时间"));
+
+    // The window runs from the close to the next open, on the half hour.
+    expect(await screen.findByRole("option", { name: "当天 16:00" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "当天 23:30" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "次日 08:00" })).toBeInTheDocument();
+    // Reflecting on a day mid-session would mark it done while it is still
+    // being traded, so those times are not offered at all.
+    expect(screen.queryByRole("option", { name: /11:00/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /15:00/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /16:15/ })).not.toBeInTheDocument();
+  });
+
+  it("saves a time after the close", async () => {
+    const user = userEvent.setup();
+    const configuredSettings = {
+      ...settings,
+      stage_settings: settings.stage_settings.map((stage) =>
+        stage.stage_id === "Dream" ? { ...stage, model_selected_model_id: 1 } : stage,
+      ),
+    };
+    api.getSettings.mockResolvedValue(configuredSettings);
+    api.listModelChannels.mockResolvedValue([
+      {
+        name: "测试通道",
+        enabled: true,
+        selected_models: [{ selected_model_id: 1, model_name: "测试模型", thinking_efforts: [] }],
+      },
+    ]);
+    api.updateSettings.mockResolvedValue({
+      ...configuredSettings,
+      revision: 4,
+      dream_schedule_time: "16:00",
+    });
+
+    renderPage();
+
+    await user.click(await screen.findByRole("tab", { name: "梦境阶段" }));
+    fireEvent.click(await screen.findByLabelText("每日执行时间"));
+    fireEvent.click(await screen.findByRole("option", { name: "当天 16:00" }));
+    await user.click(screen.getByRole("button", { name: "保存阶段设置" }));
+
+    await waitFor(() => expect(api.updateSettings).toHaveBeenCalledTimes(1));
+    expect(api.updateSettings.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ dream_schedule_time: "16:00" }),
+    );
   });
 
   it("saves current three-stage prompts as a named config", async () => {

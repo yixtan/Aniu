@@ -2,20 +2,44 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.business.settings import (
+    DEFAULT_DREAM_SCHEDULE_TIME,
     AniuAgentPrompt,
     AppSettings,
+    normalize_dream_schedule_time,
     normalize_stage_settings,
 )
 from backend.business.shared import ConfigurationConflictError
 from backend.infra.db.models import AppSettingsModel
 from backend.infra.repositories.secret_store_repo import SecretStoreRepository
 from backend.infra.security import SecretCodec
+
+logger = logging.getLogger(__name__)
+
+
+def _loadable_dream_time(stored: str) -> str:
+    """Keep a settings row loadable after the allowed window narrowed.
+
+    A time saved before the window existed would otherwise raise on every
+    load and take the process down at startup. Falling back is logged rather
+    than silent, and the operator sees the default in settings.
+    """
+
+    try:
+        return normalize_dream_schedule_time(stored)
+    except ValueError:
+        logger.warning(
+            "stored dream schedule time is outside the allowed window; "
+            "using the default instead",
+            extra={"stored": stored, "default": DEFAULT_DREAM_SCHEDULE_TIME},
+        )
+        return DEFAULT_DREAM_SCHEDULE_TIME
 
 
 class SettingsRepository:
@@ -90,7 +114,7 @@ class SettingsRepository:
             mx_api_key=mx_api_key,
             prompt_profile=AniuAgentPrompt.from_mapping(model.prompt_profile_json),
             stage_settings=normalize_stage_settings(model.stage_settings_json),
-            dream_schedule_time=model.dream_schedule_time,
+            dream_schedule_time=_loadable_dream_time(model.dream_schedule_time),
             revision=model.revision,
             created_at=datetime.fromisoformat(model.created_at),
             updated_at=datetime.fromisoformat(model.updated_at),

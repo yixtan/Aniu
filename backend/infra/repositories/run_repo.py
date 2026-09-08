@@ -6,7 +6,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.business.runs import (
@@ -325,6 +325,41 @@ class RunRepository:
             }
             for row in rows
         ]
+
+    async def recent_days_with_runs(self, *, limit: int) -> list[date]:
+        """Market days holding at least one completed run, newest first.
+
+        Walks back a day at a time from the newest completed run. Each step is
+        one indexed MAX(), and the answer is exact whatever a day holds —
+        taking a bounded slice of recent rows instead would quietly return
+        fewer days than asked for on a busy day.
+
+        Reads `completed_at`, and defines a day the same way
+        `list_completed_reports` does, because the dream picking a date and the
+        dream reading that date's reports have to agree on what a day is.
+        """
+
+        days: list[date] = []
+        upper: str | None = None
+        for _ in range(max(limit, 0)):
+            statement = select(func.max(StrategyRunModel.completed_at)).where(
+                StrategyRunModel.status == RunStatus.COMPLETED.value,
+                StrategyRunModel.completed_at.is_not(None),
+            )
+            if upper is not None:
+                statement = statement.where(StrategyRunModel.completed_at < upper)
+            newest = (await self._session.execute(statement)).scalar_one_or_none()
+            moment = _deserialize_datetime(newest)
+            if moment is None:
+                break
+            day = moment.astimezone(_MARKET_TIMEZONE).date()
+            days.append(day)
+            upper = (
+                datetime.combine(day, time.min, tzinfo=_MARKET_TIMEZONE)
+                .astimezone(UTC)
+                .isoformat()
+            )
+        return days
 
     async def list_completed_reports(
         self,
