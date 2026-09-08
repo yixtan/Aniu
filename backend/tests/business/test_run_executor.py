@@ -11,8 +11,9 @@ from backend.business.notifications import (
 from backend.business.runs import StrategyRun, StrategySnapshot
 from backend.business.runs.abort_registry import ActiveRunAbortRegistry
 from backend.business.runs.executor import RunExecutor
+from backend.business.runs.orchestration import RunResult
 from backend.business.shared import RunAbortError
-from backend.business.shared.enums import RunStatus, TriggerSource
+from backend.business.shared.enums import RunState, RunStatus, TriggerSource
 
 
 class InMemoryRunRepository:
@@ -166,3 +167,133 @@ async def test_a_broken_notifier_does_not_mask_the_run_failure() -> None:
     with pytest.raises(RuntimeError, match="余额不足"):
         await executor.execute(run.run_id)
     assert repository.run.status is RunStatus.FAILED
+
+
+class RecordingCompletionHook:
+    def __init__(self) -> None:
+        self.completed: list[int] = []
+
+    async def on_run_completed(self, run_id: int) -> None:
+        self.completed.append(run_id)
+
+
+class StubAgentRunnerFactory:
+    async def prepare(self, _snapshot: StrategySnapshot) -> object:
+        class Runtime:
+            tool_registry = object()
+            stage_runtimes: dict[str, object] = {}
+
+        return Runtime()
+
+
+def _stub_orchestrator(run_id: int) -> type:
+    """Stand in for the real pipeline so a run can simply succeed."""
+
+    class StubOrchestrator:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        async def execute(self, run: StrategyRun) -> RunResult:
+            run.advance_to(RunState.SUMMARY)
+            run.advance_to(RunState.COMPLETED)
+            return RunResult(
+                run_id=run_id,
+                status=RunStatus.COMPLETED,
+                final_state=RunState.COMPLETED,
+                summary="<section>done</section>",
+                total_duration_ms=7,
+            )
+
+    return StubOrchestrator
+
+
+@pytest.mark.asyncio
+async def test_a_finished_run_reaches_the_completion_hook(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    run = _run()
+    repository = InMemoryRunRepository(run)
+    hook = RecordingCompletionHook()
+    monkeypatch.setattr(
+        "backend.business.runs.executor.AniuOrchestrator",
+        _stub_orchestrator(run.run_id),
+    )
+    executor = RunExecutor(
+        repository,  # type: ignore[arg-type]
+        agent_runner_factory=StubAgentRunnerFactory(),  # type: ignore[arg-type]
+        abort_registry=ActiveRunAbortRegistry(),
+        run_completion_hook=hook,  # type: ignore[arg-type]
+    )
+
+    await executor.execute(run.run_id)
+
+    assert hook.completed == [run.run_id]
+
+
+@pytest.mark.asyncio
+async def test_a_failed_run_never_reaches_the_completion_hook() -> None:
+    """Away mode mails finished reports; a failure has none to mail."""
+
+    run = _run()
+    repository = InMemoryRunRepository(run)
+    hook = RecordingCompletionHook()
+    executor = RunExecutor(
+        repository,  # type: ignore[arg-type]
+        agent_runner_factory=ExplodingAgentRunnerFactory(),  # type: ignore[arg-type]
+        abort_registry=ActiveRunAbortRegistry(),
+        run_completion_hook=hook,  # type: ignore[arg-type]
+    )
+
+    with pytest.raises(RuntimeError):
+        await executor.execute(run.run_id)
+
+    assert repository.run.status is RunStatus.FAILED
+    assert hook.completed == []
+
+
+@pytest.mark.asyncio
+async def test_an_aborted_run_never_reaches_the_completion_hook() -> None:
+    run = _run()
+    repository = InMemoryRunRepository(run)
+    hook = RecordingCompletionHook()
+    executor = RunExecutor(
+        repository,  # type: ignore[arg-type]
+        agent_runner_factory=FailingAgentRunnerFactory(),  # type: ignore[arg-type]
+        abort_registry=ActiveRunAbortRegistry(),
+        run_completion_hook=hook,  # type: ignore[arg-type]
+    )
+
+    async def abort_immediately() -> None:
+        raise RunAbortError(run.run_id)
+
+    executor.set_execution_guard(abort_immediately)
+
+    with pytest.raises(RunAbortError):
+        await executor.execute(run.run_id)
+
+    assert hook.completed == []
+
+
+@pytest.mark.asyncio
+async def test_a_broken_completion_hook_does_not_fail_the_finished_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class ExplodingHook:
+        async def on_run_completed(self, run_id: int) -> None:
+            raise RuntimeError("mailer is down")
+
+    run = _run()
+    repository = InMemoryRunRepository(run)
+    monkeypatch.setattr(
+        "backend.business.runs.executor.AniuOrchestrator",
+        _stub_orchestrator(run.run_id),
+    )
+    executor = RunExecutor(
+        repository,  # type: ignore[arg-type]
+        agent_runner_factory=StubAgentRunnerFactory(),  # type: ignore[arg-type]
+        abort_registry=ActiveRunAbortRegistry(),
+        run_completion_hook=ExplodingHook(),  # type: ignore[arg-type]
+    )
+
+    # The run succeeded; a hook problem may not turn that into a failure.
+    await executor.execute(run.run_id)

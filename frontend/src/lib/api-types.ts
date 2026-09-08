@@ -33,6 +33,7 @@ export type NotificationEvent = NotificationChannel["subscribed_events"][number]
 export type NotificationTestResult = Schemas["NotificationTestResultResponse"];
 export type NotificationDelivery = Schemas["NotificationDeliveryResponse"];
 export type NotificationDeliveryPage = Schemas["NotificationDeliveryPageResponse"];
+export type AwayModeState = Schemas["AwayModeResponse"];
 export type ReportEmailSettings = Schemas["ReportEmailSettingsResponse"];
 export type SaveReportEmailSettingsPayload = Schemas["SaveReportEmailSettingsRequest"];
 export type ReportMailResult = Schemas["ReportMailResultResponse"];

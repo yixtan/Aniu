@@ -26,6 +26,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AwayModeToggle } from "@/features/dashboard/away-mode-toggle";
 import { accountKeys } from "@/features/dashboard/query-keys";
 import { useRefreshAnimation } from "@/hooks/use-refresh-animation";
 import {
@@ -310,24 +311,27 @@ export function DashboardPage() {
           <h1 className="text-2xl font-bold tracking-tight">投资总览</h1>
           <p className="text-muted-foreground text-sm">聚焦账户状态、最近运行与组合变化</p>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className={cn(refreshActive && "cursor-wait")}
-          disabled={refreshActive}
-          aria-busy={refreshActive}
-          title="刷新投资总览数据"
-          onClick={refreshDashboard}
-        >
-          <RefreshCwIcon
-            className={cn(
-              "size-4 transition-transform duration-500",
-              refreshActive && "animate-spin",
-            )}
-          />
-          刷新数据
-        </Button>
+        <div className="flex items-center gap-2">
+          <AwayModeToggle />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={cn(refreshActive && "cursor-wait")}
+            disabled={refreshActive}
+            aria-busy={refreshActive}
+            title="刷新投资总览数据"
+            onClick={refreshDashboard}
+          >
+            <RefreshCwIcon
+              className={cn(
+                "size-4 transition-transform duration-500",
+                refreshActive && "animate-spin",
+              )}
+            />
+            刷新数据
+          </Button>
+        </div>
       </div>
 
       <Tabs

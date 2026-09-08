@@ -12,6 +12,9 @@ const api = vi.hoisted(() => ({
   getMarketDetails: vi.fn(),
   getSettings: vi.fn(),
   refreshAccountCache: vi.fn(),
+  // The header carries the away-mode switch, which reads its own state.
+  getAwayMode: vi.fn(),
+  setAwayMode: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => api);
@@ -131,6 +134,11 @@ function LocationDisplay() {
 }
 
 function renderPage({ mxApiKeyConfigured = true } = {}) {
+  api.getAwayMode.mockResolvedValue({
+    enabled: false,
+    active_date: null,
+    updated_at: "2026-09-08T00:00:00Z",
+  });
   api.getSettings.mockResolvedValue({
     mx: { api_key_configured: mxApiKeyConfigured },
   });
