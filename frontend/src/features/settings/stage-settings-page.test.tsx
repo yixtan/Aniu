@@ -12,7 +12,13 @@ const api = vi.hoisted(() => ({
   updateSettings: vi.fn(),
 }));
 
+const toast = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+}));
+
 vi.mock("@/lib/api", () => api);
+vi.mock("sonner", () => ({ toast }));
 
 const settings = {
   revision: 3,
@@ -299,6 +305,73 @@ describe("StageSettingsPage prompt configs", () => {
 
     await waitFor(() => expect(option).not.toBeInTheDocument());
     expect(api.updateSettings).not.toHaveBeenCalled();
+  });
+
+  it("refuses an execution time inside the trading session", async () => {
+    const user = userEvent.setup();
+    const configuredSettings = {
+      ...settings,
+      stage_settings: settings.stage_settings.map((stage) =>
+        stage.stage_id === "Dream" ? { ...stage, model_selected_model_id: 1 } : stage,
+      ),
+    };
+    api.getSettings.mockResolvedValue(configuredSettings);
+    api.listModelChannels.mockResolvedValue([
+      {
+        name: "测试通道",
+        enabled: true,
+        selected_models: [{ selected_model_id: 1, model_name: "测试模型", thinking_efforts: [] }],
+      },
+    ]);
+
+    renderPage();
+
+    await user.click(await screen.findByRole("tab", { name: "梦境阶段" }));
+    const timeInput = await screen.findByLabelText("每日执行时间");
+    await user.clear(timeInput);
+    await user.type(timeInput, "11:00");
+    await user.click(screen.getByRole("button", { name: "保存阶段设置" }));
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith("运行时间需在 16:00 至次日 08:00 之间"),
+    );
+    expect(api.updateSettings).not.toHaveBeenCalled();
+  });
+
+  it("accepts an execution time after the close", async () => {
+    const user = userEvent.setup();
+    const configuredSettings = {
+      ...settings,
+      stage_settings: settings.stage_settings.map((stage) =>
+        stage.stage_id === "Dream" ? { ...stage, model_selected_model_id: 1 } : stage,
+      ),
+    };
+    api.getSettings.mockResolvedValue(configuredSettings);
+    api.listModelChannels.mockResolvedValue([
+      {
+        name: "测试通道",
+        enabled: true,
+        selected_models: [{ selected_model_id: 1, model_name: "测试模型", thinking_efforts: [] }],
+      },
+    ]);
+    api.updateSettings.mockResolvedValue({
+      ...configuredSettings,
+      revision: 4,
+      dream_schedule_time: "16:00",
+    });
+
+    renderPage();
+
+    await user.click(await screen.findByRole("tab", { name: "梦境阶段" }));
+    const timeInput = await screen.findByLabelText("每日执行时间");
+    await user.clear(timeInput);
+    await user.type(timeInput, "16:00");
+    await user.click(screen.getByRole("button", { name: "保存阶段设置" }));
+
+    await waitFor(() => expect(api.updateSettings).toHaveBeenCalledTimes(1));
+    expect(api.updateSettings.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ dream_schedule_time: "16:00" }),
+    );
   });
 
   it("saves current three-stage prompts as a named config", async () => {

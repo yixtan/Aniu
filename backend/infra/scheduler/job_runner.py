@@ -8,7 +8,7 @@ import asyncio
 import logging
 import uuid
 from collections.abc import Awaitable, Callable
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 from apscheduler.jobstores.base import JobLookupError
@@ -43,7 +43,7 @@ SCHEDULER_LEASE_RENEW_SECONDS = 20.0
 
 LeaseCheck = Callable[[], Awaitable[None]]
 MarketAnalysisHandler = Callable[[StrategySchedule, LeaseCheck], Awaitable[None]]
-MemoryDreamHandler = Callable[[date, LeaseCheck], Awaitable[None]]
+MemoryDreamHandler = Callable[[LeaseCheck], Awaitable[None]]
 AccountRefreshHandler = Callable[[LeaseCheck], Awaitable[None]]
 
 
@@ -213,21 +213,20 @@ class JobRunner:
         return None if job is None else job.next_run_time
 
     async def trigger_memory_dream(self) -> None:
+        # Which days need a dream is a question about run history, so the
+        # handler answers it. This only decides that now is a moment to ask.
         if not self._enabled or self._memory_dream_handler is None:
             return
-        target_date = self._now_market_time().date() - timedelta(days=1)
         await self._run_as_leader(
-            lambda lease_check: self._trigger_memory_dream(target_date, lease_check),
+            self._trigger_memory_dream,
             lease_key=SCHEDULER_MEMORY_DREAM_LEASE_KEY,
             task_name="aniu-memory-dream-scheduler-handler",
         )
 
-    async def _trigger_memory_dream(
-        self, target_date: date, lease_check: LeaseCheck
-    ) -> None:
+    async def _trigger_memory_dream(self, lease_check: LeaseCheck) -> None:
         if self._memory_dream_handler is None:
             return
-        await self._memory_dream_handler(target_date, lease_check)
+        await self._memory_dream_handler(lease_check)
 
     async def sync_account_refresh_job(self) -> datetime | None:
         if not self._enabled:

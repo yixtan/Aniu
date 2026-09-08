@@ -344,6 +344,7 @@ class AppRuntime:
                 session_factory=self.require_session_factory(),
             ),
             committer=session,
+            run_days=RunRepository(session),
         )
 
     def run_executor(self, session: AsyncSession) -> RunExecutor:

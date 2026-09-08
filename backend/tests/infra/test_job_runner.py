@@ -140,23 +140,25 @@ async def test_job_runner_triggers_scheduled_market_analysis(
 
 
 @pytest.mark.asyncio
-async def test_job_runner_schedules_previous_day_memory_dream(
+async def test_job_runner_asks_the_handler_which_days_need_a_dream(
     session_factory,
-    monkeypatch,
 ) -> None:
-    calls: list[object] = []
+    """The runner decides when to ask, not which day the answer is.
 
-    async def dream_handler(target_date, _lease_check):
-        calls.append(target_date)
+    Which days still need reflecting on is a question about run history, so it
+    belongs to the handler. Reading a date off the clock here is what made a
+    missed trigger unrecoverable.
+    """
+
+    calls = 0
+
+    async def dream_handler(_lease_check):
+        nonlocal calls
+        calls += 1
 
     runner = JobRunner(
         session_factory=session_factory,
         memory_dream_handler=dream_handler,
-    )
-    monkeypatch.setattr(
-        runner,
-        "_now_market_time",
-        lambda: datetime(2026, 8, 19, 0, 30, tzinfo=ZoneInfo("Asia/Shanghai")),
     )
 
     next_run_at = await runner.sync_memory_dream_job()
@@ -166,7 +168,7 @@ async def test_job_runner_schedules_previous_day_memory_dream(
     assert next_run_at is not None
     assert next_run_at.astimezone(ZoneInfo("Asia/Shanghai")).hour == 0
     assert next_run_at.astimezone(ZoneInfo("Asia/Shanghai")).minute == 30
-    assert calls == [datetime(2026, 8, 18).date()]
+    assert calls == 1
 
 
 @pytest.mark.asyncio

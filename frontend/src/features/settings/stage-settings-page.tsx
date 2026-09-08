@@ -90,6 +90,20 @@ function stageMetaById(stageId: string) {
 const SETTINGS_QUERY_KEY = ["settings"] as const;
 const DEFAULT_DREAM_SCHEDULE_TIME = "00:30";
 const DREAM_SCHEDULE_TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+// After the A-share close and before the next session. A dream during trading
+// hours would reflect on a day still in progress and then mark it done, so the
+// rest of that day's runs would never be read. Mirrors the backend's window.
+const DREAM_WINDOW_START_MINUTES = 16 * 60;
+const DREAM_WINDOW_END_MINUTES = 8 * 60;
+
+function isOutOfSession(value: string): boolean {
+  const match = /^(\d{2}):(\d{2})$/.exec(value);
+  // Anything unparseable is refused rather than defaulted, so a malformed
+  // value cannot read as allowed.
+  if (match === null) return false;
+  const total = Number(match[1]) * 60 + Number(match[2]);
+  return total >= DREAM_WINDOW_START_MINUTES || total <= DREAM_WINDOW_END_MINUTES;
+}
 const GLOBAL_TAB_ID = "Global";
 /** Reserved select value: the currently effective (server-side) configuration. */
 const CURRENT_PROMPT_CONFIG_VALUE = "__current_effective__";
@@ -357,9 +371,15 @@ export function StageSettingsPage() {
       return;
     }
     const dreamScheduleTime = effectiveStageDraft.dreamScheduleTime.trim();
-    if (activeStage.stage_id === "Dream" && !DREAM_SCHEDULE_TIME_PATTERN.test(dreamScheduleTime)) {
-      toast.error("运行时间必须使用 HH:MM 格式");
-      return;
+    if (activeStage.stage_id === "Dream") {
+      if (!DREAM_SCHEDULE_TIME_PATTERN.test(dreamScheduleTime)) {
+        toast.error("运行时间必须使用 HH:MM 格式");
+        return;
+      }
+      if (!isOutOfSession(dreamScheduleTime)) {
+        toast.error("运行时间需在 16:00 至次日 08:00 之间");
+        return;
+      }
     }
     const updatedStage: StageSettings = {
       stage_id: activeStage.stage_id,
@@ -934,7 +954,9 @@ export function StageSettingsPage() {
                       onChange={(event) => updateDraft({ dreamScheduleTime: event.target.value })}
                     />
                     <FieldDescription>
-                      按上海时间每天执行一次，整理前一天的运行报告与长期记忆。
+                      按上海时间每天执行一次，可选 16:00 至次日 08:00 ——
+                      收盘之后、开盘之前。每次会整理最近 3
+                      个有运行的交易日里尚未整理过的那些，因此错过一晚不会永久遗漏。
                     </FieldDescription>
                   </Field>
                 </section>

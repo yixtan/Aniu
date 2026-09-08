@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
-from datetime import datetime
+from datetime import datetime, time
 
 from backend.business.settings.prompt import (
     AniuAgentPrompt,
@@ -19,10 +19,18 @@ from backend.business.settings.stages import (
 )
 
 DEFAULT_DREAM_SCHEDULE_TIME = "00:30"
+DREAM_WINDOW_START = time(16, 0)
+DREAM_WINDOW_END = time(8, 0)
 
 
 def normalize_dream_schedule_time(value: str) -> str:
-    """Validate and normalize the daily Dream execution time."""
+    """Validate the daily Dream execution time, and that it is out of session.
+
+    The allowed window runs from 16:00 to 08:00 the next morning: after the
+    A-share close, before the next session opens. A dream during trading hours
+    would reflect on a day that is still happening and then mark it done, so
+    the rest of that day's runs would never be read.
+    """
 
     normalized = value.strip()
     try:
@@ -32,6 +40,10 @@ def normalize_dream_schedule_time(value: str) -> str:
     result = parsed.strftime("%H:%M")
     if result != normalized:
         raise ValueError("dream_schedule_time must use HH:MM format")
+    if DREAM_WINDOW_END < parsed.time() < DREAM_WINDOW_START:
+        raise ValueError(
+            "dream_schedule_time must fall between 16:00 and 08:00"
+        )
     return result
 
 

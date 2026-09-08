@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import date
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -55,7 +54,7 @@ async def test_scheduler_handlers_are_single_owner_across_runner_instances(
     release = asyncio.Event()
     calls = 0
 
-    async def handler(_target_date: date, _lease_check) -> None:
+    async def handler(_lease_check) -> None:
         nonlocal calls
         calls += 1
         started.set()
@@ -83,7 +82,7 @@ async def test_same_runner_serializes_same_scheduler_lease_key(
     active = 0
     max_active = 0
 
-    async def handler(_target_date: date, _lease_check) -> None:
+    async def handler(_lease_check) -> None:
         nonlocal active, max_active
         active += 1
         max_active = max(max_active, active)
@@ -140,7 +139,7 @@ async def test_scheduler_cancels_handler_when_lease_is_lost(
     started = asyncio.Event()
     cancelled = asyncio.Event()
 
-    async def handler(_target_date: date, _lease_check) -> None:
+    async def handler(_lease_check) -> None:
         started.set()
         try:
             await asyncio.Event().wait()

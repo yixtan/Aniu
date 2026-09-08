@@ -9,7 +9,11 @@ from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from backend.business.dreams.models import DreamStatus, MemoryDream
-from backend.business.dreams.ports import DreamAgentPort, DreamRepositoryPort
+from backend.business.dreams.ports import (
+    DreamAgentPort,
+    DreamRepositoryPort,
+    RunDayQueryPort,
+)
 from backend.business.shared.ports import CommitterPort
 
 logger = logging.getLogger(__name__)
@@ -22,6 +26,14 @@ class ExecutionFencedError(RuntimeError):
 
 
 _MARKET_TIMEZONE = ZoneInfo("Asia/Shanghai")
+DREAM_BACKFILL_DAYS = 3
+"""How many recent run days one trigger considers.
+
+The lookback window and the per-trigger cap are deliberately the same
+number. A window wider than the cap promises a backfill the trigger cannot
+reach: the days beyond it slide out of range before anything gets to them,
+and nothing says so.
+"""
 
 
 class DreamService:
@@ -31,9 +43,11 @@ class DreamService:
         agent: DreamAgentPort | None = None,
         *,
         committer: CommitterPort | None = None,
+        run_days: RunDayQueryPort | None = None,
     ) -> None:
         self._repository = repository
         self._agent = agent
+        self._run_days = run_days
         self._committer = committer
 
     async def create_or_get(
@@ -60,14 +74,81 @@ class DreamService:
                 return existing
             raise
 
+    async def pending_target_dates(
+        self, *, limit: int = DREAM_BACKFILL_DAYS
+    ) -> list[date]:
+        """Recent run days that no completed dream covers, newest first.
+
+        Days without runs are skipped. There is no report to reflect on, and a
+        dream over an empty day still spends a full agent turn to conclude it
+        had nothing to do.
+
+        A failed or still-running dream leaves its day pending: the question is
+        whether the day has been reflected on, not whether a row exists for it.
+        """
+
+        if self._run_days is None:
+            return []
+        days = await self._run_days.recent_days_with_runs(limit=limit)
+        pending: list[date] = []
+        for day in days:
+            existing = await self._repository.get_by_date(day)
+            if existing is None or existing.status is not DreamStatus.COMPLETED:
+                pending.append(day)
+        return pending
+
+    async def prepare_scheduled_run(
+        self,
+        target_date: date,
+        *,
+        execution_guard: ExecutionGuard | None = None,
+    ) -> MemoryDream:
+        """Bring this date's dream to a state the worker can pick up.
+
+        A failed dream is put back to pending. Eligibility asks whether a day
+        has a completed dream, so a failure left alone would be selected every
+        night and enqueued none of them — the day would be picked forever and
+        never run.
+
+        A running dream is returned untouched, so a trigger firing while one is
+        in flight cannot start it twice.
+        """
+
+        dream = await self.create_or_get(
+            target_date, execution_guard=execution_guard
+        )
+        if dream.status is DreamStatus.FAILED:
+            dream.retry()
+            saved = await self._repository.save(dream)
+            await self._commit(execution_guard=execution_guard)
+            return saved
+        return dream
+
     async def prepare_manual_run(self, *, now: datetime | None = None) -> MemoryDream:
-        current = (now or datetime.now(tz=UTC)).astimezone(_MARKET_TIMEZONE)
-        target_date = current.date() - timedelta(days=1)
+        """Dream the most recent day that still needs one.
+
+        When every recent day is covered the newest is re-run instead: the
+        button was pressed deliberately, so it should do something.
+        """
+
+        target_date = await self._manual_target_date(now=now)
         dream = await self.create_or_get(target_date)
         if dream.status in {DreamStatus.COMPLETED, DreamStatus.FAILED}:
             dream.retry()
             return await self._save_and_commit(dream)
         return dream
+
+    async def _manual_target_date(self, *, now: datetime | None) -> date:
+        pending = await self.pending_target_dates()
+        if pending:
+            return pending[0]
+        if self._run_days is not None:
+            recent = await self._run_days.recent_days_with_runs(limit=1)
+            if recent:
+                return recent[0]
+        # No run history to go on, so keep the original meaning of the button.
+        current = (now or datetime.now(tz=UTC)).astimezone(_MARKET_TIMEZONE)
+        return current.date() - timedelta(days=1)
 
     async def list_recent(
         self, *, limit: int, offset: int

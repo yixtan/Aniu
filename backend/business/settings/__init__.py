@@ -7,7 +7,10 @@ from backend.business.settings.channels_models import (
 )
 from backend.business.settings.models import (
     DEFAULT_DREAM_SCHEDULE_TIME,
+    DREAM_WINDOW_END,
+    DREAM_WINDOW_START,
     AppSettings,
+    normalize_dream_schedule_time,
 )
 from backend.business.settings.ports import (
     ModelProfileRepositoryPort,
@@ -40,6 +43,8 @@ __all__ = [
     "AniuAgentPrompt",
     "AppSettings",
     "DEFAULT_DREAM_SCHEDULE_TIME",
+    "DREAM_WINDOW_END",
+    "DREAM_WINDOW_START",
     "DEFAULT_PROMPT_PROFILE_NAME",
     "ModelAuthMode",
     "ModelProfile",
@@ -59,5 +64,6 @@ __all__ = [
     "StageSettings",
     "ThinkingEffort",
     "default_stage_settings",
+    "normalize_dream_schedule_time",
     "normalize_stage_settings",
 ]
