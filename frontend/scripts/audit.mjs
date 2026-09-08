@@ -1,18 +1,20 @@
 import { spawnSync } from "node:child_process";
 
-const ALLOWED_ADVISORIES = new Map([
-  [
-    "https://github.com/advisories/GHSA-qwww-vcr4-c8h2",
-    {
-      packages: new Set(["react-router", "react-router-dom"]),
-      trackingUrl:
-        "https://github.com/remix-run/react-router/security/advisories/GHSA-qwww-vcr4-c8h2",
-      reason:
-        "RSC APIs are not used by this Vite client-only application; the upstream advisory marks 7.18.2 as patched",
-      expiresOn: "2027-12-31",
-    },
-  ],
-]);
+// Advisories this project has reviewed and accepted, keyed by advisory URL.
+// Empty means every high or critical finding blocks the build.
+//
+// Add an entry only when an advisory has no fix available and the affected
+// code path is genuinely unreachable here. Each one needs a reason, a URL for
+// tracking upstream, and an expiry — an accepted risk that is never revisited
+// stops being a decision and becomes a blind spot.
+//
+//   ["https://github.com/advisories/GHSA-xxxx", {
+//     packages: new Set(["some-package"]),
+//     trackingUrl: "https://github.com/owner/repo/security/advisories/GHSA-xxxx",
+//     reason: "why this cannot affect this application",
+//     expiresOn: "YYYY-MM-DD",
+//   }],
+const ALLOWED_ADVISORIES = new Map([]);
 const BLOCKING_SEVERITIES = new Set(["high", "critical"]);
 
 const audit = spawnSync("npm", ["audit", "--json"], {
