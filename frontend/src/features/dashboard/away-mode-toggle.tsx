@@ -37,7 +37,11 @@ export function AwayModeToggle() {
   return (
     <Button
       type="button"
-      variant={enabled ? "default" : "outline"}
+      // The theme's red token, used here for how loud it is rather than
+      // because the action is destructive: away mode leaves Aniu acting on
+      // its own, which should be obvious at a glance and easy to notice you
+      // left on.
+      variant={enabled ? "destructive" : "outline"}
       size="sm"
       role="switch"
       aria-checked={enabled}
