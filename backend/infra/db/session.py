@@ -252,6 +252,9 @@ def _upgrade_sqlite_schema(connection: Connection) -> None:
     """Apply additive migrations required by persisted local databases."""
 
     _upgrade_memory_schema(connection)
+    # New tables arrive through create_all, which runs before this; nothing to
+    # migrate for the watchlist beyond that.
+
 
     auth_session_columns = {
         column["name"] for column in inspect(connection).get_columns("auth_sessions")

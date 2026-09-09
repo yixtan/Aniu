@@ -306,6 +306,27 @@ class StrategyRunModel(Base):
     completed_at: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class WatchlistItemModel(Base):
+    """One company the operator follows."""
+
+    __tablename__ = "watchlist_items"
+    __table_args__ = (
+        UniqueConstraint("symbol", name="uq_watchlist_items_symbol"),
+        Index("idx_watchlist_items_created", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    symbol: Mapped[str] = mapped_column(String(16), nullable=False)
+    name: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    created_at: Mapped[str] = mapped_column(Text, nullable=False, default=utc_now_iso)
+    updated_at: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default=utc_now_iso,
+        onupdate=utc_now_iso,
+    )
+
+
 class MemoryItemModel(Base):
     """Current projection of one task-sourced memory."""
 

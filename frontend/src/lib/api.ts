@@ -3,6 +3,7 @@ import type {
   RunDetail,
   RunTrace,
   MemoryItem,
+  WatchlistItem,
   MemoryOverview,
   MemoryDream,
   MemoryDreamDetail,
@@ -297,6 +298,25 @@ export async function getMemoryOverview({
         item_keywords: itemKeywords,
       },
     },
+  });
+  return getResponseData(result);
+}
+
+export async function listWatchlist(): Promise<WatchlistItem[]> {
+  const result = await openapiClient.GET("/api/aniu/watchlist", {});
+  return getResponseData(result).items;
+}
+
+export async function addWatchlistItem(symbol: string): Promise<WatchlistItem> {
+  const result = await openapiClient.POST("/api/aniu/watchlist", {
+    body: { symbol },
+  });
+  return getResponseData(result);
+}
+
+export async function deleteWatchlistItem(itemId: number) {
+  const result = await openapiClient.DELETE("/api/aniu/watchlist/{item_id}", {
+    params: { path: { item_id: itemId } },
   });
   return getResponseData(result);
 }

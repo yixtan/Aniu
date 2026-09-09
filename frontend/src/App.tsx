@@ -20,6 +20,11 @@ const MemoryOverviewPage = lazy(() =>
     default: module.MemoryOverviewPage,
   })),
 );
+const WatchlistPage = lazy(() =>
+  import("./features/watchlist/watchlist-page").then((module) => ({
+    default: module.WatchlistPage,
+  })),
+);
 const SettingsLayout = lazy(() =>
   import("./features/settings/settings-layout").then((module) => ({
     default: module.SettingsLayout,
@@ -83,6 +88,10 @@ const router = createBrowserRouter([
           {
             path: "memories",
             element: page(<MemoryOverviewPage />),
+          },
+          {
+            path: "watchlist",
+            element: page(<WatchlistPage />),
           },
           {
             element: page(<SettingsLayout />),
