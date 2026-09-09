@@ -405,10 +405,10 @@ describe("StageSettingsPage prompt configs", () => {
     renderPage();
 
     await user.click(await screen.findByRole("tab", { name: "执行阶段" }));
-    expect(screen.getByLabelText("补充提示词")).toBeInTheDocument();
+    expect(screen.getByLabelText("关注清单补充提示词")).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "总结阶段" }));
-    expect(screen.queryByLabelText("补充提示词")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("关注清单补充提示词")).not.toBeInTheDocument();
   });
 
   it("saves the watchlist instruction with the Run stage", async () => {
@@ -432,7 +432,7 @@ describe("StageSettingsPage prompt configs", () => {
     renderPage();
 
     await user.click(await screen.findByRole("tab", { name: "执行阶段" }));
-    await user.type(screen.getByLabelText("补充提示词"), "先快速筛查");
+    await user.type(screen.getByLabelText("关注清单补充提示词"), "先快速筛查");
     await user.click(screen.getByRole("button", { name: "保存阶段设置" }));
 
     await waitFor(() => expect(api.updateSettings).toHaveBeenCalledTimes(1));

@@ -10,7 +10,6 @@ import {
   ScrollTextIcon,
   Settings2,
   SlidersHorizontal,
-  StarIcon,
 } from "lucide-react";
 
 import { QueryErrorState, QueryLoadingState } from "@/components/query-state";
@@ -983,25 +982,6 @@ export function StageSettingsPage() {
                 </div>
               </section>
 
-              {activeStage.stage_id === "Run" ? (
-                <section className="flex flex-col gap-3" aria-label="关注清单提示词">
-                  <SectionLabel icon={<StarIcon className="size-3.5" />}>关注清单</SectionLabel>
-                  <Field>
-                    <FieldLabel htmlFor="watchlist-prompt">补充提示词</FieldLabel>
-                    <Textarea
-                      id="watchlist-prompt"
-                      rows={6}
-                      value={effectiveStageDraft.watchlistPrompt}
-                      onChange={(event) => updateDraft({ watchlistPrompt: event.target.value })}
-                    />
-                    <FieldDescription>
-                      仅在关注清单非空时拼接到执行阶段提示词之后；清单为空时整段不发送。
-                      清单本身会随运行上下文一并送达，无需在此列出代码。
-                    </FieldDescription>
-                  </Field>
-                </section>
-              ) : null}
-
               {activeStage.stage_id === "Dream" ? (
                 <section className="flex flex-col gap-3" aria-label="梦境运行时间">
                   <SectionLabel icon={<MoonIcon className="size-3.5" />}>运行时间</SectionLabel>
@@ -1045,6 +1025,22 @@ export function StageSettingsPage() {
                     这里仅填写该阶段的专属指令；所有阶段共用的角色与边界请在“全局”中配置。
                   </FieldDescription>
                 </Field>
+                {activeStage.stage_id === "Run" ? (
+                  <Field>
+                    <FieldLabel htmlFor="watchlist-prompt">关注清单补充提示词</FieldLabel>
+                    <Textarea
+                      id="watchlist-prompt"
+                      value={effectiveStageDraft.watchlistPrompt}
+                      onChange={(event) => updateDraft({ watchlistPrompt: event.target.value })}
+                      placeholder="说明如何处理关注清单，例如先批量筛查再选择性深入…"
+                      className="min-h-32 resize-y text-sm"
+                    />
+                    <FieldDescription>
+                      拼接在上面这段之后，且仅在关注清单非空时发送；清单为空时整段略过。
+                      清单本身随运行上下文一并送达，无需在此列出代码。
+                    </FieldDescription>
+                  </Field>
+                ) : null}
               </section>
             </CardContent>
           )}
