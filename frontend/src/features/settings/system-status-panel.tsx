@@ -242,10 +242,10 @@ function DreamsCard({
   );
 }
 
-/** One hue, two steps: the bars are a magnitude, and today is the one to find. */
-const BAR = "bg-slate-500 hover:bg-slate-600 dark:bg-slate-500 dark:hover:bg-slate-400";
-const BAR_TODAY = "bg-slate-800 dark:bg-slate-200";
-const BAR_IDLE = "bg-slate-200 dark:bg-slate-700";
+/** One bright hue, two steps: the bars are a magnitude, and today is the one to find. */
+const BAR = "bg-sky-500 hover:bg-sky-600 dark:bg-sky-400 dark:hover:bg-sky-300";
+const BAR_TODAY = "bg-sky-700 dark:bg-sky-200";
+const BAR_IDLE = "bg-sky-100 dark:bg-sky-900";
 
 function describeDay(day: TokenDay) {
   return `${formatDay(day.day)} · ${formatTokens(day.tokens)} · ${day.runs} 次运行`;
