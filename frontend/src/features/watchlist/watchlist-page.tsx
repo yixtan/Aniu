@@ -83,37 +83,44 @@ export function WatchlistPage() {
   const canAdd = symbol.trim().length > 0 && !isFull && !addMutation.isPending;
 
   return (
-    <section className="w-full max-w-[986px] space-y-5" aria-label="关注股票内容">
+    <section className="w-full max-w-[986px] space-y-5" aria-label="关注清单内容">
       <form
-        className="flex flex-wrap items-end gap-3"
+        className="max-w-md"
         onSubmit={(event) => {
           event.preventDefault();
           if (canAdd) addMutation.mutate(symbol.trim());
         }}
       >
-        <Field className="max-w-xs flex-1">
-          <FieldLabel htmlFor="watchlist-symbol">股票代码</FieldLabel>
-          <Input
-            id="watchlist-symbol"
-            value={symbol}
-            autoComplete="off"
-            placeholder="600519"
-            disabled={isFull}
-            onChange={(event) => setSymbol(event.target.value)}
-          />
+        <Field>
+          <div className="flex items-center justify-between gap-2">
+            <FieldLabel htmlFor="watchlist-symbol">股票代码</FieldLabel>
+            <span className="text-muted-foreground text-sm tabular-nums">
+              {items.length} / {MAX_FOLLOWED}
+            </span>
+          </div>
+          {/* Input and button share one row so the button sits against the
+              field itself, not against the description below it. */}
+          <div className="flex items-center gap-2">
+            <Input
+              id="watchlist-symbol"
+              className="flex-1"
+              value={symbol}
+              autoComplete="off"
+              placeholder="600519"
+              disabled={isFull}
+              onChange={(event) => setSymbol(event.target.value)}
+            />
+            <Button type="submit" className="shrink-0" disabled={!canAdd}>
+              <PlusIcon className="size-4" />
+              加入关注
+            </Button>
+          </div>
           <FieldDescription>
             {isFull
               ? `已达上限 ${MAX_FOLLOWED} 只，请先移除不再关注的`
               : "只需填代码，保存时自动查询并记录名称"}
           </FieldDescription>
         </Field>
-        <Button type="submit" disabled={!canAdd}>
-          <PlusIcon className="size-4" />
-          加入关注
-        </Button>
-        <span className="text-muted-foreground ms-auto text-sm tabular-nums">
-          {items.length} / {MAX_FOLLOWED}
-        </span>
       </form>
 
       {items.length === 0 ? (

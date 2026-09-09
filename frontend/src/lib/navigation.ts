@@ -111,7 +111,7 @@ export const navigationGroups: NavigationGroup[] = [
         icon: MoonStarIcon,
       },
       {
-        title: "关注股票",
+        title: "关注清单",
         description: "你自己关注的公司，供运行时参考",
         to: "/watchlist",
         icon: StarIcon,
