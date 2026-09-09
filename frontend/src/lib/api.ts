@@ -18,6 +18,7 @@ import type {
   UpdateSettingsPayload,
   StockApiLogToolSource,
   StockApiProvider,
+  SystemStatus,
 } from "@/lib/api-types";
 import {
   clearAuthSession,
@@ -305,6 +306,11 @@ export async function getMemoryOverview({
 export async function listWatchlist(): Promise<WatchlistItem[]> {
   const result = await openapiClient.GET("/api/aniu/watchlist", {});
   return getResponseData(result).items;
+}
+
+export async function getSystemStatus(): Promise<SystemStatus> {
+  const result = await openapiClient.GET("/api/aniu/system-status", {});
+  return getResponseData(result);
 }
 
 export async function addWatchlistItem(symbol: string): Promise<WatchlistItem> {

@@ -48,7 +48,7 @@ export const settingsNavigationItems: NavigationItem[] = [
   },
   {
     title: "工具管理",
-    description: "统一管理数据工具、系统工具与调用日志",
+    description: "统一管理数据工具、系统工具、调用日志与系统状态",
     to: "/stock-api",
     icon: ChartCandlestickIcon,
   },

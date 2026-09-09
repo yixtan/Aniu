@@ -675,6 +675,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/aniu/system-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get System Status */
+        get: operations["get_system_status_api_aniu_system_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/aniu/watchlist": {
         parameters: {
             query?: never;
@@ -1007,10 +1024,62 @@ export interface components {
              */
             task_type: "market_analysis";
         };
+        /** DailyStatusResponse */
+        DailyStatusResponse: {
+            /** Data Call Failures */
+            data_call_failures: number;
+            /** Data Calls */
+            data_calls: number;
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** Memory Distinct Queries */
+            memory_distinct_queries: number;
+            /** Memory Reads */
+            memory_reads: number;
+            /** Memory Write Failures */
+            memory_write_failures: number;
+            /** Memory Writes */
+            memory_writes: number;
+            /** Runs Completed */
+            runs_completed: number;
+            /** Runs Failed */
+            runs_failed: number;
+            /** Summaries Html */
+            summaries_html: number;
+            /** Tokens */
+            tokens: number;
+            /** Trades Completed */
+            trades_completed: number;
+            /** Trades Failed */
+            trades_failed: number;
+        };
         /** DeleteMemoryRequest */
         DeleteMemoryRequest: {
             /** Expected Version */
             expected_version: number;
+        };
+        /** DreamStatusResponse */
+        DreamStatusResponse: {
+            /** Completed At */
+            completed_at: string | null;
+            /** Created */
+            created: number;
+            /** Deleted */
+            deleted: number;
+            /** Failure Reason */
+            failure_reason: string | null;
+            /** Status */
+            status: string;
+            /**
+             * Target Date
+             * Format: date
+             */
+            target_date: string;
+            /** Updated */
+            updated: number;
         };
         /** ErrorDetailResponse */
         ErrorDetailResponse: {
@@ -1964,6 +2033,35 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** SystemStatusResponse */
+        SystemStatusResponse: {
+            /** Days */
+            days: components["schemas"]["DailyStatusResponse"][];
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            latest_dream: components["schemas"]["DreamStatusResponse"] | null;
+            /** Memory Live */
+            memory_live: number;
+            /** Memory With Lineage */
+            memory_with_lineage: number;
+            /** Tokens */
+            tokens: components["schemas"]["TokenDayResponse"][];
+        };
+        /** TokenDayResponse */
+        TokenDayResponse: {
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** Runs */
+            runs: number;
+            /** Tokens */
+            tokens: number;
         };
         /** TraceStageResponse */
         TraceStageResponse: {
@@ -5353,6 +5451,44 @@ export interface operations {
             };
             /** @description Request validation failed */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_system_status_api_aniu_system_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemStatusResponse"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

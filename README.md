@@ -91,7 +91,7 @@ Dream（每日独立任务）：整理记忆库
   <tr>
     <td width="50%">
       <img src="./docs/screenshots/tool-management.png" alt="工具管理页面" width="100%" />
-      <p align="center"><strong>工具管理</strong><br /><sub>数据工具、系统工具与调用日志目录</sub></p>
+      <p align="center"><strong>工具管理</strong><br /><sub>数据工具、系统工具、调用日志与系统状态</sub></p>
     </td>
     <td width="50%">
       <img src="./docs/screenshots/tool-calls.png" alt="工具调用页面" width="100%" />
