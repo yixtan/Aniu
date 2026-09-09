@@ -60,6 +60,7 @@ class StageSettingsDTO:
     top_p: float
     thinking_effort: ThinkingEffort | None
     prompt: str
+    watchlist_prompt: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -241,6 +242,7 @@ def to_stage_settings_dto(settings: StageSettings) -> StageSettingsDTO:
         top_p=settings.top_p,
         thinking_effort=settings.thinking_effort,
         prompt=settings.prompt,
+        watchlist_prompt=settings.watchlist_prompt,
     )
 
 

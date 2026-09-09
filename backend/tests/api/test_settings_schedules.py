@@ -640,3 +640,45 @@ async def test_removed_and_legacy_configuration_surfaces_are_rejected(
     assert legacy_write.status_code == 422
     assert legacy_prompt.status_code == 404
     assert legacy_schedule.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_the_watchlist_instruction_survives_a_save(
+    api_client: AsyncClient,
+) -> None:
+    """It is edited in one box and read back into the same box; losing it on
+    save is indistinguishable from the field not working at all."""
+
+    channel = await create_channel(api_client)
+    selected_model_id = channel["selected_models"][0]["selected_model_id"]
+    current = (await api_client.get("/api/aniu/settings")).json()
+    stages = current["stage_settings"]
+    for stage in stages:
+        stage["model_selected_model_id"] = selected_model_id
+        if stage["stage_id"] == "Run":
+            stage["watchlist_prompt"] = "先批量筛查关注清单，再决定深入哪几只。"
+
+    updated = await api_client.put(
+        "/api/aniu/settings",
+        json={
+            "expected_revision": current["revision"],
+            "prompt_profile": current["prompt_profile"],
+            "stage_settings": stages,
+        },
+    )
+
+    assert updated.status_code == 200
+    saved = next(
+        item for item in updated.json()["stage_settings"] if item["stage_id"] == "Run"
+    )
+    assert saved["watchlist_prompt"] == "先批量筛查关注清单，再决定深入哪几只。"
+
+    reloaded = (await api_client.get("/api/aniu/settings")).json()
+    stored = next(
+        item for item in reloaded["stage_settings"] if item["stage_id"] == "Run"
+    )
+    assert stored["watchlist_prompt"] == "先批量筛查关注清单，再决定深入哪几只。"
+    others = [
+        item for item in reloaded["stage_settings"] if item["stage_id"] != "Run"
+    ]
+    assert all(item["watchlist_prompt"] == "" for item in others)
