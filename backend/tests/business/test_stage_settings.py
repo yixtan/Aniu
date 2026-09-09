@@ -44,6 +44,9 @@ def test_stage_settings_contract_has_no_render_or_tool_loop_switches() -> None:
         "top_p",
         "thinking_effort",
         "prompt",
+        # Prompt text the operator writes, not a switch that changes how a
+        # stage runs — which is what the assertions below guard against.
+        "watchlist_prompt",
     }
     assert not hasattr(settings, "render_mode")
     assert not hasattr(settings, "html_prompt")

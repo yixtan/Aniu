@@ -3038,6 +3038,12 @@
             "minimum": 0.0,
             "title": "Top P",
             "type": "number"
+          },
+          "watchlist_prompt": {
+            "default": "",
+            "maxLength": 4000,
+            "title": "Watchlist Prompt",
+            "type": "string"
           }
         },
         "required": [
@@ -3095,6 +3101,11 @@
           "top_p": {
             "title": "Top P",
             "type": "number"
+          },
+          "watchlist_prompt": {
+            "default": "",
+            "title": "Watchlist Prompt",
+            "type": "string"
           }
         },
         "required": [

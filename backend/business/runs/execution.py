@@ -92,6 +92,13 @@ class RunExecutionContext:
     llm_runtime: object | None = None
     tool_registry: object | None = None
     market_session_is_open: Callable[[], bool] | None = None
+    followed_companies: tuple[tuple[str, str], ...] = ()
+    """The operator's watchlist, resolved once before the Run stage.
+
+    Data rather than configuration, so it is read live instead of being frozen
+    into the run snapshot: a company followed this morning should be seen by
+    this afternoon's run.
+    """
     abort_signal: AbortSignal | None = None
     tool_loop_event_sink: ToolLoopEventSink | None = None
     llm_stream_delta_sink: LlmStreamDeltaSink | None = None

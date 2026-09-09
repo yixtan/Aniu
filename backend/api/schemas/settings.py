@@ -53,6 +53,7 @@ class StageSettingsResponse(ApiModel):
     top_p: float
     thinking_effort: ThinkingEffort | None = None
     prompt: str
+    watchlist_prompt: str = ""
 
 
 class MxSettingsResponse(ApiModel):
@@ -223,6 +224,7 @@ class StageSettingsRequest(BaseModel):
     top_p: float = Field(default=1, ge=0, le=1)
     thinking_effort: ThinkingEffort | None = None
     prompt: str = Field(min_length=1)
+    watchlist_prompt: str = Field(default="", max_length=4000)
 
 
 class UpdateSettingsRequest(BaseModel):

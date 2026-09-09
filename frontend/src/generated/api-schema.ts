@@ -1819,6 +1819,11 @@ export interface components {
              * @default 1
              */
             top_p: number;
+            /**
+             * Watchlist Prompt
+             * @default
+             */
+            watchlist_prompt: string;
         };
         /** StageSettingsResponse */
         StageSettingsResponse: {
@@ -1834,6 +1839,11 @@ export interface components {
             thinking_effort?: ("minimal" | "low" | "medium" | "high" | "xhigh" | "max") | null;
             /** Top P */
             top_p: number;
+            /**
+             * Watchlist Prompt
+             * @default
+             */
+            watchlist_prompt: string;
         };
         /**
          * StartRunRequest

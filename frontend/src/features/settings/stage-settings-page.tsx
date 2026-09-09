@@ -153,6 +153,7 @@ type StageDraft = {
   temperature: string;
   topP: string;
   prompt: string;
+  watchlistPrompt: string;
   dreamScheduleTime: string;
 };
 
@@ -193,6 +194,7 @@ function toStageDraft(
     temperature: String(stage.temperature),
     topP: String(stage.top_p),
     prompt: stage.prompt,
+    watchlistPrompt: stage.watchlist_prompt,
     dreamScheduleTime,
   };
 }
@@ -426,6 +428,7 @@ export function StageSettingsPage() {
       temperature,
       top_p: topP,
       prompt: effectiveStageDraft.prompt.trim(),
+      watchlist_prompt: effectiveStageDraft.watchlistPrompt.trim(),
     };
     const stageSettings = stages.map((stage) =>
       stage.stage_id === updatedStage.stage_id ? updatedStage : stage,
@@ -1022,6 +1025,22 @@ export function StageSettingsPage() {
                     这里仅填写该阶段的专属指令；所有阶段共用的角色与边界请在“全局”中配置。
                   </FieldDescription>
                 </Field>
+                {activeStage.stage_id === "Run" ? (
+                  <Field>
+                    <FieldLabel htmlFor="watchlist-prompt">关注清单补充提示词</FieldLabel>
+                    <Textarea
+                      id="watchlist-prompt"
+                      value={effectiveStageDraft.watchlistPrompt}
+                      onChange={(event) => updateDraft({ watchlistPrompt: event.target.value })}
+                      placeholder="说明如何处理关注清单，例如先批量筛查再选择性深入…"
+                      className="min-h-32 resize-y text-sm"
+                    />
+                    <FieldDescription>
+                      拼接在上面这段之后，且仅在关注清单非空时发送；清单为空时整段略过。
+                      清单本身随运行上下文一并送达，无需在此列出代码。
+                    </FieldDescription>
+                  </Field>
+                ) : null}
               </section>
             </CardContent>
           )}
