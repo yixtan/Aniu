@@ -17,6 +17,7 @@ from backend.business.system_status.dto import (
 from backend.business.system_status.models import (
     MARKET_TIMEZONE,
     MEMORY_WRITE_TOOL,
+    RECENT_DREAMS,
     STATUS_WINDOW_DAYS,
     TOKEN_WINDOW_DAYS,
     TRADE_TOOL,
@@ -113,7 +114,7 @@ class SystemStatusService:
         tool_calls = await self._repository.tool_calls_since(status_since)
         data_calls = await self._repository.data_calls_since(status_since)
         activities = await self._repository.memory_activities_since(status_since)
-        dream = await self._repository.latest_dream()
+        dreams = await self._repository.recent_dreams(RECENT_DREAMS)
         inventory = await self._repository.memory_inventory()
 
         runs_by_day = _by_day(runs, lambda fact: fact.started_at)
@@ -153,23 +154,35 @@ class SystemStatusService:
             generated_at=now,
             days=days,
             tokens=tokens,
-            latest_dream=None if dream is None else await self._describe(dream),
+            dreams=await self._describe(dreams),
             memory_live=inventory.live,
+            memory_deleted=inventory.deleted,
             memory_with_lineage=inventory.with_lineage,
         )
 
-    async def _describe(self, dream: DreamFact) -> DreamStatusDTO:
-        activities = await self._repository.memory_activities_for_task(dream.task_id)
-        counts = Counter(activity.operation for activity in activities)
-        return DreamStatusDTO(
-            target_date=dream.target_date,
-            status=dream.status,
-            completed_at=dream.completed_at,
-            failure_reason=dream.failure_reason,
-            created=counts[MemoryActivityOperation.CREATE.value],
-            updated=counts[MemoryActivityOperation.UPDATE.value],
-            deleted=counts[MemoryActivityOperation.DELETE.value],
+    async def _describe(self, dreams: list[DreamFact]) -> list[DreamStatusDTO]:
+        """What each dream did to memory, read once for all of them."""
+
+        if not dreams:
+            return []
+        activities = await self._repository.memory_activities_for_tasks(
+            [dream.task_id for dream in dreams]
         )
+        counts = Counter(
+            (activity.task_id, activity.operation) for activity in activities
+        )
+        return [
+            DreamStatusDTO(
+                target_date=dream.target_date,
+                status=dream.status,
+                completed_at=dream.completed_at,
+                failure_reason=dream.failure_reason,
+                created=counts[(dream.task_id, MemoryActivityOperation.CREATE.value)],
+                updated=counts[(dream.task_id, MemoryActivityOperation.UPDATE.value)],
+                deleted=counts[(dream.task_id, MemoryActivityOperation.DELETE.value)],
+            )
+            for dream in dreams
+        ]
 
 
 __all__ = ["SystemStatusService"]

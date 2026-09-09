@@ -6,9 +6,10 @@ a few hundred small tuples rather than a few hundred trace payloads.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, date, datetime
 
-from sqlalchemy import Select, case, func, select
+from sqlalchemy import Select, and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.business.system_status import (
@@ -113,15 +114,17 @@ class SystemStatusRepository:
         ).where(MemoryActivityModel.created_at >= since.isoformat())
         return await self._activities(statement)
 
-    async def memory_activities_for_task(
-        self, task_id: int
+    async def memory_activities_for_tasks(
+        self, task_ids: Sequence[int]
     ) -> list[MemoryActivityFact]:
+        if not task_ids:
+            return []
         statement = select(
             MemoryActivityModel.created_at,
             MemoryActivityModel.operation,
             MemoryActivityModel.task_id,
             MemoryActivityModel.content,
-        ).where(MemoryActivityModel.task_id == task_id)
+        ).where(MemoryActivityModel.task_id.in_(list(task_ids)))
         return await self._activities(statement)
 
     async def _activities(
@@ -138,30 +141,42 @@ class SystemStatusRepository:
             for created_at, operation, task_id, content in rows
         ]
 
-    async def latest_dream(self) -> DreamFact | None:
+    async def recent_dreams(self, limit: int) -> list[DreamFact]:
         statement = (
             select(MemoryDreamModel)
             .order_by(MemoryDreamModel.target_date.desc())
-            .limit(1)
+            .limit(limit)
         )
-        row = (await self._session.scalars(statement)).first()
-        if row is None:
-            return None
-        return DreamFact(
-            task_id=row.id,
-            target_date=date.fromisoformat(row.target_date),
-            status=row.status,
-            completed_at=_optional_utc(row.completed_at),
-            failure_reason=row.failure_reason,
-        )
+        rows = (await self._session.scalars(statement)).all()
+        return [
+            DreamFact(
+                task_id=row.id,
+                target_date=date.fromisoformat(row.target_date),
+                status=row.status,
+                completed_at=_optional_utc(row.completed_at),
+                failure_reason=row.failure_reason,
+            )
+            for row in rows
+        ]
 
     async def memory_inventory(self) -> MemoryInventory:
+        is_live = MemoryItemModel.deleted_at.is_(None)
         statement = select(
-            func.count(MemoryItemModel.id),
-            func.sum(case((MemoryItemModel.replaces_json.is_not(None), 1), else_=0)),
-        ).where(MemoryItemModel.deleted_at.is_(None))
-        live, with_lineage = (await self._session.execute(statement)).one()
-        return MemoryInventory(live=int(live or 0), with_lineage=int(with_lineage or 0))
+            func.sum(case((is_live, 1), else_=0)),
+            func.sum(case((MemoryItemModel.deleted_at.is_not(None), 1), else_=0)),
+            func.sum(
+                case(
+                    (and_(is_live, MemoryItemModel.replaces_json.is_not(None)), 1),
+                    else_=0,
+                )
+            ),
+        )
+        live, deleted, with_lineage = (await self._session.execute(statement)).one()
+        return MemoryInventory(
+            live=int(live or 0),
+            deleted=int(deleted or 0),
+            with_lineage=int(with_lineage or 0),
+        )
 
 
 __all__ = ["SystemStatusRepository"]

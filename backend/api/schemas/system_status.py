@@ -43,8 +43,9 @@ class SystemStatusResponse(ApiModel):
     generated_at: datetime
     days: list[DailyStatusResponse]
     tokens: list[TokenDayResponse]
-    latest_dream: DreamStatusResponse | None
+    dreams: list[DreamStatusResponse]
     memory_live: int
+    memory_deleted: int
     memory_with_lineage: int
 
 

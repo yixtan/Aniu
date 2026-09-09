@@ -3618,20 +3618,21 @@
             "title": "Days",
             "type": "array"
           },
+          "dreams": {
+            "items": {
+              "$ref": "#/components/schemas/DreamStatusResponse"
+            },
+            "title": "Dreams",
+            "type": "array"
+          },
           "generated_at": {
             "format": "date-time",
             "title": "Generated At",
             "type": "string"
           },
-          "latest_dream": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DreamStatusResponse"
-              },
-              {
-                "type": "null"
-              }
-            ]
+          "memory_deleted": {
+            "title": "Memory Deleted",
+            "type": "integer"
           },
           "memory_live": {
             "title": "Memory Live",
@@ -3653,8 +3654,9 @@
           "generated_at",
           "days",
           "tokens",
-          "latest_dream",
+          "dreams",
           "memory_live",
+          "memory_deleted",
           "memory_with_lineage"
         ],
         "title": "SystemStatusResponse",

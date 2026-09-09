@@ -13,6 +13,8 @@ from backend.business.dreams.models import DREAM_TASK_TYPE
 # better over a month.
 STATUS_WINDOW_DAYS = 7
 TOKEN_WINDOW_DAYS = 30
+# Enough dreams to see a skipped night and its backfill side by side.
+RECENT_DREAMS = 5
 
 # A day is a market day: a run that finishes after midnight UTC still belongs
 # to the Shanghai date the operator sees on the runs page.
@@ -67,6 +69,8 @@ class DreamFact:
 @dataclass(frozen=True, slots=True)
 class MemoryInventory:
     live: int
+    deleted: int
+    # Live memories that record which older ones they were condensed from.
     with_lineage: int
 
 
@@ -89,6 +93,7 @@ def is_dream_task(task_id: int) -> bool:
 __all__ = [
     "MARKET_TIMEZONE",
     "MEMORY_WRITE_TOOL",
+    "RECENT_DREAMS",
     "STATUS_WINDOW_DAYS",
     "TOKEN_WINDOW_DAYS",
     "TRADE_TOOL",

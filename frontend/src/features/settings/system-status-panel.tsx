@@ -155,46 +155,88 @@ function dreamBadge(status: string) {
   return <Badge variant="outline">待执行</Badge>;
 }
 
-function DreamCard({
-  dream,
+/** One figure in the summary row that opens a card. */
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex gap-1.5">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="font-medium tabular-nums">{value}</dd>
+    </div>
+  );
+}
+
+function DreamsCard({
+  dreams,
   memoryLive,
+  memoryDeleted,
   memoryWithLineage,
 }: {
-  dream: DreamStatus | null;
+  dreams: DreamStatus[];
   memoryLive: number;
+  memoryDeleted: number;
   memoryWithLineage: number;
 }) {
   return (
     <Card className="gap-2 py-4">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0">
-        <CardTitle className="text-sm font-medium">最近梦境</CardTitle>
+        <CardTitle className="text-sm font-medium">
+          {dreams.length > 0 ? `记忆梦境（最近 ${dreams.length} 次）` : "记忆梦境"}
+        </CardTitle>
         <MoonStarIcon className="text-muted-foreground size-4" />
       </CardHeader>
-      <CardContent className="space-y-3 text-sm">
-        {dream === null ? (
-          <p className="text-muted-foreground">还没有执行过梦境。</p>
+      <CardContent className="space-y-3">
+        <dl className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
+          <Stat label="记忆库" value={`${memoryLive} 条`} />
+          <Stat label="已删除" value={`${memoryDeleted} 条`} />
+          <Stat label="记录了血缘" value={`${memoryWithLineage} 条`} />
+        </dl>
+        {dreams.length === 0 ? (
+          <p className="text-muted-foreground text-sm">还没有执行过梦境。</p>
         ) : (
-          <>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-medium">整理 {dream.target_date}</span>
-              {dreamBadge(dream.status)}
-              {dream.completed_at ? (
-                <span className="text-muted-foreground text-xs">
-                  {formatMonthDayTime(dream.completed_at)}
-                </span>
-              ) : null}
-            </div>
-            {dream.failure_reason ? (
-              <p className={cn("text-xs", alarm)}>{dream.failure_reason}</p>
-            ) : null}
-            <p className="text-muted-foreground text-xs">
-              新增 {dream.created} 条 · 更新 {dream.updated} 条 · 删除 {dream.deleted} 条
-            </p>
-          </>
+          <div className="overflow-x-auto rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>整理日期</TableHead>
+                  <TableHead>状态</TableHead>
+                  <TableHead>完成时间</TableHead>
+                  <TableHead className="text-right">新增</TableHead>
+                  <TableHead className="text-right">更新</TableHead>
+                  <TableHead className="text-right">删除</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {dreams.map((dream) => (
+                  <TableRow key={dream.target_date}>
+                    <TableCell className="font-medium whitespace-nowrap">
+                      {formatDay(dream.target_date)}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col items-start gap-1">
+                        {dreamBadge(dream.status)}
+                        {dream.failure_reason ? (
+                          <span className={cn("text-xs", alarm)}>{dream.failure_reason}</span>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground whitespace-nowrap">
+                      {dream.completed_at ? formatMonthDayTime(dream.completed_at) : "--"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Count value={dream.created} />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Count value={dream.updated} />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Count value={dream.deleted} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         )}
-        <p className="text-muted-foreground border-t pt-3 text-xs">
-          记忆库现有 {memoryLive} 条，其中 {memoryWithLineage} 条记录了由哪些经验凝练而来
-        </p>
       </CardContent>
     </Card>
   );
@@ -231,26 +273,16 @@ function TokenChart({ tokens }: { tokens: TokenDay[] }) {
       </CardHeader>
       <CardContent className="space-y-3">
         <dl className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
-          <div className="flex gap-1.5">
-            <dt className="text-muted-foreground">合计</dt>
-            <dd className="font-medium">{formatTokens(total)}</dd>
-          </div>
-          <div className="flex gap-1.5">
-            <dt className="text-muted-foreground">有运行的天数</dt>
-            <dd className="font-medium">{activeDays}</dd>
-          </div>
-          <div className="flex gap-1.5">
-            <dt className="text-muted-foreground">日均</dt>
-            <dd className="font-medium">
-              {activeDays === 0 ? "--" : formatTokens(Math.round(total / activeDays))}
-            </dd>
-          </div>
-          <div className="flex gap-1.5">
-            <dt className="text-muted-foreground">每次运行</dt>
-            <dd className="font-medium">
-              {runs === 0 ? "--" : formatTokens(Math.round(total / runs))}
-            </dd>
-          </div>
+          <Stat label="合计" value={formatTokens(total)} />
+          <Stat label="有运行的天数" value={String(activeDays)} />
+          <Stat
+            label="日均"
+            value={activeDays === 0 ? "--" : formatTokens(Math.round(total / activeDays))}
+          />
+          <Stat
+            label="每次运行"
+            value={runs === 0 ? "--" : formatTokens(Math.round(total / runs))}
+          />
         </dl>
         <p className="text-xs tabular-nums" aria-live="polite">
           {focus ? describeDay(focus) : ""}
@@ -424,14 +456,13 @@ export function SystemStatusPanel() {
         </Button>
       </div>
       {today ? <TodayCards today={today} /> : null}
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        <DreamCard
-          dream={status.latest_dream}
-          memoryLive={status.memory_live}
-          memoryWithLineage={status.memory_with_lineage}
-        />
-        <TokenChart tokens={status.tokens} />
-      </div>
+      <DreamsCard
+        dreams={status.dreams}
+        memoryLive={status.memory_live}
+        memoryDeleted={status.memory_deleted}
+        memoryWithLineage={status.memory_with_lineage}
+      />
+      <TokenChart tokens={status.tokens} />
       <DaysTable days={status.days} />
     </section>
   );

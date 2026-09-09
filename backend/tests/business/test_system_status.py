@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
 
 from backend.business.system_status import (
+    RECENT_DREAMS,
     STATUS_WINDOW_DAYS,
     TOKEN_WINDOW_DAYS,
     DataCallFact,
@@ -26,6 +28,9 @@ TODAY = date(2026, 9, 9)
 
 RUN_TASK = 20260909101
 DREAM_TASK = 20260908401
+OLDER_DREAM_TASK = 20260907401
+
+EMPTY_INVENTORY = MemoryInventory(live=0, deleted=0, with_lineage=0)
 
 
 def at(day: date, hour: int, minute: int = 0) -> datetime:
@@ -50,6 +55,16 @@ def read(
     )
 
 
+def dream(task_id: int, target: date, *, status: str = "completed") -> DreamFact:
+    return DreamFact(
+        task_id=task_id,
+        target_date=target,
+        status=status,
+        completed_at=at(target, 23, 32),
+        failure_reason=None,
+    )
+
+
 class FakeRepository:
     """Answers with whatever facts the test hands it, filtered by `since` the
     way a store would, so the window arithmetic is exercised too."""
@@ -61,15 +76,16 @@ class FakeRepository:
         tool_calls: list[ToolCallFact] | None = None,
         data_calls: list[DataCallFact] | None = None,
         activities: list[MemoryActivityFact] | None = None,
-        dream: DreamFact | None = None,
-        inventory: MemoryInventory = MemoryInventory(live=0, with_lineage=0),
+        dreams: list[DreamFact] | None = None,
+        inventory: MemoryInventory = EMPTY_INVENTORY,
     ) -> None:
         self.runs = runs or []
         self.tool_calls = tool_calls or []
         self.data_calls = data_calls or []
         self.activities = activities or []
-        self.dream = dream
+        self.dreams = dreams or []
         self.inventory = inventory
+        self.dream_limits: list[int] = []
 
     async def runs_since(self, since: datetime) -> list[RunFact]:
         return [fact for fact in self.runs if fact.started_at >= since]
@@ -85,13 +101,14 @@ class FakeRepository:
     ) -> list[MemoryActivityFact]:
         return [fact for fact in self.activities if fact.created_at >= since]
 
-    async def memory_activities_for_task(
-        self, task_id: int
+    async def memory_activities_for_tasks(
+        self, task_ids: Sequence[int]
     ) -> list[MemoryActivityFact]:
-        return [fact for fact in self.activities if fact.task_id == task_id]
+        return [fact for fact in self.activities if fact.task_id in task_ids]
 
-    async def latest_dream(self) -> DreamFact | None:
-        return self.dream
+    async def recent_dreams(self, limit: int) -> list[DreamFact]:
+        self.dream_limits.append(limit)
+        return self.dreams[:limit]
 
     async def memory_inventory(self) -> MemoryInventory:
         return self.inventory
@@ -113,7 +130,7 @@ async def test_the_window_is_a_fixed_run_of_days_ending_today_zeros_included() -
     assert all(row.runs_completed == 0 and row.data_calls == 0 for row in status.days)
     assert [row.day for row in status.tokens][:2] == [TODAY, TODAY - timedelta(days=1)]
     assert len(status.tokens) == TOKEN_WINDOW_DAYS
-    assert status.latest_dream is None
+    assert status.dreams == []
     assert status.generated_at == NOW
 
 
@@ -197,35 +214,38 @@ async def test_the_curators_reads_are_not_the_runs() -> None:
 
 
 @pytest.mark.asyncio
-async def test_the_latest_dream_reports_what_it_did_to_memory() -> None:
-    dream = DreamFact(
-        task_id=DREAM_TASK,
-        target_date=date(2026, 9, 8),
-        status="completed",
-        completed_at=at(date(2026, 9, 8), 23, 32),
-        failure_reason=None,
-    )
-    when = dream.completed_at
-    assert when is not None
-    ops = ["read", "create", "create", "update", "delete", "delete", "delete"]
+async def test_recent_dreams_each_report_what_they_did_to_memory() -> None:
+    latest = dream(DREAM_TASK, date(2026, 9, 8))
+    older = dream(OLDER_DREAM_TASK, date(2026, 9, 7), status="failed")
+    when = at(date(2026, 9, 8), 23, 32)
+    latest_ops = ["read", "create", "create", "update", "delete", "delete", "delete"]
+    older_ops = ["read", "delete"]
     repository = FakeRepository(
-        dream=dream,
-        activities=[MemoryActivityFact(when, op, DREAM_TASK, "") for op in ops]
+        dreams=[latest, older],
+        activities=[MemoryActivityFact(when, op, DREAM_TASK, "") for op in latest_ops]
+        + [MemoryActivityFact(when, op, OLDER_DREAM_TASK, "") for op in older_ops]
+        # A run's own write must not be credited to any dream.
         + [MemoryActivityFact(when, "create", RUN_TASK, "")],
-        inventory=MemoryInventory(live=53, with_lineage=2),
+        inventory=MemoryInventory(live=53, deleted=30, with_lineage=2),
     )
 
     status = await _service(repository).overview()
 
-    assert status.latest_dream is not None
-    assert status.latest_dream.target_date == date(2026, 9, 8)
-    assert status.latest_dream.status == "completed"
-    assert (
-        status.latest_dream.created,
-        status.latest_dream.updated,
-        status.latest_dream.deleted,
-    ) == (2, 1, 3)
-    assert (status.memory_live, status.memory_with_lineage) == (53, 2)
+    assert repository.dream_limits == [RECENT_DREAMS]
+    assert [item.target_date for item in status.dreams] == [
+        date(2026, 9, 8),
+        date(2026, 9, 7),
+    ]
+    first, second = status.dreams
+    assert first.status == "completed"
+    assert (first.created, first.updated, first.deleted) == (2, 1, 3)
+    assert second.status == "failed"
+    assert (second.created, second.updated, second.deleted) == (0, 0, 1)
+    assert (status.memory_live, status.memory_deleted, status.memory_with_lineage) == (
+        53,
+        30,
+        2,
+    )
 
 
 @pytest.mark.asyncio

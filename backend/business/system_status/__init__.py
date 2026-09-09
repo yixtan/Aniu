@@ -8,6 +8,7 @@ from backend.business.system_status.dto import (
 )
 from backend.business.system_status.models import (
     MEMORY_WRITE_TOOL,
+    RECENT_DREAMS,
     STATUS_WINDOW_DAYS,
     TOKEN_WINDOW_DAYS,
     TRADE_TOOL,
@@ -25,6 +26,7 @@ from backend.business.system_status.service import SystemStatusService
 
 __all__ = [
     "MEMORY_WRITE_TOOL",
+    "RECENT_DREAMS",
     "STATUS_WINDOW_DAYS",
     "TOKEN_WINDOW_DAYS",
     "TRADE_TOOL",

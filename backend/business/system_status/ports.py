@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Protocol
 
@@ -33,11 +34,13 @@ class SystemStatusRepositoryPort(Protocol):
         self, since: datetime
     ) -> list[MemoryActivityFact]: ...
 
-    async def memory_activities_for_task(
-        self, task_id: int
+    async def memory_activities_for_tasks(
+        self, task_ids: Sequence[int]
     ) -> list[MemoryActivityFact]: ...
 
-    async def latest_dream(self) -> DreamFact | None: ...
+    async def recent_dreams(self, limit: int) -> list[DreamFact]:
+        """Newest target date first."""
+        ...
 
     async def memory_inventory(self) -> MemoryInventory: ...
 

@@ -71,16 +71,28 @@ const status = {
     tokens: offset === 0 ? 780_000 : offset === 1 ? 1_080_000 : 0,
     runs: offset < 2 ? 16 : 0,
   })),
-  latest_dream: {
-    target_date: "2026-09-08",
-    status: "completed",
-    completed_at: "2026-09-08T15:32:00+00:00",
-    failure_reason: null,
-    created: 3,
-    updated: 2,
-    deleted: 11,
-  },
+  dreams: [
+    {
+      target_date: "2026-09-08",
+      status: "completed",
+      completed_at: "2026-09-08T15:32:00+00:00",
+      failure_reason: null,
+      created: 3,
+      updated: 2,
+      deleted: 11,
+    },
+    {
+      target_date: "2026-09-07",
+      status: "failed",
+      completed_at: "2026-09-07T15:40:00+00:00",
+      failure_reason: "memory_write 工具的内部 bug",
+      created: 0,
+      updated: 0,
+      deleted: 0,
+    },
+  ],
   memory_live: 53,
+  memory_deleted: 30,
   memory_with_lineage: 0,
 };
 
@@ -149,15 +161,25 @@ describe("SystemStatusPanel", () => {
     expect(within(card).getByText("09-09 周三 · 780k · 16 次运行")).toBeInTheDocument();
   });
 
-  it("describes what the latest dream did to memory", async () => {
+  it("lists the recent dreams and what each did to memory", async () => {
     api.getSystemStatus.mockResolvedValue(status);
 
     renderPanel();
 
-    expect(await screen.findByText("整理 2026-09-08")).toBeInTheDocument();
-    expect(screen.getByText("已完成")).toBeInTheDocument();
-    expect(screen.getByText("新增 3 条 · 更新 2 条 · 删除 11 条")).toBeInTheDocument();
-    expect(screen.getByText(/记忆库现有 53 条/)).toBeInTheDocument();
+    const title = await screen.findByText("记忆梦境（最近 2 次）");
+    const card = title.closest("[data-slot=card]") as HTMLElement;
+    expect(within(card).getByText("53 条")).toBeInTheDocument();
+    expect(within(card).getByText("30 条")).toBeInTheDocument();
+
+    const rows = within(card).getAllByRole("row");
+    expect(rows).toHaveLength(3);
+    const latest = rows[1] as HTMLElement;
+    expect(latest).toHaveTextContent("09-08 周二");
+    expect(within(latest).getByText("已完成")).toBeInTheDocument();
+    expect(latest).toHaveTextContent(/3.*2.*11/);
+    const failed = rows[2] as HTMLElement;
+    expect(within(failed).getByText("失败")).toBeInTheDocument();
+    expect(within(failed).getByText("memory_write 工具的内部 bug")).toHaveClass("text-destructive");
   });
 
   it("says so when the status cannot be loaded", async () => {

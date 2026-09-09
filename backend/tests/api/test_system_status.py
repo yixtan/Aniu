@@ -147,15 +147,17 @@ async def test_system_status_folds_the_days_activity(
     token_row = next(row for row in body["tokens"] if row["day"] == expected_day)
     assert token_row == {"day": expected_day, "tokens": 1234, "runs": 1}
 
-    assert body["latest_dream"]["target_date"] == "2026-09-08"
-    assert body["latest_dream"]["status"] == "completed"
-    assert body["latest_dream"]["failure_reason"] is None
+    assert len(body["dreams"]) == 1
+    dream = body["dreams"][0]
+    assert dream["target_date"] == "2026-09-08"
+    assert dream["status"] == "completed"
+    assert dream["failure_reason"] is None
+    assert (dream["created"], dream["updated"], dream["deleted"]) == (1, 0, 1)
     assert (
-        body["latest_dream"]["created"],
-        body["latest_dream"]["updated"],
-        body["latest_dream"]["deleted"],
-    ) == (1, 0, 1)
-    assert (body["memory_live"], body["memory_with_lineage"]) == (2, 1)
+        body["memory_live"],
+        body["memory_deleted"],
+        body["memory_with_lineage"],
+    ) == (2, 1, 1)
 
 
 @pytest.mark.asyncio
@@ -167,5 +169,9 @@ async def test_system_status_with_nothing_recorded_is_all_zeros(
     assert response.status_code == 200
     body = response.json()
     assert all(row["runs_completed"] == 0 for row in body["days"])
-    assert body["latest_dream"] is None
-    assert (body["memory_live"], body["memory_with_lineage"]) == (0, 0)
+    assert body["dreams"] == []
+    assert (
+        body["memory_live"],
+        body["memory_deleted"],
+        body["memory_with_lineage"],
+    ) == (0, 0, 0)

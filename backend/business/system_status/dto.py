@@ -46,8 +46,9 @@ class SystemStatusDTO:
     generated_at: datetime
     days: list[DailyStatusDTO]
     tokens: list[TokenDayDTO]
-    latest_dream: DreamStatusDTO | None
+    dreams: list[DreamStatusDTO]
     memory_live: int
+    memory_deleted: int
     memory_with_lineage: int
 
 

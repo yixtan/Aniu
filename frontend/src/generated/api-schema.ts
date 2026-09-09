@@ -2038,12 +2038,15 @@ export interface components {
         SystemStatusResponse: {
             /** Days */
             days: components["schemas"]["DailyStatusResponse"][];
+            /** Dreams */
+            dreams: components["schemas"]["DreamStatusResponse"][];
             /**
              * Generated At
              * Format: date-time
              */
             generated_at: string;
-            latest_dream: components["schemas"]["DreamStatusResponse"] | null;
+            /** Memory Deleted */
+            memory_deleted: number;
             /** Memory Live */
             memory_live: number;
             /** Memory With Lineage */
