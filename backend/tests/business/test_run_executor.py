@@ -297,3 +297,82 @@ async def test_a_broken_completion_hook_does_not_fail_the_finished_run(
 
     # The run succeeded; a hook problem may not turn that into a failure.
     await executor.execute(run.run_id)
+
+
+@pytest.mark.asyncio
+async def test_a_finished_run_announces_itself(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A run that trades nothing sends no other event, so without this a quiet
+    day looks exactly like a scheduler that stopped firing."""
+
+    run = _run()
+    repository = InMemoryRunRepository(run)
+    notifier = RecordingNotifier()
+    monkeypatch.setattr(
+        "backend.business.runs.executor.AniuOrchestrator",
+        _stub_orchestrator(run.run_id),
+    )
+    executor = RunExecutor(
+        repository,  # type: ignore[arg-type]
+        agent_runner_factory=StubAgentRunnerFactory(),  # type: ignore[arg-type]
+        abort_registry=ActiveRunAbortRegistry(),
+        notifier=notifier,  # type: ignore[arg-type]
+    )
+
+    await executor.execute(run.run_id)
+
+    assert [event.kind for event in notifier.published] == [
+        NotificationEventKind.RUN_COMPLETED
+    ]
+    event = notifier.published[0]
+    assert event.run_id == run.run_id
+    assert event.duration_ms == 7
+
+
+@pytest.mark.asyncio
+async def test_a_failed_run_is_not_also_announced_as_finished() -> None:
+    run = _run()
+    repository = InMemoryRunRepository(run)
+    notifier = RecordingNotifier()
+    executor = RunExecutor(
+        repository,  # type: ignore[arg-type]
+        agent_runner_factory=ExplodingAgentRunnerFactory(),  # type: ignore[arg-type]
+        abort_registry=ActiveRunAbortRegistry(),
+        notifier=notifier,  # type: ignore[arg-type]
+    )
+
+    with pytest.raises(RuntimeError):
+        await executor.execute(run.run_id)
+
+    assert NotificationEventKind.RUN_COMPLETED not in {
+        event.kind for event in notifier.published
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_broken_notifier_does_not_fail_the_finished_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The announcement is a side effect of finishing, not part of finishing."""
+
+    class ExplodingNotifier:
+        async def publish(self, _event: NotificationEvent) -> None:
+            raise RuntimeError("推送服务不可用")
+
+    run = _run()
+    repository = InMemoryRunRepository(run)
+    monkeypatch.setattr(
+        "backend.business.runs.executor.AniuOrchestrator",
+        _stub_orchestrator(run.run_id),
+    )
+    executor = RunExecutor(
+        repository,  # type: ignore[arg-type]
+        agent_runner_factory=StubAgentRunnerFactory(),  # type: ignore[arg-type]
+        abort_registry=ActiveRunAbortRegistry(),
+        notifier=ExplodingNotifier(),  # type: ignore[arg-type]
+    )
+
+    detail = await executor.execute(run.run_id)
+
+    assert detail.status == RunStatus.COMPLETED.value

@@ -938,10 +938,11 @@ export interface components {
              *       "order_placed",
              *       "order_cancelled",
              *       "order_filled",
-             *       "run_failed"
+             *       "run_failed",
+             *       "run_completed"
              *     ]
              */
-            subscribed_events: ("order_placed" | "order_cancelled" | "order_filled" | "run_failed")[];
+            subscribed_events: ("order_placed" | "order_cancelled" | "order_filled" | "run_failed" | "run_completed")[];
         };
         /**
          * CreateScheduleRequest
@@ -1364,7 +1365,7 @@ export interface components {
             /** Name */
             name: string;
             /** Subscribed Events */
-            subscribed_events: ("order_placed" | "order_cancelled" | "order_filled" | "run_failed")[];
+            subscribed_events: ("order_placed" | "order_cancelled" | "order_filled" | "run_failed" | "run_completed")[];
             /** Target Hint */
             target_hint: string;
             /**
@@ -1402,7 +1403,7 @@ export interface components {
              * Event Kind
              * @enum {string}
              */
-            event_kind: "order_placed" | "order_cancelled" | "order_filled" | "run_failed";
+            event_kind: "order_placed" | "order_cancelled" | "order_filled" | "run_failed" | "run_completed";
             /** Event Label */
             event_label: string;
             /** Id */
@@ -2062,7 +2063,7 @@ export interface components {
             /** Secret */
             secret?: string | null;
             /** Subscribed Events */
-            subscribed_events?: ("order_placed" | "order_cancelled" | "order_filled" | "run_failed")[] | null;
+            subscribed_events?: ("order_placed" | "order_cancelled" | "order_filled" | "run_failed" | "run_completed")[] | null;
         };
         /** UpdateScheduleRequest */
         UpdateScheduleRequest: {

@@ -90,7 +90,13 @@ describe("NotificationsSettingsPage", () => {
       kind: "webhook",
       secret: "https://hook.test/abcd1234",
       enabled: true,
-      subscribed_events: ["order_placed", "order_cancelled", "order_filled", "run_failed"],
+      subscribed_events: [
+        "order_placed",
+        "order_cancelled",
+        "order_filled",
+        "run_failed",
+        "run_completed",
+      ],
       body_template: null,
     });
   });
