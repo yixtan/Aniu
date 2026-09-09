@@ -16,6 +16,7 @@ vi.stubGlobal("ResizeObserver", ResizeObserverMock);
 const api = vi.hoisted(() => ({
   getStockApiSettings: vi.fn(),
   listStockApiLogs: vi.fn(),
+  getSystemStatus: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => api);
@@ -129,7 +130,12 @@ describe("StockApiSettingsPage", () => {
     const tabList = await screen.findByRole("tablist", { name: "工具管理导航" });
     expect(tabList.parentElement?.tagName).toBe("ASIDE");
     const tabs = within(tabList).getAllByRole("tab");
-    expect(tabs.map((tab) => tab.textContent)).toEqual(["数据工具", "系统工具", "调用日志"]);
+    expect(tabs.map((tab) => tab.textContent)).toEqual([
+      "数据工具",
+      "系统工具",
+      "调用日志",
+      "系统状态",
+    ]);
     expect(screen.getByRole("tabpanel", { name: "数据工具" })).toBeInTheDocument();
     const directory = screen.getByRole("region", { name: "数据工具" });
     expect(screen.queryByRole("heading", { name: "公开数据" })).not.toBeInTheDocument();

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
+  ActivityIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   LayersIcon,
@@ -29,6 +30,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { stockApiKeys } from "@/features/settings/query-keys";
+import { SystemStatusPanel } from "@/features/settings/system-status-panel";
 import { getStockApiSettings, listStockApiLogs } from "@/lib/api";
 import type {
   StockApiLogToolSource,
@@ -47,7 +49,7 @@ const STOCK_API_LOGS_QUERY_KEY = (toolSource: StockApiLogToolSource | undefined,
   ["stock-api-logs", toolSource ?? "all", page] as const;
 const STOCK_API_LOGS_PAGE_SIZE = 50;
 
-type StockApiTabId = "directory" | "system" | "logs";
+type StockApiTabId = "directory" | "system" | "logs" | "status";
 type StockApiLogToolSourceFilter = "all" | StockApiLogToolSource;
 
 const stockApiNavigationItems = [
@@ -68,6 +70,12 @@ const stockApiNavigationItems = [
     label: "调用日志",
     icon: ListTreeIcon,
     description: "查看 Agent 数据工具调用记录。",
+  },
+  {
+    id: "status",
+    label: "系统状态",
+    icon: ActivityIcon,
+    description: "每天的运行、工具、记忆与 Token 消耗，一眼看出哪天不对劲。",
   },
 ] as const;
 
@@ -474,6 +482,8 @@ export function StockApiSettingsPage() {
               <StockApiDirectory settings={settings} />
             ) : activeTab === "system" ? (
               <SystemToolsPanel />
+            ) : activeTab === "status" ? (
+              <SystemStatusPanel />
             ) : (
               <StockApiLogsPanel />
             )}

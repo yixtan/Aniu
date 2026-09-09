@@ -700,6 +700,81 @@
         "title": "CreateScheduleRequest",
         "type": "object"
       },
+      "DailyStatusResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "data_call_failures": {
+            "title": "Data Call Failures",
+            "type": "integer"
+          },
+          "data_calls": {
+            "title": "Data Calls",
+            "type": "integer"
+          },
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "memory_distinct_queries": {
+            "title": "Memory Distinct Queries",
+            "type": "integer"
+          },
+          "memory_reads": {
+            "title": "Memory Reads",
+            "type": "integer"
+          },
+          "memory_write_failures": {
+            "title": "Memory Write Failures",
+            "type": "integer"
+          },
+          "memory_writes": {
+            "title": "Memory Writes",
+            "type": "integer"
+          },
+          "runs_completed": {
+            "title": "Runs Completed",
+            "type": "integer"
+          },
+          "runs_failed": {
+            "title": "Runs Failed",
+            "type": "integer"
+          },
+          "summaries_html": {
+            "title": "Summaries Html",
+            "type": "integer"
+          },
+          "tokens": {
+            "title": "Tokens",
+            "type": "integer"
+          },
+          "trades_completed": {
+            "title": "Trades Completed",
+            "type": "integer"
+          },
+          "trades_failed": {
+            "title": "Trades Failed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "day",
+          "runs_completed",
+          "runs_failed",
+          "summaries_html",
+          "tokens",
+          "trades_completed",
+          "trades_failed",
+          "memory_writes",
+          "memory_write_failures",
+          "memory_reads",
+          "memory_distinct_queries",
+          "data_calls",
+          "data_call_failures"
+        ],
+        "title": "DailyStatusResponse",
+        "type": "object"
+      },
       "DeleteMemoryRequest": {
         "additionalProperties": false,
         "properties": {
@@ -713,6 +788,66 @@
           "expected_version"
         ],
         "title": "DeleteMemoryRequest",
+        "type": "object"
+      },
+      "DreamStatusResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "created": {
+            "title": "Created",
+            "type": "integer"
+          },
+          "deleted": {
+            "title": "Deleted",
+            "type": "integer"
+          },
+          "failure_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Reason"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "target_date": {
+            "format": "date",
+            "title": "Target Date",
+            "type": "string"
+          },
+          "updated": {
+            "title": "Updated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "target_date",
+          "status",
+          "completed_at",
+          "failure_reason",
+          "created",
+          "updated",
+          "deleted"
+        ],
+        "title": "DreamStatusResponse",
         "type": "object"
       },
       "ErrorDetailResponse": {
@@ -3471,6 +3606,85 @@
           "updated_at"
         ],
         "title": "StrategyScheduleResponse",
+        "type": "object"
+      },
+      "SystemStatusResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/DailyStatusResponse"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "dreams": {
+            "items": {
+              "$ref": "#/components/schemas/DreamStatusResponse"
+            },
+            "title": "Dreams",
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "memory_deleted": {
+            "title": "Memory Deleted",
+            "type": "integer"
+          },
+          "memory_live": {
+            "title": "Memory Live",
+            "type": "integer"
+          },
+          "memory_with_lineage": {
+            "title": "Memory With Lineage",
+            "type": "integer"
+          },
+          "tokens": {
+            "items": {
+              "$ref": "#/components/schemas/TokenDayResponse"
+            },
+            "title": "Tokens",
+            "type": "array"
+          }
+        },
+        "required": [
+          "generated_at",
+          "days",
+          "tokens",
+          "dreams",
+          "memory_live",
+          "memory_deleted",
+          "memory_with_lineage"
+        ],
+        "title": "SystemStatusResponse",
+        "type": "object"
+      },
+      "TokenDayResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "runs": {
+            "title": "Runs",
+            "type": "integer"
+          },
+          "tokens": {
+            "title": "Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "day",
+          "tokens",
+          "runs"
+        ],
+        "title": "TokenDayResponse",
         "type": "object"
       },
       "TraceStageResponse": {
@@ -8380,6 +8594,52 @@
         "summary": "Stream Run Snapshot",
         "tags": [
           "SSE"
+        ]
+      }
+    },
+    "/api/aniu/system-status": {
+      "get": {
+        "operationId": "get_system_status_api_aniu_system_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request forbidden"
+          }
+        },
+        "security": [
+          {
+            "AniuSessionCookie": []
+          }
+        ],
+        "summary": "Get System Status",
+        "tags": [
+          "SystemStatus"
         ]
       }
     },

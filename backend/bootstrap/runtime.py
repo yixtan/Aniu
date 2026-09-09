@@ -29,6 +29,7 @@ from backend.business.settings.resolver import ModelSelectionResolver
 from backend.business.settings.service import SettingsService
 from backend.business.stock_api_logs.models import StockApiToolCall
 from backend.business.stock_api_logs.service import StockApiLogService
+from backend.business.system_status import SystemStatusService
 from backend.business.watchlist import WatchlistService
 from backend.infra.calendar import TradingCalendar2026, is_market_session_open
 from backend.infra.integrations.agent_runner import AgentRunnerFactoryAdapter
@@ -56,6 +57,7 @@ from backend.infra.repositories import (
     SettingsRepository,
     StockApiCallLogRecord,
     StockApiCallLogRepository,
+    SystemStatusRepository,
     WatchlistRepository,
 )
 from backend.infra.repositories.auth_repo import (
@@ -264,6 +266,9 @@ class AppRuntime:
             names=QuoteStockNameLookup(self.require_public_stock_data()),
             committer=session,
         )
+
+    def system_status_service(self, session: AsyncSession) -> SystemStatusService:
+        return SystemStatusService(SystemStatusRepository(session))
 
     def market_overview_query(self) -> MarketOverviewQueryPort:
         return PublicMarketOverviewQuery(self.require_public_stock_data())

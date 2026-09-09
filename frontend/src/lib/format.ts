@@ -33,6 +33,13 @@ export function formatNumber(value: number | null | undefined) {
   return numberFormatter.format(value);
 }
 
+/** Tokens read at the scale they cost: 49k a run, 0.8M a day. */
+export function formatTokens(value: number) {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+  if (value >= 1_000) return `${Math.round(value / 1_000)}k`;
+  return String(value);
+}
+
 export function formatPercent(value: number | null | undefined) {
   if (value === null || value === undefined || Number.isNaN(value)) {
     return "--";

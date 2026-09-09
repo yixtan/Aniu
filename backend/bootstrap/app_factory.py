@@ -34,6 +34,7 @@ from backend.api.routes import (
     runs,
     schedules,
     settings,
+    system_status,
     watchlist,
 )
 from backend.api.sse import StreamHub, stream_hub
@@ -431,6 +432,7 @@ def create_app(config: RuntimeConfig | None = None) -> FastAPI:
     application.include_router(report_email.router)
     application.include_router(away_mode.router)
     application.include_router(watchlist.router)
+    application.include_router(system_status.router)
     application.include_router(stream_hub.router)
 
     @application.get("/health")
