@@ -17,7 +17,11 @@ import { spawnSync } from "node:child_process";
 const ALLOWED_ADVISORIES = new Map([]);
 const BLOCKING_SEVERITIES = new Set(["high", "critical"]);
 
-const audit = spawnSync("npm", ["audit", "--json"], {
+// Pinned to the public registry rather than whatever is configured. Advisory
+// data lives only there: a mirror such as registry.npmmirror.com answers an
+// audit with an empty error, so a developer behind one sees a clean tree while
+// CI sees the real findings.
+const audit = spawnSync("npm", ["audit", "--json", "--registry=https://registry.npmjs.org"], {
   cwd: new URL("..", import.meta.url),
   encoding: "utf8",
 });
