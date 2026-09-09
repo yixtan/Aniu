@@ -593,7 +593,8 @@
             "enum": [
               "webhook",
               "serverchan",
-              "wecom_bot"
+              "wecom_bot",
+              "macos_desktop"
             ],
             "title": "Kind",
             "type": "string"
@@ -1747,7 +1748,8 @@
             "enum": [
               "webhook",
               "serverchan",
-              "wecom_bot"
+              "wecom_bot",
+              "macos_desktop"
             ],
             "title": "Kind",
             "type": "string"
@@ -1833,7 +1835,8 @@
             "enum": [
               "webhook",
               "serverchan",
-              "wecom_bot"
+              "wecom_bot",
+              "macos_desktop"
             ],
             "title": "Channel Kind",
             "type": "string"

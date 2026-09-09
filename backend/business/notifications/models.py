@@ -19,13 +19,18 @@ class NotificationChannelKind(StrEnum):
     """Supported push transports.
 
     ``WEBHOOK`` posts a caller-defined JSON body to any URL, which covers 飞书 /
-    钉钉 / n8n / self-hosted receivers. The other kinds wrap one vendor protocol
-    each, because their request shape is not caller-configurable.
+    钉钉 / n8n / self-hosted receivers. The other remote kinds wrap one vendor
+    protocol each, because their request shape is not caller-configurable.
+
+    ``MACOS_DESKTOP`` is the odd one out: it reaches no network at all, and
+    only works when the backend runs on the operator's own Mac. Its address is
+    the page a click should open, not a credential.
     """
 
     WEBHOOK = "webhook"
     SERVERCHAN = "serverchan"
     WECOM_BOT = "wecom_bot"
+    MACOS_DESKTOP = "macos_desktop"
 
 
 class NotificationEventKind(StrEnum):

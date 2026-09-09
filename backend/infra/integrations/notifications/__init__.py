@@ -8,6 +8,7 @@ from backend.infra.integrations.notifications.rendering import (
     render_body_template,
 )
 from backend.infra.integrations.notifications.senders import (
+    MacDesktopSender,
     RoutingNotificationSender,
     ServerChanSender,
     WebhookSender,
@@ -15,6 +16,7 @@ from backend.infra.integrations.notifications.senders import (
 )
 
 __all__ = [
+    "MacDesktopSender",
     "RoutingNotificationSender",
     "ServerChanSender",
     "TradeNotificationDispatcher",
