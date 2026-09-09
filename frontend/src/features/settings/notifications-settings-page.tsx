@@ -101,6 +101,11 @@ const EVENTS: { id: NotificationEvent; label: string; description: string }[] = 
     label: "运行失败",
     description: "任务运行以失败告终；手动中止不会推送",
   },
+  {
+    id: "run_completed",
+    label: "运行完成",
+    description: "任务运行成功结束。零交易的运行不触发其他事件，只有这条能证明它跑过",
+  },
 ];
 
 const DEFAULT_EVENTS: NotificationEvent[] = [
@@ -108,6 +113,7 @@ const DEFAULT_EVENTS: NotificationEvent[] = [
   "order_cancelled",
   "order_filled",
   "run_failed",
+  "run_completed",
 ];
 
 const TEMPLATE_PLACEHOLDER = `留空则推送完整事件 JSON。也可自定义，例如飞书：

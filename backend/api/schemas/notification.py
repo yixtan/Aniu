@@ -10,7 +10,8 @@ TradeEvent = Literal[
     "order_placed",
     "order_cancelled",
     "order_filled",
-    "run_failed"
+    "run_failed",
+    "run_completed",
 ]
 DeliveryStatusLiteral = Literal["delivered", "failed"]
 
@@ -42,7 +43,13 @@ class CreateNotificationChannelRequest(BaseModel):
     """Webhook URL for ``webhook``; the sendkey or bot key otherwise."""
     enabled: bool = True
     subscribed_events: list[TradeEvent] = Field(
-        default=["order_placed", "order_cancelled", "order_filled", "run_failed"],
+        default=[
+            "order_placed",
+            "order_cancelled",
+            "order_filled",
+            "run_failed",
+            "run_completed",
+        ],
         min_length=1,
     )
     body_template: str | None = Field(default=None, max_length=4000)

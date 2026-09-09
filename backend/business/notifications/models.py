@@ -41,12 +41,16 @@ class NotificationEventKind(StrEnum):
     never fill, so fills are detected by diffing the account order cache during
     a refresh. ``RUN_FAILED`` reports a strategy run that ended in failure,
     which a scheduled overnight run would otherwise leave unnoticed.
+    ``RUN_COMPLETED`` reports one that ended well — a quiet run trades nothing
+    and so announces nothing else, which reads the same as the scheduler having
+    stopped.
     """
 
     ORDER_PLACED = "order_placed"
     ORDER_CANCELLED = "order_cancelled"
     ORDER_FILLED = "order_filled"
     RUN_FAILED = "run_failed"
+    RUN_COMPLETED = "run_completed"
 
     @property
     def label(self) -> str:
@@ -58,6 +62,7 @@ _EVENT_LABELS: dict[NotificationEventKind, str] = {
     NotificationEventKind.ORDER_CANCELLED: "已撤单",
     NotificationEventKind.ORDER_FILLED: "已成交",
     NotificationEventKind.RUN_FAILED: "运行失败",
+    NotificationEventKind.RUN_COMPLETED: "运行完成",
 }
 DEFAULT_SUBSCRIBED_EVENTS: frozenset[NotificationEventKind] = frozenset(
     NotificationEventKind
@@ -80,6 +85,16 @@ def _truncated(value: str | None, limit: int) -> str | None:
     if not text:
         return None
     return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def _humanized_duration(duration_ms: int) -> str:
+    """Seconds and minutes, because a run is measured in neither milliseconds
+    nor hours."""
+
+    seconds = max(duration_ms, 0) // 1000
+    if seconds < 60:
+        return f"{seconds} 秒"
+    return f"{seconds // 60} 分 {seconds % 60} 秒"
 
 
 def normalize_channel_name(value: str) -> str:
@@ -221,6 +236,7 @@ class NotificationEvent:
     filled_quantity: int | None = None
     filled_price: float | None = None
     failure_reason: str | None = None
+    duration_ms: int | None = None
     occurred_at: datetime = field(default_factory=utc_now)
 
     def __post_init__(self) -> None:
@@ -271,6 +287,8 @@ class NotificationEvent:
             lines.append(("运行", f"#{self.run_id}"))
         if self.kind is NotificationEventKind.RUN_FAILED and self.stage_name:
             lines.append(("失败阶段", self.stage_name))
+        if self.duration_ms is not None:
+            lines.append(("耗时", _humanized_duration(self.duration_ms)))
         if self.failure_reason:
             lines.append(("原因", self.failure_reason))
         if self.instruction:

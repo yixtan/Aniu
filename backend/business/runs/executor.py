@@ -184,7 +184,10 @@ class RunExecutor:
         stored = await self._run_repo.get_by_id(run.run_id)
         if stored is None:
             raise RunNotFoundError(run.run_id)
+        # Both live outside the try: a side effect of finishing must not be
+        # caught by the handler that decides a run failed.
         await self._notify_run_completed(run.run_id)
+        await self._announce_run_completed(run, result.total_duration_ms)
         return to_run_detail_dto(stored)
 
     async def cancel(self, run_id: int, reason: str) -> None:
@@ -265,26 +268,47 @@ class RunExecutor:
                 exc_info=True,
             )
 
-    async def _notify_run_failed(self, run: StrategyRun, reason: str) -> None:
-        """Announce a failed run without letting the push affect the run."""
+    async def _announce_run_completed(
+        self, run: StrategyRun, duration_ms: int
+    ) -> None:
+        """Announce a finished run without letting the push affect the run.
 
+        A run that traded nothing sends no other notification, so without this
+        a quiet day is indistinguishable from a scheduler that stopped firing.
+        """
+
+        await self._publish_run_event(
+            NotificationEvent(
+                kind=NotificationEventKind.RUN_COMPLETED,
+                run_id=run.run_id,
+                stage_name=run.trace.current_stage_id or run.current_state.value,
+                duration_ms=duration_ms,
+            )
+        )
+
+    async def _publish_run_event(self, event: NotificationEvent) -> None:
         if self._notifier is None:
             return
         try:
-            await self._notifier.publish(
-                NotificationEvent(
-                    kind=NotificationEventKind.RUN_FAILED,
-                    run_id=run.run_id,
-                    stage_name=run.trace.current_stage_id or run.current_state.value,
-                    failure_reason=reason,
-                )
-            )
+            await self._notifier.publish(event)
         except Exception:
             logger.warning(
-                "failed to publish run failure notification",
-                extra={"run_id": run.run_id},
+                "failed to publish run notification",
+                extra={"run_id": event.run_id, "event": event.kind.value},
                 exc_info=True,
             )
+
+    async def _notify_run_failed(self, run: StrategyRun, reason: str) -> None:
+        """Announce a failed run without letting the push affect the run."""
+
+        await self._publish_run_event(
+            NotificationEvent(
+                kind=NotificationEventKind.RUN_FAILED,
+                run_id=run.run_id,
+                stage_name=run.trace.current_stage_id or run.current_state.value,
+                failure_reason=reason,
+            )
+        )
 
     async def _persist_run(self, run: StrategyRun) -> StrategyRun:
         if self._execution_fence is None:

@@ -616,14 +616,16 @@
               "order_placed",
               "order_cancelled",
               "order_filled",
-              "run_failed"
+              "run_failed",
+              "run_completed"
             ],
             "items": {
               "enum": [
                 "order_placed",
                 "order_cancelled",
                 "order_filled",
-                "run_failed"
+                "run_failed",
+                "run_completed"
               ],
               "type": "string"
             },
@@ -1764,7 +1766,8 @@
                 "order_placed",
                 "order_cancelled",
                 "order_filled",
-                "run_failed"
+                "run_failed",
+                "run_completed"
               ],
               "type": "string"
             },
@@ -1866,7 +1869,8 @@
               "order_placed",
               "order_cancelled",
               "order_filled",
-              "run_failed"
+              "run_failed",
+              "run_completed"
             ],
             "title": "Event Kind",
             "type": "string"
@@ -3948,7 +3952,8 @@
                     "order_placed",
                     "order_cancelled",
                     "order_filled",
-                    "run_failed"
+                    "run_failed",
+                    "run_completed"
                   ],
                   "type": "string"
                 },
