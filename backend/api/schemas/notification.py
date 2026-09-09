@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from backend.api.schemas.common import ApiModel
 
-ChannelKind = Literal["webhook", "serverchan", "wecom_bot"]
+ChannelKind = Literal["webhook", "serverchan", "wecom_bot", "macos_desktop"]
 TradeEvent = Literal[
     "order_placed",
     "order_cancelled",

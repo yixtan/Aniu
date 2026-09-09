@@ -927,7 +927,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "webhook" | "serverchan" | "wecom_bot";
+            kind: "webhook" | "serverchan" | "wecom_bot" | "macos_desktop";
             /** Name */
             name: string;
             /** Secret */
@@ -1360,7 +1360,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "webhook" | "serverchan" | "wecom_bot";
+            kind: "webhook" | "serverchan" | "wecom_bot" | "macos_desktop";
             /** Name */
             name: string;
             /** Subscribed Events */
@@ -1388,7 +1388,7 @@ export interface components {
              * Channel Kind
              * @enum {string}
              */
-            channel_kind: "webhook" | "serverchan" | "wecom_bot";
+            channel_kind: "webhook" | "serverchan" | "wecom_bot" | "macos_desktop";
             /** Channel Name */
             channel_name: string;
             /**

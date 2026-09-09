@@ -21,6 +21,7 @@ from backend.infra.integrations.notifications import (
     WebhookSender,
     WeComBotSender,
     render_body_template,
+    senders,
 )
 
 EVENT = NotificationEvent(
@@ -244,3 +245,173 @@ async def test_router_picks_the_transport_matching_the_channel_kind() -> None:
         "https://sctapi.ftqq.com/SCTkey.send",
         "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=botkey",
     ]
+
+
+class _FakeProcess:
+    def __init__(self, returncode: int, stderr: bytes) -> None:
+        self.returncode = returncode
+        self._stderr = stderr
+        self.killed = False
+
+    async def communicate(self) -> tuple[bytes, bytes]:
+        return b"", self._stderr
+
+    def kill(self) -> None:
+        self.killed = True
+
+
+def _record_commands(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    notifier: str | None,
+    returncode: int = 0,
+    stderr: bytes = b"",
+) -> list[list[str]]:
+    """Capture the argv a sender would run instead of running it."""
+
+    calls: list[list[str]] = []
+
+    async def fake_exec(*argv: str, **_: object) -> _FakeProcess:
+        calls.append(list(argv))
+        return _FakeProcess(returncode, stderr)
+
+    monkeypatch.setattr(senders.asyncio, "create_subprocess_exec", fake_exec)
+    monkeypatch.setattr(senders.shutil, "which", lambda _name: notifier)
+    monkeypatch.setattr(senders.sys, "platform", "darwin")
+    return calls
+
+
+@pytest.mark.asyncio
+async def test_terminal_notifier_gets_a_click_target_and_a_group(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = _record_commands(
+        monkeypatch, notifier="/opt/homebrew/bin/terminal-notifier"
+    )
+
+    await senders.MacDesktopSender().send(
+        channel=_channel(kind=NotificationChannelKind.MACOS_DESKTOP),
+        secret="http://localhost:5173/",
+        event=EVENT,
+    )
+
+    argv = calls[0]
+    assert argv[0] == "/opt/homebrew/bin/terminal-notifier"
+    assert argv[argv.index("-open") + 1] == "http://localhost:5173/"
+    # Grouped per event kind, so repeated order pushes collapse into one while a
+    # run failure keeps its own banner.
+    assert argv[argv.index("-group") + 1] == "aniu-order_placed"
+    assert argv[argv.index("-title") + 1] == "Aniu"
+    assert "已下单" in argv[argv.index("-subtitle") + 1]
+
+
+@pytest.mark.asyncio
+async def test_a_run_failure_lands_in_its_own_group(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = _record_commands(monkeypatch, notifier="/usr/local/bin/terminal-notifier")
+
+    await senders.MacDesktopSender().send(
+        channel=_channel(kind=NotificationChannelKind.MACOS_DESKTOP),
+        secret="http://localhost:5173/",
+        event=NotificationEvent(
+            kind=NotificationEventKind.RUN_FAILED, run_id=9, failure_reason="超时"
+        ),
+    )
+
+    argv = calls[0]
+    assert argv[argv.index("-group") + 1] == "aniu-run_failed"
+
+
+@pytest.mark.asyncio
+async def test_an_address_that_is_not_a_url_leaves_the_banner_unclickable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = _record_commands(monkeypatch, notifier="/usr/local/bin/terminal-notifier")
+
+    await senders.MacDesktopSender().send(
+        channel=_channel(kind=NotificationChannelKind.MACOS_DESKTOP),
+        secret="不是地址",
+        event=EVENT,
+    )
+
+    assert "-open" not in calls[0]
+
+
+@pytest.mark.asyncio
+async def test_without_terminal_notifier_it_falls_back_to_osascript(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = _record_commands(monkeypatch, notifier=None)
+
+    await senders.MacDesktopSender().send(
+        channel=_channel(kind=NotificationChannelKind.MACOS_DESKTOP),
+        secret="http://localhost:5173/",
+        event=EVENT,
+    )
+
+    argv = calls[0]
+    assert argv[0] == "osascript"
+    # Content travels as argv, never inside the script text, so a quote in a
+    # stock name or an error message cannot rewrite the script.
+    assert argv[1] == "-e"
+    assert "600519" not in argv[2]
+    assert any("600519" in part for part in argv[3:])
+
+
+@pytest.mark.asyncio
+async def test_content_with_quotes_stays_an_argument(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = _record_commands(monkeypatch, notifier=None)
+    hostile = 'x" with title "劫持" ignoring "'
+
+    await senders.MacDesktopSender().send(
+        channel=_channel(kind=NotificationChannelKind.MACOS_DESKTOP),
+        secret="",
+        event=NotificationEvent(
+            kind=NotificationEventKind.RUN_FAILED, run_id=3, failure_reason=hostile
+        ),
+    )
+
+    argv = calls[0]
+    assert "劫持" not in argv[2]
+    assert any(hostile in part for part in argv[3:])
+
+
+@pytest.mark.asyncio
+async def test_a_blocked_notification_says_how_to_unblock_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The first thing a new Mac hits, and the fix is not in this codebase."""
+
+    _record_commands(
+        monkeypatch,
+        notifier="/usr/local/bin/terminal-notifier",
+        returncode=3,
+        stderr=b"Could not request notification permission: Notifications are "
+        b"not allowed for this application",
+    )
+
+    with pytest.raises(ServiceIntegrationError) as caught:
+        await senders.MacDesktopSender().send(
+            channel=_channel(kind=NotificationChannelKind.MACOS_DESKTOP),
+            secret="http://localhost:5173/",
+            event=EVENT,
+        )
+
+    assert "lsregister" in str(caught.value)
+
+
+@pytest.mark.asyncio
+async def test_it_refuses_to_pretend_on_a_non_mac_host(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(senders.sys, "platform", "linux")
+
+    with pytest.raises(ServiceIntegrationError, match="macOS"):
+        await senders.MacDesktopSender().send(
+            channel=_channel(kind=NotificationChannelKind.MACOS_DESKTOP),
+            secret="http://localhost:5173/",
+            event=EVENT,
+        )

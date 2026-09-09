@@ -67,6 +67,7 @@ const KIND_LABELS: Record<NotificationChannelKind, string> = {
   webhook: "通用 Webhook",
   serverchan: "Server酱",
   wecom_bot: "企业微信机器人",
+  macos_desktop: "macOS 桌面通知",
 };
 
 /** What the user must paste for each transport, and how it is used. */
@@ -74,6 +75,9 @@ const SECRET_HINTS: Record<NotificationChannelKind, string> = {
   webhook: "完整的接收地址，例如 https://open.feishu.cn/open-apis/bot/v2/hook/xxxx",
   serverchan: "Server酱 SendKey（也可直接粘贴完整推送地址）",
   wecom_bot: "群机器人 Webhook 的 key 参数（也可直接粘贴完整地址）",
+  macos_desktop:
+    "点击通知时打开的地址，例如 http://localhost:5173/。仅在后端跑在你自己的 Mac 上时可用；" +
+    "装了 terminal-notifier 才可点击，否则只弹出不跳转。",
 };
 
 const EVENTS: { id: NotificationEvent; label: string; description: string }[] = [
