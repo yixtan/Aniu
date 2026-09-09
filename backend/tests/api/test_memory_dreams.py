@@ -10,6 +10,7 @@ from httpx import AsyncClient
 
 from backend.business.dreams import DreamStatus, MemoryDream
 from backend.business.dreams.service import DreamService
+from backend.infra.db.models import StrategyRunModel
 from backend.infra.repositories.memory_dream_repo import MemoryDreamRepository
 from backend.main import app
 
@@ -86,3 +87,33 @@ async def test_memory_dream_list_and_detail_roundtrip(
 
     missing_delete = await api_client.delete(f"/api/aniu/memory-dreams/{first.task_id}")
     assert missing_delete.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_manual_memory_dream_run_targets_the_newest_run_day(
+    api_client: AsyncClient, session
+) -> None:
+    """With run history the button dreams the newest day that had runs, not
+    the calendar's yesterday — the scheduled path already did, and the two
+    must agree on what "the day to dream" means."""
+
+    now = datetime.now(tz=UTC)
+    session.add(
+        StrategyRunModel(
+            id=20260909199,
+            trigger_source="MANUAL",
+            status="COMPLETED",
+            current_state="Completed",
+            snapshot_json={},
+            trace_json={},
+            started_at=now.isoformat(),
+            completed_at=now.isoformat(),
+        )
+    )
+    await session.commit()
+
+    response = await api_client.post("/api/aniu/memory-dreams/run")
+
+    assert response.status_code == 202
+    expected = now.astimezone(ZoneInfo("Asia/Shanghai")).date()
+    assert response.json()["target_date"] == expected.isoformat()

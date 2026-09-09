@@ -345,9 +345,13 @@ class AppRuntime:
         )
 
     def dream_query_service(self, session: AsyncSession) -> DreamService:
+        # The manual button picks its day the same way the schedule does —
+        # newest run day still without a dream, else the newest run day.
+        # Without run history it would silently fall back to "yesterday".
         return DreamService(
             repository=MemoryDreamRepository(session),
             committer=session,
+            run_days=RunRepository(session),
         )
 
     def dream_service(self, session: AsyncSession) -> DreamService:
