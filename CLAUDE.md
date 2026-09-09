@@ -85,12 +85,17 @@ WHERE summary IS NOT NULL GROUP BY 1;
 
 降级原因记录在该次运行 `trace_json` 的 Summary 阶段里，step_id 为 `markdown_fallback`。
 
-**国内镜像源会让本地和 CI 看到不同的世界。** `registry.npmmirror.com` 不提供 audit 数据，
-本地 `npm audit` 永远返回 0 漏洞，而 CI 走官方源会真实报出来。查真实结果要显式指定源：
+**国内镜像源会让本地和 CI 看到不同的世界。** `registry.npmmirror.com` 不提供 audit 数据——
+裸跑 `npm audit` 会拿到一个空的 error，看起来像「没有漏洞」，而 CI 走官方源会真实报出来。
+`scripts/audit.mjs` 因此把源写死成官方地址，所以 `npm --prefix frontend run audit` 在任何
+镜像配置下都能给出真实结果。手动查同理，要显式指定源：
 
 ```bash
 npm --prefix frontend audit --registry=https://registry.npmjs.org
 ```
+
+`~/.npmrc` 里出现 `allow-scripts=` 会让所有项目级 npm 操作（含 `npm audit`）直接报
+`EALLOWSCRIPTS` 失败。要给全局包放行安装脚本，在那一条安装命令上加参数，别写进用户级配置。
 
 pip 同理：用 pip-compile 重建 `requirements.lock` 时，本地镜像配置会被写进文件头，
 必须手动删掉 `--index-url` / `--trusted-host` 两行再提交。
