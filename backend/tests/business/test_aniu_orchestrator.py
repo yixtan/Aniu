@@ -98,10 +98,12 @@ class StaticRunStage:
         self.report = report or RunReport(content="# Run report\n\nNo trade.")
         self.calls = 0
         self.market_session_open: bool | None = None
+        self.seen_context: object | None = None
 
     async def execute(self, context: object, runner: object) -> RunReport:
         del runner
         self.calls += 1
+        self.seen_context = context
         market_check = getattr(context, "market_session_is_open")
         self.market_session_open = market_check()
         return self.report
@@ -130,6 +132,7 @@ def make_orchestrator(
     run_stage: StaticRunStage,
     summary_stage: ScriptedSummaryStage,
     market_open: bool = True,
+    watchlist: object | None = None,
 ) -> AniuOrchestrator:
     return AniuOrchestrator(
         state_callbacks=callbacks,
@@ -138,6 +141,7 @@ def make_orchestrator(
         run_stage=run_stage,  # type: ignore[arg-type]
         summary_stage=summary_stage,  # type: ignore[arg-type]
         market_session_is_open=lambda _moment: market_open,
+        watchlist=watchlist,  # type: ignore[arg-type]
     )
 
 
@@ -261,3 +265,57 @@ def test_run_report_counts_only_successful_trade_orders() -> None:
     assert report.as_payload()["trade_count"] == 1
     assert report.as_payload()["tool_calls_count"] == 4
     assert report.as_payload()["tool_failure_count"] == 1
+
+
+class ExplodingWatchlist:
+    async def followed(self) -> tuple[tuple[str, str], ...]:
+        raise RuntimeError("数据库暂时不可用")
+
+
+class RecordingWatchlist:
+    def __init__(self, followed: tuple[tuple[str, str], ...]) -> None:
+        self._followed = followed
+        self.reads = 0
+
+    async def followed(self) -> tuple[tuple[str, str], ...]:
+        self.reads += 1
+        return self._followed
+
+
+@pytest.mark.asyncio
+async def test_the_watchlist_is_read_once_and_handed_to_the_run_stage() -> None:
+    callbacks = RecordingCallbacks()
+    run_stage = StaticRunStage()
+    watchlist = RecordingWatchlist((("600519.SH", "贵州茅台"),))
+    orchestrator = make_orchestrator(
+        callbacks,
+        run_stage=run_stage,
+        summary_stage=ScriptedSummaryStage([SummaryDraft(summary="<section/>")]),
+        watchlist=watchlist,
+    )
+
+    await orchestrator.execute(make_run())
+
+    assert watchlist.reads == 1
+    assert run_stage.seen_context is not None
+    assert run_stage.seen_context.followed_companies == (("600519.SH", "贵州茅台"),)
+
+
+@pytest.mark.asyncio
+async def test_an_unreadable_watchlist_costs_the_reference_not_the_run() -> None:
+    """It is a reference, not an input the run depends on."""
+
+    callbacks = RecordingCallbacks()
+    run_stage = StaticRunStage()
+    orchestrator = make_orchestrator(
+        callbacks,
+        run_stage=run_stage,
+        summary_stage=ScriptedSummaryStage([SummaryDraft(summary="<section/>")]),
+        watchlist=ExplodingWatchlist(),
+    )
+
+    result = await orchestrator.execute(make_run())
+
+    assert result.status is RunStatus.COMPLETED
+    assert run_stage.seen_context is not None
+    assert run_stage.seen_context.followed_companies == ()

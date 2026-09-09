@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -19,11 +20,14 @@ from backend.business.runs.execution import (
     SummaryDraft,
     ToolLoopEventSink,
 )
+from backend.business.runs.ports import FollowedCompaniesPort
 from backend.business.runs.run_events import RunEventType
 from backend.business.runs.stages.run_stage import RunStage
 from backend.business.runs.stages.summary_stage import SummaryStage
 from backend.business.shared import RunAbortError, ServiceConfigurationError
 from backend.business.shared.enums import RunState, RunStatus
+
+logger = logging.getLogger(__name__)
 
 StageOutput = RunReport | SummaryDraft
 MarketSessionOpen = Callable[[datetime], bool]
@@ -96,6 +100,7 @@ class AniuOrchestrator:
         abort_signal: RunAbortSignal | None = None,
         market_session_is_open: MarketSessionOpen,
         now_provider: NowProvider | None = None,
+        watchlist: FollowedCompaniesPort | None = None,
     ) -> None:
         self._callbacks = state_callbacks
         self._agent_runner_factory = agent_runner_factory
@@ -107,6 +112,26 @@ class AniuOrchestrator:
         self._abort_signal = abort_signal
         self._market_session_is_open = market_session_is_open
         self._now_provider = now_provider or (lambda: datetime.now(tz=UTC))
+        self._watchlist = watchlist
+
+    async def _followed_companies(self, run_id: int) -> tuple[tuple[str, str], ...]:
+        """Read the watchlist without letting it stop a run.
+
+        It is a reference, not an input the run depends on: a database hiccup
+        here should cost the run that reference, not the run.
+        """
+
+        if self._watchlist is None:
+            return ()
+        try:
+            return await self._watchlist.followed()
+        except Exception:
+            logger.warning(
+                "failed to read the watchlist for a run",
+                extra={"run_id": run_id},
+                exc_info=True,
+            )
+            return ()
 
     async def execute(self, run: StrategyRun) -> RunResult:
         started_at = perf_counter()
@@ -114,6 +139,7 @@ class AniuOrchestrator:
         context.abort_signal = self._abort_signal or RunAbortSignal(run.run_id)
         context.market_session_is_open = self._is_market_session_open
         context.tool_registry = self._tool_registry
+        context.followed_companies = await self._followed_companies(run.run_id)
         self._attach_runtime_callbacks(context, run.run_id)
 
         report = await self._execute_run_stage(context)

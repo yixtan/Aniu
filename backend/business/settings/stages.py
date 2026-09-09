@@ -29,6 +29,13 @@ class StageSettings:
     top_p: float
     prompt: str
     thinking_effort: ThinkingEffort | None = None
+    watchlist_prompt: str = ""
+    """Extra instruction appended for the Run stage when a watchlist exists.
+
+    Kept apart from ``prompt`` so it can be edited or emptied without touching
+    the trading instruction, and so it can be left out of the message entirely
+    on a run where nothing is followed.
+    """
 
     def __post_init__(self) -> None:
         if self.stage_id not in STAGE_IDS:
@@ -49,6 +56,9 @@ class StageSettings:
             self, "thinking_effort", coerce_thinking_effort(self.thinking_effort)
         )
         object.__setattr__(self, "prompt", prompt)
+        object.__setattr__(
+            self, "watchlist_prompt", normalize_prompt_text(self.watchlist_prompt)
+        )
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any]) -> StageSettings:
@@ -62,6 +72,11 @@ class StageSettings:
             top_p=float(value.get("top_p", 1)),
             thinking_effort=coerce_thinking_effort(value.get("thinking_effort")),
             prompt="" if value.get("prompt") is None else str(value.get("prompt")),
+            watchlist_prompt=(
+                ""
+                if value.get("watchlist_prompt") is None
+                else str(value.get("watchlist_prompt"))
+            ),
         )
 
     def as_dict(self) -> dict[str, object]:
@@ -72,6 +87,7 @@ class StageSettings:
             "top_p": self.top_p,
             "thinking_effort": self.thinking_effort,
             "prompt": self.prompt,
+            "watchlist_prompt": self.watchlist_prompt,
         }
 
 

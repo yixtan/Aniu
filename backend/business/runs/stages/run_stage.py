@@ -43,7 +43,18 @@ class RunStage:
             else False
         )
         runtime_payload: dict[str, object] = {"market_session_open": market_open}
-        agent_prompt = "\n\n".join((stage_settings.prompt, _MEMORY_TOOL_PROTOCOL))
+        prompt_parts = [stage_settings.prompt, _MEMORY_TOOL_PROTOCOL]
+        # Both the list and the instruction about it are left out when nothing
+        # is followed: there is nothing to screen, and asking a model to
+        # consider an empty list only invites it to say so.
+        if context.followed_companies:
+            runtime_payload["watchlist"] = [
+                {"symbol": symbol, "name": name}
+                for symbol, name in context.followed_companies
+            ]
+            if stage_settings.watchlist_prompt:
+                prompt_parts.append(stage_settings.watchlist_prompt)
+        agent_prompt = "\n\n".join(prompt_parts)
         user_prompt = "\n\n".join(
             (
                 agent_prompt,
@@ -55,7 +66,10 @@ class RunStage:
             stage_name="Run",
             phase="run_input",
             title="任务提示词",
-            summary="已发送任务规则、记忆工具协议与当前交易时段状态",
+            summary=(
+                "已发送任务规则、记忆工具协议与当前交易时段状态"
+                + ("，含关注清单" if context.followed_companies else "")
+            ),
             display_prompt=agent_prompt,
             payload=runtime_payload,
             user_message=user_prompt,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
@@ -97,3 +98,59 @@ async def test_run_stage_requires_runtime_before_emitting_or_prompting() -> None
         await RunStage().execute(context, runner)
 
     assert runner.prompts == []
+
+
+def _with_watchlist(
+    followed: tuple[tuple[str, str], ...],
+    *,
+    watchlist_prompt: str = "",
+) -> RunExecutionContext:
+    context = _context(market_open=True)
+    context.followed_companies = followed
+    run_stage = context.snapshot.stage_settings["Run"]
+    context.snapshot.stage_settings["Run"] = replace(
+        run_stage, watchlist_prompt=watchlist_prompt
+    )
+    return context
+
+
+@pytest.mark.asyncio
+async def test_a_watchlist_reaches_the_model_with_its_instruction() -> None:
+    context = _with_watchlist(
+        (("600519.SH", "贵州茅台"), ("300750.SZ", "宁德时代")),
+        watchlist_prompt="先快速筛查关注清单，再决定是否深入。",
+    )
+    runner = RecordingRunner(AgentStageResult(content="报告"))
+
+    await RunStage().execute(context, runner)
+
+    prompt = runner.prompts[0]
+    assert "600519.SH" in prompt
+    assert "贵州茅台" in prompt
+    assert "先快速筛查关注清单" in prompt
+
+
+@pytest.mark.asyncio
+async def test_an_empty_watchlist_sends_neither_list_nor_instruction() -> None:
+    """Asking a model to consider an empty list only invites it to say so."""
+
+    context = _with_watchlist((), watchlist_prompt="先快速筛查关注清单。")
+    runner = RecordingRunner(AgentStageResult(content="报告"))
+
+    await RunStage().execute(context, runner)
+
+    prompt = runner.prompts[0]
+    assert "watchlist" not in prompt
+    assert "先快速筛查关注清单" not in prompt
+
+
+@pytest.mark.asyncio
+async def test_a_watchlist_without_an_instruction_still_reaches_the_model() -> None:
+    """The list is the fact; the instruction is optional wording about it."""
+
+    context = _with_watchlist((("600519.SH", "贵州茅台"),))
+    runner = RecordingRunner(AgentStageResult(content="报告"))
+
+    await RunStage().execute(context, runner)
+
+    assert "600519.SH" in runner.prompts[0]

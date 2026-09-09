@@ -62,3 +62,14 @@ class RunJobRepositoryPort(Protocol):
         *,
         reason: str,
     ) -> RunJob | None: ...
+
+
+class FollowedCompaniesPort(Protocol):
+    """The operator's watchlist, as a run needs to see it.
+
+    Declared here rather than imported from the watchlist feature so this
+    module stays independent of it. Returns ``(symbol, name)`` pairs, newest
+    first, which is all a run does with them.
+    """
+
+    async def followed(self) -> tuple[tuple[str, str], ...]: ...

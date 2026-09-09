@@ -35,6 +35,7 @@ const settings = {
       top_p: 1,
       thinking_effort: null,
       prompt: "执行提示词",
+      watchlist_prompt: "",
     },
     {
       stage_id: "Summary",
@@ -43,6 +44,7 @@ const settings = {
       top_p: 1,
       thinking_effort: null,
       prompt: "总结提示词",
+      watchlist_prompt: "",
     },
     {
       stage_id: "Dream",
@@ -51,6 +53,7 @@ const settings = {
       top_p: 1,
       thinking_effort: null,
       prompt: "梦境提示词",
+      watchlist_prompt: "",
     },
   ],
 };
@@ -392,5 +395,50 @@ describe("StageSettingsPage prompt configs", () => {
         dream_prompt: "梦境提示词",
       },
     ]);
+  });
+
+  it("offers the watchlist instruction only on the Run stage", async () => {
+    const user = userEvent.setup();
+    api.getSettings.mockResolvedValue(settings);
+    api.listModelChannels.mockResolvedValue([]);
+
+    renderPage();
+
+    await user.click(await screen.findByRole("tab", { name: "执行阶段" }));
+    expect(screen.getByLabelText("补充提示词")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "总结阶段" }));
+    expect(screen.queryByLabelText("补充提示词")).not.toBeInTheDocument();
+  });
+
+  it("saves the watchlist instruction with the Run stage", async () => {
+    const user = userEvent.setup();
+    const configured = {
+      ...settings,
+      stage_settings: settings.stage_settings.map((stage) =>
+        stage.stage_id === "Run" ? { ...stage, model_selected_model_id: 1 } : stage,
+      ),
+    };
+    api.getSettings.mockResolvedValue(configured);
+    api.listModelChannels.mockResolvedValue([
+      {
+        name: "测试通道",
+        enabled: true,
+        selected_models: [{ selected_model_id: 1, model_name: "测试模型", thinking_efforts: [] }],
+      },
+    ]);
+    api.updateSettings.mockResolvedValue({ ...configured, revision: 4 });
+
+    renderPage();
+
+    await user.click(await screen.findByRole("tab", { name: "执行阶段" }));
+    await user.type(screen.getByLabelText("补充提示词"), "先快速筛查");
+    await user.click(screen.getByRole("button", { name: "保存阶段设置" }));
+
+    await waitFor(() => expect(api.updateSettings).toHaveBeenCalledTimes(1));
+    const saved = api.updateSettings.mock.calls[0]?.[0].stage_settings.find(
+      (stage: { stage_id: string }) => stage.stage_id === "Run",
+    );
+    expect(saved.watchlist_prompt).toBe("先快速筛查");
   });
 });

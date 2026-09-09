@@ -10,6 +10,7 @@ import {
   ScrollTextIcon,
   Settings2,
   SlidersHorizontal,
+  StarIcon,
 } from "lucide-react";
 
 import { QueryErrorState, QueryLoadingState } from "@/components/query-state";
@@ -153,6 +154,7 @@ type StageDraft = {
   temperature: string;
   topP: string;
   prompt: string;
+  watchlistPrompt: string;
   dreamScheduleTime: string;
 };
 
@@ -193,6 +195,7 @@ function toStageDraft(
     temperature: String(stage.temperature),
     topP: String(stage.top_p),
     prompt: stage.prompt,
+    watchlistPrompt: stage.watchlist_prompt,
     dreamScheduleTime,
   };
 }
@@ -426,6 +429,7 @@ export function StageSettingsPage() {
       temperature,
       top_p: topP,
       prompt: effectiveStageDraft.prompt.trim(),
+      watchlist_prompt: effectiveStageDraft.watchlistPrompt.trim(),
     };
     const stageSettings = stages.map((stage) =>
       stage.stage_id === updatedStage.stage_id ? updatedStage : stage,
@@ -978,6 +982,25 @@ export function StageSettingsPage() {
                   </Field>
                 </div>
               </section>
+
+              {activeStage.stage_id === "Run" ? (
+                <section className="flex flex-col gap-3" aria-label="关注清单提示词">
+                  <SectionLabel icon={<StarIcon className="size-3.5" />}>关注清单</SectionLabel>
+                  <Field>
+                    <FieldLabel htmlFor="watchlist-prompt">补充提示词</FieldLabel>
+                    <Textarea
+                      id="watchlist-prompt"
+                      rows={6}
+                      value={effectiveStageDraft.watchlistPrompt}
+                      onChange={(event) => updateDraft({ watchlistPrompt: event.target.value })}
+                    />
+                    <FieldDescription>
+                      仅在关注清单非空时拼接到执行阶段提示词之后；清单为空时整段不发送。
+                      清单本身会随运行上下文一并送达，无需在此列出代码。
+                    </FieldDescription>
+                  </Field>
+                </section>
+              ) : null}
 
               {activeStage.stage_id === "Dream" ? (
                 <section className="flex flex-col gap-3" aria-label="梦境运行时间">

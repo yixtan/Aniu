@@ -19,7 +19,7 @@ from backend.business.runs.agent_runner import AgentRunnerFactoryPort
 from backend.business.runs.callbacks import RunExecutionCallbacks
 from backend.business.runs.dto import RunDetailDTO, to_run_detail_dto
 from backend.business.runs.orchestration import AniuOrchestrator
-from backend.business.runs.ports import RunRepositoryPort
+from backend.business.runs.ports import FollowedCompaniesPort, RunRepositoryPort
 from backend.business.runs.runtime import RunRuntimeState
 from backend.business.runs.trace_support import (
     RunSnapshotPublisher,
@@ -56,6 +56,7 @@ class RunExecutor:
         market_session_is_open: MarketSessionOpen | None = None,
         notifier: NotificationPublisherPort | None = None,
         run_completion_hook: RunCompletionHookPort | None = None,
+        watchlist: FollowedCompaniesPort | None = None,
     ) -> None:
         self._run_repo = run_repo
         self._committer = committer
@@ -67,6 +68,7 @@ class RunExecutor:
         self._market_session_is_open = market_session_is_open or (lambda _moment: False)
         self._runtime = RunRuntimeState()
         self._notifier = notifier
+        self._watchlist = watchlist
         self._run_completion_hook = run_completion_hook
         self._execution_callbacks = RunExecutionCallbacks(
             runtime=self._runtime,
@@ -118,6 +120,7 @@ class RunExecutor:
                     abort_signal=abort_signal,
                     market_session_is_open=self._market_session_is_open,
                     now_provider=self._now_provider,
+                    watchlist=self._watchlist,
                 ).execute(run)
             recorder = self._runtime.trace_recorder
             if recorder is not None:
