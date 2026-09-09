@@ -29,6 +29,7 @@ from backend.business.settings.resolver import ModelSelectionResolver
 from backend.business.settings.service import SettingsService
 from backend.business.stock_api_logs.models import StockApiToolCall
 from backend.business.stock_api_logs.service import StockApiLogService
+from backend.business.watchlist import WatchlistService
 from backend.infra.calendar import TradingCalendar2026, is_market_session_open
 from backend.infra.integrations.agent_runner import AgentRunnerFactoryAdapter
 from backend.infra.integrations.agent_runtime import AgentRuntimeFactory
@@ -39,6 +40,7 @@ from backend.infra.integrations.notifications import (
     RoutingNotificationSender,
     TradeNotificationDispatcher,
 )
+from backend.infra.integrations.watchlist_stock_names import QuoteStockNameLookup
 from backend.infra.repositories import (
     AccountCacheRepository,
     MemoryDreamRepository,
@@ -53,6 +55,7 @@ from backend.infra.repositories import (
     SettingsRepository,
     StockApiCallLogRecord,
     StockApiCallLogRepository,
+    WatchlistRepository,
 )
 from backend.infra.repositories.auth_repo import (
     AuthSessionRepository,
@@ -245,6 +248,19 @@ class AppRuntime:
         return AwayModeService(
             repo=AwayModeRepository(session),
             mailer=self.report_mail_service(session),
+            committer=session,
+        )
+
+    def watchlist_service(self, session: AsyncSession) -> WatchlistService:
+        """The operator's followed companies.
+
+        Naming a symbol needs live quotes, so this requires the public stock
+        data service the same way the market pages do.
+        """
+
+        return WatchlistService(
+            WatchlistRepository(session),
+            names=QuoteStockNameLookup(self.require_public_stock_data()),
             committer=session,
         )
 

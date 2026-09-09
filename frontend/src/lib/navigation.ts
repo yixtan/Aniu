@@ -1,14 +1,15 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  BellRingIcon,
   ChartCandlestickIcon,
   KeyRoundIcon,
   LayoutDashboardIcon,
-  MessageSquareTextIcon,
-  BellRingIcon,
   MailIcon,
+  MessageSquareTextIcon,
   MoonStarIcon,
   NetworkIcon,
   Settings2Icon,
+  StarIcon,
   TimerIcon,
   WorkflowIcon,
 } from "lucide-react";
@@ -108,6 +109,12 @@ export const navigationGroups: NavigationGroup[] = [
         description: "可验证交易经验的读取与演化",
         to: "/memories",
         icon: MoonStarIcon,
+      },
+      {
+        title: "关注股票",
+        description: "你自己关注的公司，供运行时参考",
+        to: "/watchlist",
+        icon: StarIcon,
       },
     ],
   },

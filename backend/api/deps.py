@@ -21,6 +21,7 @@ from backend.business.schedules.service import ScheduleAppService
 from backend.business.settings.channels import ModelChannelService
 from backend.business.settings.service import SettingsService
 from backend.business.stock_api_logs.service import StockApiLogService
+from backend.business.watchlist import WatchlistService
 
 __all__ = ["get_db_session", "get_session_factory"]
 
@@ -45,6 +46,8 @@ class ApiRuntimePort(Protocol):
     ) -> ReportMailService: ...
 
     def away_mode_service(self, session: AsyncSession) -> AwayModeService: ...
+
+    def watchlist_service(self, session: AsyncSession) -> WatchlistService: ...
 
     def dream_query_service(self, session: AsyncSession) -> DreamService: ...
 
@@ -165,3 +168,10 @@ def get_away_mode_service(
     runtime: Annotated[ApiRuntimePort, Depends(get_runtime)],
 ) -> AwayModeService:
     return runtime.away_mode_service(session)
+
+
+def get_watchlist_service(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    runtime: Annotated[ApiRuntimePort, Depends(get_runtime)],
+) -> WatchlistService:
+    return runtime.watchlist_service(session)

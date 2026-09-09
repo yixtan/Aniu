@@ -20,6 +20,7 @@ from backend.infra.repositories.stock_api_call_log_repo import (
     StockApiCallLogRecord,
     StockApiCallLogRepository,
 )
+from backend.infra.repositories.watchlist_repo import WatchlistRepository
 
 __all__ = [
     "AccountCacheRepository",
@@ -37,6 +38,7 @@ __all__ = [
     "SecretStoreRepository",
     "SelectedModelRepository",
     "SettingsRepository",
+    "WatchlistRepository",
     "StockApiCallLogRecord",
     "StockApiCallLogRepository",
 ]
