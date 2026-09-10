@@ -204,12 +204,14 @@ describe("DashboardPage", () => {
 
     expect(await screen.findByText("投资总览")).toBeInTheDocument();
     expect((await screen.findAllByText("浦发银行")).length).toBeGreaterThan(0);
-    expect(screen.getByText("¥150.50")).toBeInTheDocument();
-    expect(screen.getByText("买入")).toBeInTheDocument();
-
     // Cost and account share are per holding, so scope the assertions to the
-    // positions table rather than the whole page.
+    // positions table rather than the whole page. Narrow screens render the
+    // same holdings as cards, and jsdom applies no breakpoint, so both
+    // layouts are in the document at once — every assertion has to say which.
     const positionsTable = within(screen.getAllByRole("table")[0]!);
+    const ordersTable = within(screen.getAllByRole("table")[1]!);
+    expect(positionsTable.getByText("¥150.50")).toBeInTheDocument();
+    expect(ordersTable.getByText("买入")).toBeInTheDocument();
     expect(positionsTable.getByText("现价/成本")).toBeInTheDocument();
     expect(positionsTable.getByText("持仓市值")).toBeInTheDocument();
     expect(positionsTable.getByText("当日盈亏")).toBeInTheDocument();
@@ -252,6 +254,28 @@ describe("DashboardPage", () => {
 
     await user.click(screen.getByRole("button", { name: "刷新数据" }));
     await waitFor(() => expect(api.refreshAccountCache).toHaveBeenCalledTimes(2));
+  });
+
+  it("also lays the holdings out as cards, for screens too narrow for a table", async () => {
+    api.getAccountDashboard.mockResolvedValue(dashboard);
+
+    renderPage();
+
+    const positions = within(await screen.findByRole("list", { name: "持仓列表" }));
+    expect(positions.getAllByRole("listitem")).toHaveLength(dashboard.positions.length);
+    // The card names every figure the table puts behind a column header, so
+    // nothing is lost by not being able to fit the table.
+    expect(positions.getByText("持仓市值")).toBeInTheDocument();
+    expect(positions.getByText("当日盈亏")).toBeInTheDocument();
+    expect(positions.getByText("现价 / 成本")).toBeInTheDocument();
+    expect(positions.getByText("数量")).toBeInTheDocument();
+    // Price and cost share one line here, where the table gave them a column.
+    expect(positions.getByText("¥10.00 / ¥9.00")).toBeInTheDocument();
+    expect(positions.getByText("¥150.50")).toBeInTheDocument();
+
+    const orders = within(screen.getByRole("list", { name: "委托列表" }));
+    expect(orders.getAllByRole("listitem")).toHaveLength(dashboard.orders.length);
+    expect(orders.getByText("买入 · 已成交")).toBeInTheDocument();
   });
 
   it("uses Shanghai trading sessions for market polling and resumes at boundaries", () => {
