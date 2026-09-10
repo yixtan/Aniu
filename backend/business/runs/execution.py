@@ -54,11 +54,14 @@ class RunReport:
     content: str
     tool_activity: tuple[dict[str, object], ...] = ()
     transcript: tuple[dict[str, object], ...] = ()
+    # Billed by the provider for this stage, or zero when it reported none.
+    total_tokens: int = 0
 
     def as_payload(self) -> dict[str, object]:
         return {
             self.summary_key: _summarize_text(self.content),
             self.content_key: self.content,
+            "total_tokens": self.total_tokens,
             **_summarize_tool_activity(self.tool_activity),
             "trade_count": sum(
                 is_successful_trade_call(

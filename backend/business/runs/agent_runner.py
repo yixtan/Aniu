@@ -13,6 +13,10 @@ class AgentStageResult:
     content: str
     tool_activity: tuple[dict[str, object], ...] = ()
     transcript: tuple[dict[str, object], ...] = ()
+    # What the provider billed for this stage, summed over every turn of the
+    # tool loop. Zero means the endpoint reported nothing, not that the stage
+    # was free — the trace falls back to an estimate in that case.
+    total_tokens: int = 0
 
 
 class AgentRunnerPort(Protocol):

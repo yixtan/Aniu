@@ -307,9 +307,7 @@ class RunExecutionCallbacks:
         if segment_ref is None:
             return
         stage_id, step_id = segment_ref
-        await self._emit_step_delta(
-            run_id, stage_id, step_id, delta, channel=channel
-        )
+        await self._emit_step_delta(run_id, stage_id, step_id, delta, channel=channel)
         await recorder.publish_stream_if_due()
 
     async def on_stage_prompt_prepared(
@@ -325,9 +323,7 @@ class RunExecutionCallbacks:
             title=str(payload.get("title") or "运行提示词"),
             summary=str(payload.get("summary") or "提示词已发送给大模型"),
             prompt=(
-                None
-                if payload.get("prompt") is None
-                else str(payload.get("prompt"))
+                None if payload.get("prompt") is None else str(payload.get("prompt"))
             ),
             data=data,
         )

@@ -24,6 +24,7 @@ type DraftPatch = Partial<
     | "protocol"
     | "baseUrl"
     | "apiKey"
+    | "providerConfig"
     | "manualModelName"
     | "manualProviderId"
     | "manualContextWindowTokens"

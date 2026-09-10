@@ -85,6 +85,7 @@ class RunStage:
             content=content,
             tool_activity=result.tool_activity,
             transcript=result.transcript,
+            total_tokens=result.total_tokens,
         )
 
 
