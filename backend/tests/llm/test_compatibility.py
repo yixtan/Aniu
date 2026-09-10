@@ -2,6 +2,8 @@
 
 from dataclasses import replace
 
+import pytest
+
 from backend.llm import ModelProtocol, ThinkingEffort
 from backend.llm.providers.anthropic_messages import ClaudeMessagesDriver
 from backend.llm.providers.openai_chat import OpenAIChatDriver
@@ -31,13 +33,29 @@ def _request(
     )
 
 
-def test_openai_reasoning_models_use_completion_token_field() -> None:
-    driver = OpenAIChatDriver()
-    params = driver._params(
+@pytest.mark.parametrize(
+    "model",
+    [
+        "gpt-5-mini",
+        "gpt-5.6-terra",
+        "gpt-6-astra",
+        "gpt-10-next",
+        "o1",
+        "o3-mini",
+        "o4",
+    ],
+)
+def test_every_reasoning_generation_uses_the_completion_token_field(
+    model: str,
+) -> None:
+    """A new generation must not need this file edited. gpt-6-astra 400'd on
+    every run because the rule was a literal list ending at gpt-5."""
+
+    params = OpenAIChatDriver()._params(
         _request(
             protocol=ModelProtocol.OPENAI_CHAT_COMPLETIONS,
             base_url="https://api.openai.com/v1",
-            model="gpt-5-mini",
+            model=model,
         ),
         stream=True,
     )
@@ -46,6 +64,22 @@ def test_openai_reasoning_models_use_completion_token_field() -> None:
     assert "max_tokens" not in params
     assert "temperature" not in params
     assert "top_p" not in params
+
+
+@pytest.mark.parametrize("model", ["gpt-4o-mini", "gpt-3.5-turbo", "glm-5.3-flash"])
+def test_models_before_the_reasoning_generations_keep_max_tokens(model: str) -> None:
+    params = OpenAIChatDriver()._params(
+        _request(
+            protocol=ModelProtocol.OPENAI_CHAT_COMPLETIONS,
+            base_url="https://api.openai.com/v1",
+            model=model,
+        ),
+        stream=True,
+    )
+
+    assert params["max_tokens"] == 1024
+    assert "max_completion_tokens" not in params
+    assert params["temperature"] == 0.3
 
 
 def test_openai_maps_configured_thinking_effort() -> None:
