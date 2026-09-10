@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 
 from backend.business.notifications.commands import (
     CreateChannelCommand,
@@ -31,6 +32,7 @@ from backend.business.notifications.ports import (
     NotificationChannelRepositoryPort,
     NotificationDeliveryRepositoryPort,
     NotificationSenderPort,
+    StockNameLookupPort,
 )
 from backend.business.shared import CommitterPort, NotificationChannelNotFoundError
 
@@ -66,11 +68,13 @@ class NotificationService:
         sender: NotificationSenderPort,
         delivery_repo: NotificationDeliveryRepositoryPort | None = None,
         committer: CommitterPort | None = None,
+        names: StockNameLookupPort | None = None,
     ) -> None:
         self._channel_repo = channel_repo
         self._sender = sender
         self._delivery_repo = delivery_repo
         self._committer = committer
+        self._names = names
 
     async def list_channels(self) -> list[NotificationChannelDTO]:
         channels = await self._channel_repo.list_channels()
@@ -183,6 +187,32 @@ class NotificationService:
             message="测试消息已发送，请在对应客户端确认。",
         )
 
+    async def _named(self, event: NotificationEvent) -> NotificationEvent:
+        """Fill in the company name when the event only carries a code.
+
+        A fill is observed on the order list, which names the company; an
+        order and a cancel are read back from the instruction the agent typed,
+        which is only ever "买入 300394 268 200". Resolving it here rather than
+        where the event is built keeps the lookup off the run's task — this
+        runs on the dispatcher's, where a slow provider costs nothing.
+
+        Best effort throughout: a push that names only the code still tells the
+        operator what happened.
+        """
+
+        if self._names is None or not event.stock_code or event.stock_name:
+            return event
+        try:
+            name = await self._names.name_for(event.stock_code)
+        except Exception:
+            logger.warning(
+                "stock name lookup failed for a notification",
+                extra={"stock_code": event.stock_code},
+                exc_info=True,
+            )
+            return event
+        return event if not name else replace(event, stock_name=name)
+
     async def publish(self, event: NotificationEvent) -> int:
         """Fan one event out to every subscribed channel.
 
@@ -195,6 +225,7 @@ class NotificationService:
         except Exception:
             logger.exception("failed to load notification channels")
             return 0
+        event = await self._named(event)
         delivered = 0
         for channel in channels:
             if not channel.wants(event.kind):
@@ -263,9 +294,7 @@ class NotificationService:
                     event_kind=event.kind,
                     title=event.title,
                     status=(
-                        DeliveryStatus.FAILED
-                        if error
-                        else DeliveryStatus.DELIVERED
+                        DeliveryStatus.FAILED if error else DeliveryStatus.DELIVERED
                     ),
                     error_message=error,
                     is_test=is_test,

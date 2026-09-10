@@ -251,11 +251,14 @@ class NotificationEvent:
         if self.kind is NotificationEventKind.RUN_FAILED:
             suffix = "" if self.run_id is None else f" · 运行 #{self.run_id}"
             return f"Aniu {self.kind.label}{suffix}"
+        # The title is the whole message on a lock screen, so it carries the
+        # name too — a code alone asks the operator to recognise five digits.
         subject = " ".join(
             part
             for part in (
                 None if self.direction is None else self.direction.label,
                 self.stock_code,
+                self.stock_name,
             )
             if part
         )

@@ -200,8 +200,21 @@ class AppRuntime:
             self.notification_dispatcher = TradeNotificationDispatcher(
                 session_factory=self.require_session_factory(),
                 sender=self.require_notification_sender(),
+                names=self._optional_stock_names(),
             )
         return self.notification_dispatcher
+
+    def _optional_stock_names(self) -> QuoteStockNameLookup | None:
+        """Name lookup for pushes, or nothing if quotes are not wired.
+
+        A runtime assembled without the public stock client still pushes; the
+        message just carries the code alone, which is what it did before.
+        """
+
+        try:
+            return QuoteStockNameLookup(self.require_public_stock_data())
+        except RuntimeError:
+            return None
 
     def optional_notification_dispatcher(self) -> TradeNotificationDispatcher | None:
         """Dispatcher for callers that must still work without push wiring.

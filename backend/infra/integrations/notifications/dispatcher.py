@@ -17,6 +17,7 @@ from backend.business.notifications import (
     NotificationSenderPort,
     NotificationService,
     OrderFillObservation,
+    StockNameLookupPort,
     detect_fill_events,
 )
 from backend.infra.repositories.notification_channel_repo import (
@@ -38,10 +39,12 @@ class TradeNotificationDispatcher:
         *,
         session_factory: async_sessionmaker[AsyncSession],
         sender: NotificationSenderPort,
+        names: StockNameLookupPort | None = None,
         max_pending: int = DEFAULT_MAX_PENDING,
     ) -> None:
         self._session_factory = session_factory
         self._sender = sender
+        self._names = names
         self._max_pending = max_pending
         self._pending: set[asyncio.Task[None]] = set()
 
@@ -129,6 +132,7 @@ class TradeNotificationDispatcher:
             sender=self._sender,
             delivery_repo=NotificationDeliveryRepository(session),
             committer=session,
+            names=self._names,
         )
 
 

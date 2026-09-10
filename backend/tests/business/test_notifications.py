@@ -44,6 +44,7 @@ def _trade_payload(
 class FakeSender:
     def __init__(self, fail: bool = False) -> None:
         self.sent: list[tuple[int, NotificationEventKind]] = []
+        self.events: list[NotificationEvent] = []
         self._fail = fail
 
     async def send(
@@ -57,6 +58,7 @@ class FakeSender:
         if self._fail:
             raise RuntimeError("upstream refused")
         self.sent.append((channel.id, event.kind))
+        self.events.append(event)
 
 
 class FakeChannelRepo:
@@ -89,7 +91,9 @@ class FakeChannelRepo:
             return None
         secret = kwargs.pop("secret")
         updated = NotificationChannel(
-            id=channel_id, kind=existing.kind, **kwargs  # type: ignore[arg-type]
+            id=channel_id,
+            kind=existing.kind,
+            **kwargs,  # type: ignore[arg-type]
         )
         self.channels = [updated if c.id == channel_id else c for c in self.channels]
         if secret is not None:
@@ -283,7 +287,10 @@ def test_orders_absent_from_the_refresh_are_pruned() -> None:
 @pytest.mark.parametrize(
     ("secret", "expected"),
     [
-        ("https://qyapi.weixin.qq.com/send?key=abcd1234", "https://qyapi.weixin.qq.com/…1234"),
+        (
+            "https://qyapi.weixin.qq.com/send?key=abcd1234",
+            "https://qyapi.weixin.qq.com/…1234",
+        ),
         ("SCT123456abcd", "…abcd"),
         ("xy", "…xy"),
     ],
@@ -532,3 +539,108 @@ async def test_history_failures_never_break_the_push() -> None:
         )
         == 1
     )
+
+
+class RecordingNames:
+    """Stands in for the quote lookup that names a code."""
+
+    def __init__(self, name: str | None = "天孚通信", fail: bool = False) -> None:
+        self.asked: list[str] = []
+        self._name = name
+        self._fail = fail
+
+    async def name_for(self, symbol: str) -> str | None:
+        self.asked.append(symbol)
+        if self._fail:
+            raise RuntimeError("quote provider is down")
+        return self._name
+
+
+def _placed(**overrides: object) -> NotificationEvent:
+    fields: dict[str, object] = {
+        "kind": NotificationEventKind.ORDER_PLACED,
+        "stock_code": "300394",
+        "direction": TradeDirection.BUY,
+        "price": 268.0,
+        "quantity": 200,
+    }
+    fields.update(overrides)
+    return NotificationEvent(**fields)  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio
+async def test_an_order_push_names_the_company_behind_the_code() -> None:
+    """A fill is read off the order list and already carries the name; an order
+    is read back from "买入 300394 268 200" and carries only the code."""
+
+    sender = FakeSender()
+    names = RecordingNames()
+    service = NotificationService(
+        channel_repo=FakeChannelRepo([_channel(1)]), sender=sender, names=names
+    )
+
+    await service.publish(_placed())
+
+    assert names.asked == ["300394"]
+    assert sender.events[-1].stock_name == "天孚通信"
+    assert ("标的", "300394 天孚通信") in sender.events[-1].as_lines()
+
+
+@pytest.mark.asyncio
+async def test_an_event_that_already_names_the_company_is_not_looked_up() -> None:
+    names = RecordingNames()
+    service = NotificationService(
+        channel_repo=FakeChannelRepo([_channel(1)]), sender=FakeSender(), names=names
+    )
+
+    await service.publish(
+        NotificationEvent(
+            kind=NotificationEventKind.ORDER_FILLED,
+            stock_code="300394",
+            stock_name="天孚通信",
+        )
+    )
+
+    assert names.asked == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "names", [RecordingNames(name=None), RecordingNames(fail=True)]
+)
+async def test_a_name_that_cannot_be_resolved_still_sends_the_push(
+    names: RecordingNames,
+) -> None:
+    """The company name is a nicety; what happened to the account is not."""
+
+    sender = FakeSender()
+    service = NotificationService(
+        channel_repo=FakeChannelRepo([_channel(1)]), sender=sender, names=names
+    )
+
+    delivered = await service.publish(_placed())
+
+    assert delivered == 1
+    assert sender.events[-1].stock_name is None
+    assert ("标的", "300394") in sender.events[-1].as_lines()
+
+
+@pytest.mark.asyncio
+async def test_without_a_lookup_wired_the_push_carries_the_code_alone() -> None:
+    sender = FakeSender()
+    service = NotificationService(
+        channel_repo=FakeChannelRepo([_channel(1)]), sender=sender
+    )
+
+    assert await service.publish(_placed()) == 1
+    assert sender.events[-1].stock_name is None
+
+
+def test_the_title_carries_the_name_beside_the_code() -> None:
+    """The title is the whole message on a lock screen."""
+
+    assert _placed(stock_name="天孚通信").title == "Aniu 已下单 · 买入 300394 天孚通信"
+
+
+def test_the_title_falls_back_to_the_code_when_no_name_resolved() -> None:
+    assert _placed().title == "Aniu 已下单 · 买入 300394"
