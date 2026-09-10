@@ -92,7 +92,7 @@ async def test_webhook_renders_a_custom_body_template() -> None:
 
     assert captured["body"] == {
         "msgtype": "text",
-        "text": {"content": "Aniu 已下单 · 买入 600519"},
+        "text": {"content": "Aniu 已下单 · 买入 600519 贵州茅台"},
     }
 
 
@@ -150,7 +150,7 @@ async def test_serverchan_builds_its_endpoint_from_a_sendkey() -> None:
     assert captured["url"] == "https://sctapi.ftqq.com/SCT123abc.send"
     body = captured["body"]
     assert isinstance(body, dict)
-    assert body["title"] == "Aniu 已下单 · 买入 600519"
+    assert body["title"] == "Aniu 已下单 · 买入 600519 贵州茅台"
     assert "贵州茅台" in str(body["desp"])
 
 

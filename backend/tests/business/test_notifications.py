@@ -634,3 +634,13 @@ async def test_without_a_lookup_wired_the_push_carries_the_code_alone() -> None:
 
     assert await service.publish(_placed()) == 1
     assert sender.events[-1].stock_name is None
+
+
+def test_the_title_carries_the_name_beside_the_code() -> None:
+    """The title is the whole message on a lock screen."""
+
+    assert _placed(stock_name="天孚通信").title == "Aniu 已下单 · 买入 300394 天孚通信"
+
+
+def test_the_title_falls_back_to_the_code_when_no_name_resolved() -> None:
+    assert _placed().title == "Aniu 已下单 · 买入 300394"

@@ -79,7 +79,7 @@ async def test_test_send_delivers_to_the_configured_endpoint(
     assert body["event"] == "order_placed"
     # The sample must look like a real push, direction included.
     assert body["direction"] == "buy"
-    assert body["title"] == "Aniu 已下单 · 买入 600519"
+    assert body["title"] == "Aniu 已下单 · 买入 600519 贵州茅台"
 
 
 @pytest.mark.asyncio
