@@ -34,6 +34,7 @@ from backend.business.notifications.ports import (
     NotificationPublisherPort,
     NotificationSenderPort,
     OrderFillNotifierPort,
+    StockNameLookupPort,
 )
 from backend.business.notifications.service import NotificationService
 from backend.business.notifications.trade_event import trade_event_from_tool_payload
@@ -55,6 +56,7 @@ __all__ = [
     "NotificationEventKind",
     "NotificationPublisherPort",
     "NotificationSenderPort",
+    "StockNameLookupPort",
     "NotificationService",
     "NotificationTestResultDTO",
     "OrderFillNotifierPort",

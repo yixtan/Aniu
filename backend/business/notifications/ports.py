@@ -67,6 +67,18 @@ class FillWatermarkRepositoryPort(Protocol):
     async def replace(self, watermarks: Mapping[str, int]) -> None: ...
 
 
+class StockNameLookupPort(Protocol):
+    """Names a company from its code.
+
+    Declared here rather than reached for across features: `business` may not
+    import `stock_api`, and a port belongs to the feature that consumes it.
+    Returning ``None`` means the name could not be established, which is never
+    a reason to hold back the push.
+    """
+
+    async def name_for(self, symbol: str) -> str | None: ...
+
+
 class NotificationSenderPort(Protocol):
     """Transport for one push. Raises on delivery failure."""
 
@@ -108,4 +120,5 @@ __all__ = [
     "OrderFillNotifierPort",
     "NotificationSenderPort",
     "NotificationPublisherPort",
+    "StockNameLookupPort",
 ]
