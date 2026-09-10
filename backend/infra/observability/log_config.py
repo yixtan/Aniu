@@ -83,6 +83,13 @@ STRUCTURED_FIELDS = (
     "tool_definition_count",
     "tool_call_count",
     "max_output_tokens",
+    # What the provider billed, as opposed to what we guessed. Absent when the
+    # endpoint reports no usage, which is itself the thing worth seeing.
+    "usage_input_tokens",
+    "usage_output_tokens",
+    "usage_cache_read_tokens",
+    "usage_cache_write_tokens",
+    "usage_total_tokens",
     "status",
     "trigger_source",
     "current_state",

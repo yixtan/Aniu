@@ -15,7 +15,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Field, FieldContent, FieldLabel } from "@/components/ui/field";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Field, FieldContent, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -70,7 +76,9 @@ type ChannelFormProps = {
   channels: ModelProfile[];
   writeDisabled: boolean;
   onPatch: (
-    patch: Partial<Pick<ChannelDraft, "name" | "protocol" | "baseUrl" | "apiKey">>,
+    patch: Partial<
+      Pick<ChannelDraft, "name" | "protocol" | "baseUrl" | "apiKey" | "providerConfig">
+    >,
     markDirty?: boolean,
   ) => void;
   onNormalizeBaseUrl: (baseUrl: string) => void;
@@ -81,6 +89,156 @@ type ChannelFormProps = {
   onDelete: () => void;
   onClearApiKey: () => void;
 };
+
+/** Tri-state: 自动 lets the driver decide, the other two override it. */
+function TriStateField({
+  id,
+  label,
+  hint,
+  value,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  hint: string;
+  value: boolean | null | undefined;
+  disabled: boolean;
+  onChange: (next: boolean | null) => void;
+}) {
+  return (
+    <Field>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <FieldContent>
+        <Select
+          value={value === null || value === undefined ? "auto" : value ? "yes" : "no"}
+          disabled={disabled}
+          onValueChange={(next) => onChange(next === "auto" ? null : next === "yes")}
+        >
+          <SelectTrigger id={id}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="auto">自动</SelectItem>
+            <SelectItem value="yes">支持</SelectItem>
+            <SelectItem value="no">不支持</SelectItem>
+          </SelectContent>
+        </Select>
+        <FieldDescription>{hint}</FieldDescription>
+      </FieldContent>
+    </Field>
+  );
+}
+
+const MAX_TOKENS_FIELD_OPTIONS = [
+  { value: "auto", label: "自动" },
+  { value: "max_tokens", label: "max_tokens（旧模型）" },
+  { value: "max_completion_tokens", label: "max_completion_tokens（思考模型）" },
+] as const;
+
+/** Per-channel overrides for what an OpenAI-compatible endpoint accepts.
+ *
+ * Relays vary, and getting one of these wrong is a 400 on every call rather
+ * than a degraded run — `stream_options` is the reason the token figures on
+ * the system-status page can be real at all, and it has to be switched on per
+ * channel because only the official host is assumed to take it.
+ */
+function OpenAICompatibilitySection({
+  fieldIdPrefix,
+  draft,
+  disabled,
+  onPatch,
+}: {
+  fieldIdPrefix: string;
+  draft: ChannelDraft;
+  disabled: boolean;
+  onPatch: (patch: Partial<ChannelDraft>, touched?: boolean) => void;
+}) {
+  const openai: NonNullable<ChannelDraft["providerConfig"]["openai"]> = draft.providerConfig
+    .openai ?? { max_tokens_field: "auto" };
+  const patchOpenai = (patch: Record<string, unknown>) =>
+    onPatch(
+      {
+        providerConfig: {
+          ...draft.providerConfig,
+          openai: { ...openai, ...patch },
+        },
+      },
+      true,
+    );
+
+  return (
+    <Accordion type="single" collapsible>
+      <AccordionItem value="compat">
+        <AccordionTrigger>兼容性（高级）</AccordionTrigger>
+        <AccordionContent>
+          <div className="flex flex-col gap-3 pt-1">
+            <Field>
+              <FieldLabel htmlFor={`${fieldIdPrefix}-max-tokens-field`}>输出长度字段</FieldLabel>
+              <FieldContent>
+                <Select
+                  value={openai.max_tokens_field ?? "auto"}
+                  disabled={disabled}
+                  onValueChange={(next) => patchOpenai({ max_tokens_field: next })}
+                >
+                  <SelectTrigger id={`${fieldIdPrefix}-max-tokens-field`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MAX_TOKENS_FIELD_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FieldDescription>
+                  自动：按模型代次判断，o 系列与 gpt-5 以后用 max_completion_tokens。
+                </FieldDescription>
+              </FieldContent>
+            </Field>
+
+            <TriStateField
+              id={`${fieldIdPrefix}-stream-usage`}
+              label="返回用量统计"
+              hint="打开后请求会带 stream_options，上游才会报告真实 token 消耗；不支持的中转会报 400。"
+              value={openai.supports_stream_usage}
+              disabled={disabled}
+              onChange={(next) => patchOpenai({ supports_stream_usage: next })}
+            />
+
+            <TriStateField
+              id={`${fieldIdPrefix}-temperature`}
+              label="支持 temperature"
+              hint="自动：思考模型不发。较新的模型会直接拒绝这个参数。"
+              value={openai.supports_temperature}
+              disabled={disabled}
+              onChange={(next) => patchOpenai({ supports_temperature: next })}
+            />
+
+            <TriStateField
+              id={`${fieldIdPrefix}-top-p`}
+              label="支持 top_p"
+              hint="同上，与 temperature 一起由模型代次推断。"
+              value={openai.supports_top_p}
+              disabled={disabled}
+              onChange={(next) => patchOpenai({ supports_top_p: next })}
+            />
+
+            <TriStateField
+              id={`${fieldIdPrefix}-replay-reasoning`}
+              label="回放思考内容"
+              hint="把上一轮的思考原样回传给同一家上游，DeepSeek 一类模型需要。"
+              value={openai.replay_reasoning_content}
+              disabled={disabled}
+              onChange={(next) => patchOpenai({ replay_reasoning_content: next })}
+            />
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
+  );
+}
 
 export function ChannelForm({
   draft,
@@ -194,6 +352,15 @@ export function ChannelForm({
               </div>
             </FieldContent>
           </Field>
+
+          {draft.protocol === "openai_chat_completions" ? (
+            <OpenAICompatibilitySection
+              fieldIdPrefix={fieldIdPrefix}
+              draft={draft}
+              disabled={writeDisabled}
+              onPatch={onPatch}
+            />
+          ) : null}
         </div>
       </section>
 

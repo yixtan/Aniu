@@ -271,9 +271,7 @@ class RunExecutor:
                 exc_info=True,
             )
 
-    async def _announce_run_completed(
-        self, run: StrategyRun, duration_ms: int
-    ) -> None:
+    async def _announce_run_completed(self, run: StrategyRun, duration_ms: int) -> None:
         """Announce a finished run without letting the push affect the run.
 
         A run that traded nothing sends no other notification, so without this

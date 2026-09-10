@@ -85,12 +85,35 @@ def run_stage_status_from_trace_payload(trace: dict[str, Any] | None) -> str | N
     return None
 
 
+def _reported_tokens(stage: dict[str, Any]) -> int:
+    """What the provider billed for this stage, if it said.
+
+    Recorded on the stage's own `result` step, the same place `trade_count`
+    lives. Zero means no endpoint reported anything and the caller should keep
+    estimating, which is why this cannot simply return `int | None` — a stage
+    that genuinely cost nothing never happens.
+    """
+
+    steps = stage.get("steps")
+    if not isinstance(steps, list):
+        return 0
+    for step in reversed(steps):
+        if not isinstance(step, dict) or step.get("type") != "result":
+            continue
+        data = step.get("data")
+        reported = data.get("total_tokens") if isinstance(data, dict) else None
+        if type(reported) is int and reported > 0:
+            return reported
+    return 0
+
+
 def metrics_from_trace_payload(
     trace: dict[str, Any] | None,
 ) -> tuple[int, int, int, int]:
     tool_calls_count = 0
     thinking_count = 0
     token_characters = 0
+    reported_tokens = 0
     trade_count = 0
     stages = (trace or {}).get("stages")
     if not isinstance(stages, list):
@@ -99,6 +122,7 @@ def metrics_from_trace_payload(
         if not isinstance(stage, dict):
             continue
         trade_count += _completed_trade_count(stage)
+        reported_tokens += _reported_tokens(stage)
         steps = stage.get("steps")
         if not isinstance(steps, list):
             continue
@@ -113,6 +137,12 @@ def metrics_from_trace_payload(
             tool_calls_count += tool
             thinking_count += thinking
             token_characters += characters
+    # The provider's own count when any stage reported one, because the
+    # estimate below is wrong by two to three times: it reads each piece of
+    # text once, while a tool loop re-sends the whole conversation every turn
+    # and is billed for it again.
+    if reported_tokens > 0:
+        return tool_calls_count, thinking_count, reported_tokens, trade_count
     estimated_tokens = (
         max(1, (token_characters + 3) // 4) if token_characters > 0 else 0
     )

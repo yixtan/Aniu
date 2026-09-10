@@ -35,6 +35,7 @@ from backend.llm import (
     TextDelta,
     ThinkingEffort,
     ToolDefinition,
+    Usage,
     estimate_provider_request_tokens,
     normalize_chat_response,
 )
@@ -318,6 +319,32 @@ async def _stream_or_chat(
         elif isinstance(event, Failed):
             raise event.error
     return response
+
+
+def _usage_fields(response: object) -> dict[str, int]:
+    """The provider's own token counts, for logging.
+
+    Returns nothing when the endpoint reported no usage — an OpenAI-compatible
+    relay only sends it when asked via `stream_options`, and that request is
+    gated to the official host. An empty dict here is the signal that the
+    number on the page can only ever be an estimate for this channel.
+    """
+
+    usage = response.get("usage") if isinstance(response, dict) else None
+    if not isinstance(usage, Usage):
+        return {}
+    # `Usage()` defaults to zeros, so a stream that carried no usage block
+    # arrives looking exactly like a call that cost nothing. Only a non-zero
+    # total is evidence the provider actually reported anything.
+    if usage.total_tokens <= 0 and usage.input <= 0 and usage.output <= 0:
+        return {}
+    return {
+        "usage_input_tokens": usage.input,
+        "usage_output_tokens": usage.output,
+        "usage_cache_read_tokens": usage.cache_read,
+        "usage_cache_write_tokens": usage.cache_write,
+        "usage_total_tokens": usage.total_tokens,
+    }
 
 
 def _payload_bytes(value: object) -> int:
@@ -844,6 +871,7 @@ async def generate_tool_loop_response(
             "duration_ms": successful_duration_ms,
             "output_bytes": _payload_bytes(result),
             "tool_call_count": len(tool_calls),
+            **_usage_fields(response),
             "status": "completed",
         },
     )

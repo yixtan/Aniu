@@ -398,6 +398,7 @@ class AgentRunnerAdapter(AgentRunnerPort):
             content=result.content,
             tool_activity=activity,
             transcript=transcript,
+            total_tokens=result.usage.total_tokens,
         )
 
 

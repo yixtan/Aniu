@@ -45,6 +45,7 @@ from backend.llm import (
     LLMToolCall,
     StopReason,
     ToolDefinition,
+    Usage,
     assistant_input_from_message,
     estimate_provider_message_tokens,
     estimate_provider_request_tokens,
@@ -113,6 +114,26 @@ def _estimate_provider_message_context(
         protocol=runtime.protocol,
         model=runtime.model,
         provider_config=runtime.provider_config,
+    )
+
+
+def _add_usage(total: Usage, reported: object) -> Usage:
+    """Add one turn's reported usage to the running total.
+
+    A provider that reports nothing yields `Usage()`, all zeros, which adds
+    nothing — so a run on an endpoint that never reports usage ends at zero,
+    and zero is the signal to fall back to an estimate rather than to claim
+    the run was free.
+    """
+
+    if not isinstance(reported, Usage):
+        return total
+    return Usage(
+        input=total.input + reported.input,
+        output=total.output + reported.output,
+        cache_read=total.cache_read + reported.cache_read,
+        cache_write=total.cache_write + reported.cache_write,
+        total_tokens=total.total_tokens + reported.total_tokens,
     )
 
 
@@ -326,6 +347,7 @@ class AgentLoop:
         )
         iteration = 0
         sequence = 0
+        usage = Usage()
         while True:
             throw_if_aborted(abort_signal)
             iteration += 1
@@ -356,6 +378,10 @@ class AgentLoop:
                 )
                 if recovery_checkpoint is not None:
                     session_mutations.append(recovery_checkpoint)
+                # Every turn re-sends the whole conversation and is billed for
+                # it again, so the run's cost is the sum over turns, never the
+                # last one.
+                usage = _add_usage(usage, response.get("usage"))
             except ContextBudgetExceededError as exc:
                 result = ToolLoopResult(
                     tool_call_id="context-budget",
@@ -420,6 +446,7 @@ class AgentLoop:
                     session_mutations=tuple(session_mutations),
                     tool_activity=tuple(activity),
                     iterations=iteration,
+                    usage=usage,
                 )
 
             normalized_calls = [

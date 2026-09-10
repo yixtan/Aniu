@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal, cast
 
-from backend.llm import ChatMessage
+from backend.llm import ChatMessage, Usage
 
 AgentStopReason = Literal["completed", "aborted", "error"]
 CompactionCause = Literal["proactive", "provider_overflow"]
@@ -49,6 +49,10 @@ class AgentResult:
     tool_activity: tuple[dict[str, object], ...] = ()
     iterations: int = 0
     stop_reason: AgentStopReason = "completed"
+    # Summed over every turn of the loop, because each turn re-sends the whole
+    # conversation and is billed again for it. Zero when the provider reported
+    # nothing — an OpenAI-compatible endpoint only sends usage when asked.
+    usage: Usage = field(default_factory=Usage)
 
 
 def compaction_summary_message(summary: str) -> AgentMessage:

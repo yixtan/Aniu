@@ -15,7 +15,7 @@ from backend.agent.events import AgentEventType
 from backend.agent.kernel.context import AgentContext
 from backend.agent.kernel.runtime_config import LlmRuntimeConfig
 from backend.agent.session import AgentSession
-from backend.llm import ModelProtocol
+from backend.llm import ModelProtocol, Usage
 
 
 @dataclass
@@ -401,9 +401,7 @@ async def test_loop_continues_past_legacy_round_limit(monkeypatch) -> None:
         if calls <= 21:
             return {
                 "content": None,
-                "tool_calls": [
-                    {"id": f"c{calls}", "name": "search", "arguments": {}}
-                ],
+                "tool_calls": [{"id": f"c{calls}", "name": "search", "arguments": {}}],
             }
         return {"content": "done", "tool_calls": []}
 
@@ -573,3 +571,65 @@ async def test_tool_error_payload_becomes_error_result() -> None:
     )
     assert results[0].status == "error"
     assert results[0].error == "failed"
+
+
+@pytest.mark.asyncio
+async def test_usage_is_summed_over_every_turn(monkeypatch) -> None:
+    """Each turn re-sends the whole conversation and is billed again, so the
+    run's cost is the sum, never the last turn's figure."""
+
+    responses = iter(
+        [
+            {
+                "content": None,
+                "tool_calls": [{"id": "c1", "name": "search", "arguments": {}}],
+                "usage": Usage(input=6_198, output=421, total_tokens=6_619),
+            },
+            {
+                "content": None,
+                "tool_calls": [{"id": "c2", "name": "search", "arguments": {}}],
+                "usage": Usage(input=20_823, output=1_969, total_tokens=22_792),
+            },
+            {
+                "content": "done",
+                "tool_calls": [],
+                "usage": Usage(input=75_721, output=3_584, total_tokens=79_305),
+            },
+        ]
+    )
+
+    async def fake_response(*args, **kwargs):
+        del args, kwargs
+        return next(responses)
+
+    monkeypatch.setattr(
+        "backend.agent.actors.agent_loop.generate_tool_loop_response",
+        fake_response,
+    )
+
+    result = await AgentLoop().run(context(registry=Registry()), "analyze")
+
+    assert result.usage.total_tokens == 6_619 + 22_792 + 79_305
+    assert result.usage.input == 6_198 + 20_823 + 75_721
+    assert result.usage.output == 421 + 1_969 + 3_584
+
+
+@pytest.mark.asyncio
+async def test_a_provider_that_reports_nothing_leaves_usage_at_zero(
+    monkeypatch,
+) -> None:
+    """Zero has to mean "unknown" downstream, so the loop must not invent a
+    number when the endpoint stayed silent."""
+
+    async def fake_response(*args, **kwargs):
+        del args, kwargs
+        return {"content": "done", "tool_calls": []}
+
+    monkeypatch.setattr(
+        "backend.agent.actors.agent_loop.generate_tool_loop_response",
+        fake_response,
+    )
+
+    result = await AgentLoop().run(context(registry=Registry()), "analyze")
+
+    assert result.usage.total_tokens == 0
