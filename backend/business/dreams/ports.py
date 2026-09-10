@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date
 from typing import Protocol
 
@@ -43,8 +44,21 @@ class RunDayQueryPort(Protocol):
         ...
 
 
+@dataclass(frozen=True, slots=True)
+class DreamRunResult:
+    """What one dream produced, and what the provider billed for it."""
+
+    content: str
+    total_tokens: int = 0
+
+
 class DreamAgentPort(Protocol):
-    async def run(self, dream: MemoryDream) -> str: ...
+    async def run(self, dream: MemoryDream) -> DreamRunResult: ...
 
 
-__all__ = ["DreamAgentPort", "DreamRepositoryPort", "RunDayQueryPort"]
+__all__ = [
+    "DreamAgentPort",
+    "DreamRepositoryPort",
+    "DreamRunResult",
+    "RunDayQueryPort",
+]

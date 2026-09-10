@@ -1078,6 +1078,11 @@ export interface components {
              * Format: date
              */
             target_date: string;
+            /**
+             * Total Tokens
+             * @default 0
+             */
+            total_tokens: number;
             /** Updated */
             updated: number;
         };
@@ -2061,6 +2066,11 @@ export interface components {
              * Format: date
              */
             day: string;
+            /**
+             * Dream Tokens
+             * @default 0
+             */
+            dream_tokens: number;
             /** Runs */
             runs: number;
             /** Tokens */

@@ -114,9 +114,7 @@ class DreamService:
         in flight cannot start it twice.
         """
 
-        dream = await self.create_or_get(
-            target_date, execution_guard=execution_guard
-        )
+        dream = await self.create_or_get(target_date, execution_guard=execution_guard)
         if dream.status is DreamStatus.FAILED:
             dream.retry()
             saved = await self._repository.save(dream)
@@ -230,7 +228,7 @@ class DreamService:
         if completed is None:
             return None
         if completed.status is DreamStatus.RUNNING:
-            completed.complete(result)
+            completed.complete(result.content, result.total_tokens)
             await self._save_and_commit(
                 completed,
                 execution_fence=execution_fence,

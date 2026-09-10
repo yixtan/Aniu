@@ -38,6 +38,10 @@ class SystemStatusRepositoryPort(Protocol):
         self, task_ids: Sequence[int]
     ) -> list[MemoryActivityFact]: ...
 
+    async def dreams_since(self, since: datetime) -> list[DreamFact]:
+        """Completed dreams in the window, for the token series."""
+        ...
+
     async def recent_dreams(self, limit: int) -> list[DreamFact]:
         """Newest target date first."""
         ...

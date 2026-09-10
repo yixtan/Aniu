@@ -70,6 +70,7 @@ const status = {
     day: day(offset),
     tokens: offset === 0 ? 780_000 : offset === 1 ? 1_080_000 : 0,
     runs: offset < 2 ? 16 : 0,
+    dream_tokens: offset === 1 ? 442_124 : 0,
   })),
   dreams: [
     {
@@ -80,6 +81,7 @@ const status = {
       created: 3,
       updated: 2,
       deleted: 11,
+      total_tokens: 442_124,
     },
     {
       target_date: "2026-09-07",
@@ -89,6 +91,7 @@ const status = {
       created: 0,
       updated: 0,
       deleted: 0,
+      total_tokens: 0,
     },
   ],
   memory_live: 53,
@@ -152,10 +155,11 @@ describe("SystemStatusPanel", () => {
 
     const chart = await screen.findByText("Token 消耗（近 30 天）");
     const card = chart.closest("[data-slot=card]") as HTMLElement;
-    expect(within(card).getByText("1.86M")).toBeInTheDocument();
-    // 1.86M over the two days that ran: under a million, so it reads in k.
-    expect(within(card).getByText("930k")).toBeInTheDocument();
-    expect(within(card).getByText("58k")).toBeInTheDocument();
+    // 1.86M of runs plus the 442k a dream spent reading the day back.
+    expect(within(card).getByText("2.30M")).toBeInTheDocument();
+    expect(within(card).getByText("442k")).toBeInTheDocument();
+    expect(within(card).getByText("1.15M")).toBeInTheDocument();
+    expect(within(card).getByText("72k")).toBeInTheDocument();
     expect(within(card).getAllByRole("listitem")).toHaveLength(30);
     // With nothing under the pointer the readout names today.
     expect(within(card).getByText("09-09 周三 · 780k · 16 次运行")).toBeInTheDocument();
@@ -180,6 +184,27 @@ describe("SystemStatusPanel", () => {
     const failed = rows[2] as HTMLElement;
     expect(within(failed).getByText("失败")).toBeInTheDocument();
     expect(within(failed).getByText("memory_write 工具的内部 bug")).toHaveClass("text-destructive");
+  });
+
+  it("shows what a dream cost, on the day it reflected on", async () => {
+    api.getSystemStatus.mockResolvedValue(status);
+
+    renderPanel();
+
+    const chart = await screen.findByText("Token 消耗（近 30 天）");
+    const card = chart.closest("[data-slot=card]") as HTMLElement;
+    // The dream ran on the night of the 8th and is filed under the 8th.
+    const bars = within(card).getAllByRole("listitem");
+    const eighth = bars.find((bar) => bar.getAttribute("aria-label")?.startsWith("2026-09-08"));
+    expect(eighth?.getAttribute("aria-label")).toContain("梦境 442,124 tokens");
+
+    const dreamsTitle = screen.getByText("记忆梦境（最近 2 次）");
+    const dreamsCard = dreamsTitle.closest("[data-slot=card]") as HTMLElement;
+    const latest = within(dreamsCard).getAllByRole("row")[1] as HTMLElement;
+    expect(latest).toHaveTextContent("442k");
+    // A dream whose endpoint reported nothing shows a dash, not a zero.
+    const failed = within(dreamsCard).getAllByRole("row")[2] as HTMLElement;
+    expect(failed).toHaveTextContent("--");
   });
 
   it("says so when the status cannot be loaded", async () => {

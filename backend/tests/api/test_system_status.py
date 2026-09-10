@@ -145,7 +145,12 @@ async def test_system_status_folds_the_days_activity(
         "data_call_failures": 1,
     }
     token_row = next(row for row in body["tokens"] if row["day"] == expected_day)
-    assert token_row == {"day": expected_day, "tokens": 1234, "runs": 1}
+    assert token_row == {
+        "day": expected_day,
+        "tokens": 1234,
+        "runs": 1,
+        "dream_tokens": 0,
+    }
 
     assert len(body["dreams"]) == 1
     dream = body["dreams"][0]

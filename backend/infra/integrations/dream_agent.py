@@ -10,7 +10,7 @@ from typing import cast
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from backend.agent.harness import AgentHarness
-from backend.business.dreams import DreamAgentPort, MemoryDream
+from backend.business.dreams import DreamAgentPort, DreamRunResult, MemoryDream
 from backend.business.settings import AppSettings
 from backend.business.settings.ports import SettingsRepositoryPort
 from backend.infra.integrations.agent_runtime import AgentRuntimeFactory
@@ -101,7 +101,7 @@ class DreamAgentRunner(DreamAgentPort):
     settings_repo: SettingsRepositoryPort
     session_factory: async_sessionmaker[AsyncSession]
 
-    async def run(self, dream: MemoryDream) -> str:
+    async def run(self, dream: MemoryDream) -> DreamRunResult:
         settings = await self.settings_repo.get() or AppSettings()
         dream_settings = settings.stage_settings["Dream"]
         runtime = await self.runtime_factory.build_stage_runtime(dream_settings)
@@ -118,14 +118,16 @@ class DreamAgentRunner(DreamAgentPort):
             runtime=runtime,
             llm_client=self.llm_client,
             system_prompt=(
-                f"{settings.prompt_profile.global_prompt}\n\n"
-                f"{dream_settings.prompt}"
+                f"{settings.prompt_profile.global_prompt}\n\n{dream_settings.prompt}"
             ),
             tool_registry=registry,
             label="Dream",
         )
         result = await harness.prompt(_dream_request(dream.target_date))
-        return result.content.strip()
+        return DreamRunResult(
+            content=result.content.strip(),
+            total_tokens=result.usage.total_tokens,
+        )
 
 
 def _dream_request(target_date: date) -> str:

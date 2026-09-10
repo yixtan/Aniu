@@ -833,6 +833,11 @@
             "title": "Target Date",
             "type": "string"
           },
+          "total_tokens": {
+            "default": 0,
+            "title": "Total Tokens",
+            "type": "integer"
+          },
           "updated": {
             "title": "Updated",
             "type": "integer"
@@ -3669,6 +3674,11 @@
             "format": "date",
             "title": "Day",
             "type": "string"
+          },
+          "dream_tokens": {
+            "default": 0,
+            "title": "Dream Tokens",
+            "type": "integer"
           },
           "runs": {
             "title": "Runs",

@@ -115,6 +115,7 @@ class SystemStatusService:
         data_calls = await self._repository.data_calls_since(status_since)
         activities = await self._repository.memory_activities_since(status_since)
         dreams = await self._repository.recent_dreams(RECENT_DREAMS)
+        window_dreams = await self._repository.dreams_since(_start_of(token_days[-1]))
         inventory = await self._repository.memory_inventory()
 
         runs_by_day = _by_day(runs, lambda fact: fact.started_at)
@@ -142,11 +143,17 @@ class SystemStatusService:
             )
             for day in status_days
         ]
+        # A dream is filed under the day it reflected on, not the night it ran,
+        # so the cost of thinking about a trading day sits with that day.
+        dream_tokens_by_day: defaultdict[date, int] = defaultdict(int)
+        for dream in window_dreams:
+            dream_tokens_by_day[dream.target_date] += dream.total_tokens
         tokens = [
             TokenDayDTO(
                 day=day,
                 tokens=sum(run.total_tokens for run in runs_by_day[day]),
                 runs=len(runs_by_day[day]),
+                dream_tokens=dream_tokens_by_day[day],
             )
             for day in token_days
         ]
@@ -180,6 +187,7 @@ class SystemStatusService:
                 created=counts[(dream.task_id, MemoryActivityOperation.CREATE.value)],
                 updated=counts[(dream.task_id, MemoryActivityOperation.UPDATE.value)],
                 deleted=counts[(dream.task_id, MemoryActivityOperation.DELETE.value)],
+                total_tokens=dream.total_tokens,
             )
             for dream in dreams
         ]
