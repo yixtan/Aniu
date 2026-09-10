@@ -75,9 +75,7 @@ def _truncate_tool_content(record: dict[str, object], limit: int) -> None:
     details = record.get("details")
     if isinstance(details, dict):
         record["details"] = {
-            key: value
-            for key, value in details.items()
-            if key in {"stock_api_calls"}
+            key: value for key, value in details.items() if key in {"stock_api_calls"}
         }
 
 
@@ -102,12 +100,17 @@ def build_summary_stage_payload(
     *,
     max_characters: int | None = None,
     max_tokens: int | None = None,
+    max_bytes: int | None = None,
 ) -> dict[str, object]:
-    """Build the richest payload that fits without clipping required evidence."""
+    """Build the richest payload that fits without clipping required evidence.
+
+    Every limit given is honoured at once; see ``_payload_fits_budget``.
+    """
 
     fits = _payload_fits_budget(
         max_characters=max_characters,
         max_tokens=max_tokens,
+        max_bytes=max_bytes,
     )
     if fits is None:
         raise SummaryEvidenceTooLargeError("summary input budget is empty")
@@ -116,9 +119,7 @@ def build_summary_stage_payload(
         for index, text in enumerate(_reasoning_segments(report), start=1)
     ]
     original_tools = [_tool_record(dict(item)) for item in report.tool_activity]
-    required_tools = [
-        item for item in original_tools if _is_required_tool_record(item)
-    ]
+    required_tools = [item for item in original_tools if _is_required_tool_record(item)]
     required_payload = _payload(report, [], required_tools)
     if not fits(required_payload):
         raise SummaryEvidenceTooLargeError(
@@ -197,15 +198,37 @@ def build_summary_stage_payload(
 
 def _payload_fits_budget(
     *,
-    max_characters: int | None,
-    max_tokens: int | None,
+    max_characters: int | None = None,
+    max_tokens: int | None = None,
+    max_bytes: int | None = None,
 ) -> Callable[[dict[str, object]], bool] | None:
-    if max_characters is not None and max_tokens is not None:
-        raise ValueError("summary budget must use characters or tokens, not both")
-    if max_tokens is not None:
-        if max_tokens < 1:
-            return None
-        return lambda payload: estimate_tokens(serialize_context(payload)) <= max_tokens
-    if max_characters is None or max_characters < 1:
+    """Combine whatever limits the caller gave, and obey the strictest.
+
+    Tokens bound what the model can read; bytes bound what the transport in
+    front of it will carry, and the two do not convert. A payload of ASCII
+    JSON is four bytes a token, Chinese prose is closer to three characters —
+    so the same token budget is 240KB one day and 180KB the next, and a
+    gateway that caps message size rejects only the first. Both are measured
+    on the same serialized text, so neither can be inferred from the other.
+    """
+
+    measures: list[tuple[int, Callable[[str], int]]] = [
+        (limit, measure)
+        for limit, measure in (
+            (max_tokens, estimate_tokens),
+            (max_characters, len),
+            (max_bytes, lambda text: len(text.encode("utf-8"))),
+        )
+        if limit is not None
+    ]
+    if not measures:
         return None
-    return lambda payload: len(serialize_context(payload)) <= max_characters
+    # A budget of zero on any axis leaves nothing to send.
+    if any(limit < 1 for limit, _ in measures):
+        return None
+
+    def fits(payload: dict[str, object]) -> bool:
+        serialized = serialize_context(payload)
+        return all(measure(serialized) <= limit for limit, measure in measures)
+
+    return fits

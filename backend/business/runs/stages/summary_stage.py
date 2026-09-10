@@ -19,6 +19,16 @@ from backend.llm import estimate_tokens
 
 _SUMMARY_INPUT_RESERVE_TOKENS = 2_000
 
+# Gateways in front of a model often cap one message by size, and that limit
+# does not convert to tokens: the same token budget serializes to ~180KB of
+# Chinese prose or ~240KB of ASCII JSON, and only the second gets refused.
+# Measured against the v2ex relay, which took 177KB and refused 217KB with
+# `Message content is too long`; 160KB leaves room under the lower figure.
+# It lives here rather than in provider config because no channel has needed a
+# different value yet — when one does, this belongs in the channel's overrides
+# beside `max_tokens_field`, not in a second constant.
+_SUMMARY_INPUT_MAX_BYTES = 160_000
+
 
 def _summary_payload_budget(
     context: RunExecutionContext,
@@ -27,9 +37,7 @@ def _summary_payload_budget(
     runtime = context.llm_runtime
     context_tokens = int(getattr(runtime, "context_window_tokens", 128_000))
     output_tokens = int(getattr(runtime, "max_output_tokens", 32_768))
-    available_tokens = (
-        context_tokens - output_tokens - _SUMMARY_INPUT_RESERVE_TOKENS
-    )
+    available_tokens = context_tokens - output_tokens - _SUMMARY_INPUT_RESERVE_TOKENS
     prompt_overhead = estimate_tokens(stage_prompt + "\n\nsummary_source_data:\n")
     return max(0, available_tokens - prompt_overhead)
 
@@ -48,6 +56,7 @@ class SummaryStage:
         payload = build_summary_stage_payload(
             report,
             max_tokens=_summary_payload_budget(context, stage_prompt),
+            max_bytes=_SUMMARY_INPUT_MAX_BYTES,
         )
         user_prompt = "\n\n".join(
             (
