@@ -572,6 +572,139 @@ function StackedCell({
   );
 }
 
+/** One holding or order, as a block, for screens too narrow for a table.
+ *
+ * The dashboard's tables are `table-fixed` on percentage widths, so every
+ * column shrinks with the container and the text starts overlapping well
+ * before a phone's width. Reading down beats reading across on a phone
+ * anyway: nothing is hidden behind a sideways swipe, and the numbers worth
+ * a glance — market value, the day's profit — come first.
+ */
+function RecordCard({
+  name,
+  symbol,
+  aside,
+  children,
+}: {
+  name: string;
+  symbol: string;
+  aside: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <li className="border-border/60 rounded-md border px-3 py-2.5">
+      <div className="flex items-baseline justify-between gap-2">
+        <div className="flex min-w-0 items-baseline gap-1.5">
+          {/* No compacting here — the width the table had to ration is free. */}
+          <span className="truncate font-medium">{name}</span>
+          <span className="text-muted-foreground shrink-0 text-xs">{symbol}</span>
+        </div>
+        <div className="shrink-0 text-xs">{aside}</div>
+      </div>
+      <dl className="mt-2 flex flex-col gap-1 text-sm">{children}</dl>
+    </li>
+  );
+}
+
+function Figure({
+  label,
+  value,
+  note,
+  noteClassName,
+}: {
+  label: string;
+  value: React.ReactNode;
+  note?: React.ReactNode;
+  // getChangeTone returns undefined for a neutral value, and this project
+  // enables exactOptionalPropertyTypes, so undefined must be spelled out.
+  noteClassName?: string | undefined;
+}) {
+  return (
+    // Label left, value right, one per line: the value gets the card's whole
+    // width, so a six-figure holding never has to be truncated.
+    <div className="flex items-baseline justify-between gap-3">
+      <dt className="text-muted-foreground shrink-0 text-xs">{label}</dt>
+      <dd className="flex min-w-0 items-baseline justify-end gap-1.5 tabular-nums">
+        <span className="truncate">{value}</span>
+        {note === undefined ? null : (
+          <span className={cn("shrink-0 text-xs", noteClassName ?? "text-muted-foreground")}>
+            {note}
+          </span>
+        )}
+      </dd>
+    </div>
+  );
+}
+
+function PositionCards({
+  positions,
+  totalAsset,
+}: {
+  positions: DashboardData["positions"];
+  totalAsset: number;
+}) {
+  return (
+    <ul className="flex flex-col gap-2" aria-label="持仓列表">
+      {positions.map((position) => (
+        <RecordCard
+          key={position.symbol}
+          name={position.stock_name}
+          symbol={position.symbol}
+          aside={
+            <span className="text-muted-foreground">
+              仓位 {formatPercentNoSign(positionShare(position, totalAsset))}
+            </span>
+          }
+        >
+          <Figure
+            label="持仓市值"
+            value={formatCurrency(position.market_value)}
+            note={formatPercent(position.profit_ratio)}
+            noteClassName={getChangeTone(position.profit_ratio)}
+          />
+          <Figure
+            label="当日盈亏"
+            value={formatCurrency(position.day_profit)}
+            note={formatPercent(dayProfitRatio(position))}
+            noteClassName={getChangeTone(position.day_profit)}
+          />
+          <Figure
+            label="现价 / 成本"
+            value={`${formatCurrency(position.current_price)} / ${formatCurrency(position.avg_cost)}`}
+          />
+          <Figure label="数量" value={formatNumber(position.quantity)} />
+        </RecordCard>
+      ))}
+    </ul>
+  );
+}
+
+function OrderCards({ orders }: { orders: DashboardData["orders"] }) {
+  return (
+    <ul className="flex flex-col gap-2" aria-label="委托列表">
+      {orders.map((order) => (
+        <RecordCard
+          key={order.order_id}
+          name={order.stock_name}
+          symbol={order.symbol}
+          aside={
+            <span className="text-muted-foreground">
+              {translateOrderDirection(order.direction)} · {translateOrderStatus(order.status)}
+            </span>
+          }
+        >
+          <Figure label="成交数量" value={formatNumber(order.filled_quantity)} />
+          <Figure label="成交价" value={formatCurrency(order.filled_price)} />
+          <Figure
+            label="委托时间"
+            value={formatMonthDayTime(order.submitted_at ?? order.updated_at)}
+          />
+        </RecordCard>
+      ))}
+    </ul>
+  );
+}
+
 function PositionTable({
   positions,
   totalAsset,
@@ -595,7 +728,10 @@ function PositionTable({
           </Empty>
         ) : (
           <div className="min-h-0 min-w-0 flex-1 overflow-auto pe-1">
-            <Table className="table-fixed" containerClassName="overflow-visible">
+            <div className="lg:hidden">
+              <PositionCards positions={positions} totalAsset={totalAsset} />
+            </div>
+            <Table className="hidden table-fixed lg:table" containerClassName="overflow-visible">
               <TableHeader className="bg-card sticky top-0 z-10">
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="w-[18%] px-1.5 text-center">股票</TableHead>
@@ -671,7 +807,10 @@ function OrderTable({ orders }: { orders: DashboardData["orders"] }) {
           </Empty>
         ) : (
           <div className="min-h-0 min-w-0 flex-1 overflow-auto pe-1">
-            <Table className="table-fixed" containerClassName="overflow-visible">
+            <div className="lg:hidden">
+              <OrderCards orders={orders} />
+            </div>
+            <Table className="hidden table-fixed lg:table" containerClassName="overflow-visible">
               <TableHeader className="bg-card sticky top-0 z-10">
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="w-[20%] text-center whitespace-nowrap">委托时间</TableHead>
