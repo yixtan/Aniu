@@ -1169,16 +1169,21 @@ function MemoryList({
 }) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const currentPage = Math.min(page, totalPages);
-  const start = (currentPage - 1) * pageSize;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 min-w-0 flex-1 overflow-auto pr-1">
         <ul className="space-y-2">
-          {items.map((item, index) => (
+          {items.map((item) => (
             <li key={item.id} className={NESTED_LIST_ITEM_CLASS}>
-              <div className="bg-primary/10 text-primary flex size-8 shrink-0 items-center justify-center rounded-md text-xs font-semibold tabular-nums">
-                {start + index + 1}
+              {/* The id, not a row number: every dream report and lineage
+                  badge names memories by id, so an ordinal that changes with
+                  the page and the sort order leaves those uncheckable. */}
+              <div
+                className="bg-primary/10 text-primary flex h-8 shrink-0 items-center justify-center rounded-md px-2 text-xs font-semibold tabular-nums"
+                title={`记忆 #${item.id}`}
+              >
+                #{item.id}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-foreground/90 truncate text-sm leading-6">{item.content}</p>
