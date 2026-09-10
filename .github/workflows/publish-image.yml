@@ -83,7 +83,7 @@ jobs:
           labels: |
             org.opencontainers.image.title=Aniu
             org.opencontainers.image.description=AI trading agent workspace
-            org.opencontainers.image.source=https://github.com/AnacondaKC/Aniu
+            org.opencontainers.image.source=https://github.com/yixtan/Aniu
             org.opencontainers.image.licenses=Apache-2.0
             org.opencontainers.image.version=${{ steps.release.outputs.tag }}
 

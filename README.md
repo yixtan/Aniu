@@ -5,9 +5,9 @@
   <p>面向 A 股研究与模拟交易的本地交易智能体工作台</p>
   <p>
     <a href="https://github.com/yixtan/Aniu/actions/workflows/ci.yml"><img src="https://github.com/yixtan/Aniu/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-    <a href="https://github.com/AnacondaKC/Aniu/stargazers"><img src="https://img.shields.io/github/stars/AnacondaKC/Aniu?style=flat-square&label=Stars&color=f5b942" alt="GitHub stars" /></a>
-    <a href="https://github.com/AnacondaKC/Aniu/network/members"><img src="https://img.shields.io/github/forks/AnacondaKC/Aniu?style=flat-square&label=Forks&color=36cfc9" alt="GitHub forks" /></a>
-    <a href="https://github.com/AnacondaKC/Aniu/issues"><img src="https://img.shields.io/github/issues/AnacondaKC/Aniu?style=flat-square&label=Issues&color=eb6f92" alt="GitHub issues" /></a>
+    <a href="https://github.com/yixtan/Aniu/stargazers"><img src="https://img.shields.io/github/stars/yixtan/Aniu?style=flat-square&label=Stars&color=f5b942" alt="GitHub stars" /></a>
+    <a href="https://github.com/yixtan/Aniu/network/members"><img src="https://img.shields.io/github/forks/yixtan/Aniu?style=flat-square&label=Forks&color=36cfc9" alt="GitHub forks" /></a>
+    <a href="https://github.com/yixtan/Aniu/issues"><img src="https://img.shields.io/github/issues/yixtan/Aniu?style=flat-square&label=Issues&color=eb6f92" alt="GitHub issues" /></a>
   </p>
   <p>
     <img src="https://img.shields.io/badge/Python-3.12%2B-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.12+" />
