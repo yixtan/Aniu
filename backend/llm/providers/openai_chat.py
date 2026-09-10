@@ -5,6 +5,7 @@ Upstream inspiration: packages/ai/src/api/openai-completions.ts (MIT).
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any, cast
 from urllib.parse import urlparse
@@ -50,11 +51,21 @@ class OpenAICompat:
     supports_stream_usage: bool = True
 
 
+# OpenAI's reasoning models take `max_completion_tokens` and refuse
+# `temperature` and `top_p`. Matched by generation rather than by a literal
+# list of names: the list said ("o1", "o3", "o4", "gpt-5") and broke the day
+# gpt-6 shipped, which is a 400 on every run until someone edits this file.
+# Guessing "reasoning" for an unknown newer model is the safe way to be wrong —
+# `max_completion_tokens` is what current models want, and omitting temperature
+# never fails a request.
+_REASONING_MODEL = re.compile(r"^(?:o\d|gpt-(?:[5-9]|\d\d+))")
+
+
 def _compat(request: DriverRequest) -> OpenAICompat:
     model = request.model.lower()
     host = (urlparse(request.base_url).hostname or "").lower()
     official = host == "api.openai.com" or host.endswith(".openai.com")
-    reasoning_model = model.startswith(("o1", "o3", "o4", "gpt-5"))
+    reasoning_model = _REASONING_MODEL.match(model) is not None
     overrides = request.provider_config.openai
     inferred_max_tokens_field = (
         "max_completion_tokens" if reasoning_model else "max_tokens"
