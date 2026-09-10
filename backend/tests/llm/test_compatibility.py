@@ -168,6 +168,55 @@ def test_claude_sends_exactly_one_sampling_control() -> None:
     assert "temperature" not in top_p
 
 
+@pytest.mark.parametrize(
+    "model",
+    [
+        "claude-opus-4-7",
+        "claude-opus-4-8",
+        "claude-sonnet-5",
+        "claude-opus-5",
+        "claude-fable-5-1",
+        "claude-sonnet-6",
+    ],
+)
+def test_claude_omits_sampling_controls_where_they_are_deprecated(model: str) -> None:
+    """With no effort configured the request used to fall through to
+    `temperature`, which these models refuse outright."""
+
+    params = ClaudeMessagesDriver()._params(
+        _request(
+            protocol=ModelProtocol.CLAUDE_API,
+            base_url="https://api.anthropic.com/v1",
+            model=model,
+        ),
+        stream=True,
+    )
+
+    assert "temperature" not in params
+    assert "top_p" not in params
+    assert "thinking" not in params
+
+
+@pytest.mark.parametrize(
+    "model",
+    ["claude-sonnet-4-6", "claude-opus-4-6", "claude-opus-4-5", "claude-haiku-4-5"],
+)
+def test_claude_keeps_sampling_controls_where_they_still_apply(model: str) -> None:
+    """The line is opus-4-7, not "uses adaptive thinking": sonnet-4-6 and
+    opus-4-6 do use adaptive thinking and still accept temperature."""
+
+    params = ClaudeMessagesDriver()._params(
+        _request(
+            protocol=ModelProtocol.CLAUDE_API,
+            base_url="https://api.anthropic.com/v1",
+            model=model,
+        ),
+        stream=True,
+    )
+
+    assert params["temperature"] == 0.3
+
+
 def test_claude_maps_adaptive_thinking_effort() -> None:
     params = ClaudeMessagesDriver()._params(
         _request(

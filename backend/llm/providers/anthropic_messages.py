@@ -5,6 +5,7 @@ Upstream inspiration: packages/ai/src/api/anthropic-messages.ts (MIT).
 
 from __future__ import annotations
 
+import re
 from typing import Any, cast
 
 import httpx
@@ -44,6 +45,20 @@ from backend.llm.thinking import (
 class ClaudeMessagesDriver:
     protocol = ModelProtocol.CLAUDE_API
 
+    # Claude deprecated the sampling knobs from opus-4-7 onward: sending one is
+    # a 400, not a warning. opus-4-6 and sonnet-4-6 still take them, so this is
+    # a different line than `uses_adaptive_anthropic_thinking` — those two use
+    # adaptive thinking *and* accept temperature. Matched by generation because
+    # a literal list of names goes stale the day a model ships, and here that
+    # reads as a total outage on the new model rather than a degraded run.
+    _DEPRECATED_SAMPLING = re.compile(
+        r"(?:opus|sonnet|haiku|fable)[-.](?:4[-.][7-9]|[5-9]|\d\d+)"
+    )
+
+    @classmethod
+    def _deprecates_sampling(cls, model_name: str) -> bool:
+        return cls._DEPRECATED_SAMPLING.search(model_name.lower()) is not None
+
     def _params(self, request: DriverRequest, *, stream: bool) -> dict[str, Any]:
         params: dict[str, Any] = {
             "model": request.model,
@@ -71,10 +86,11 @@ class ClaudeMessagesDriver:
                         request.max_output_tokens,
                     ),
                 }
-        elif request.top_p < 1.0:
-            params["top_p"] = request.top_p
-        else:
-            params["temperature"] = request.temperature
+        elif not self._deprecates_sampling(request.model):
+            if request.top_p < 1.0:
+                params["top_p"] = request.top_p
+            else:
+                params["temperature"] = request.temperature
         return params
 
     async def stream_message(
