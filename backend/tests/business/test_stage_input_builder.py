@@ -149,3 +149,69 @@ def test_token_budget_bounds_cjk_evidence_by_estimated_tokens() -> None:
     assert estimate_tokens(serialize_context(payload)) <= 1_800
     with pytest.raises(SummaryEvidenceTooLargeError, match="required trade/error"):
         build_summary_stage_payload(report, max_tokens=1_000)
+
+
+def _cjk_report() -> RunReport:
+    """A Chinese-dense report: three bytes a character, one token a character."""
+
+    return RunReport(
+        content="# 运行报告\n\n" + "本次运行的结论与依据。" * 200,
+        transcript=({"role": "assistant", "reasoning": "推理过程。" * 400},),
+        tool_activity=(
+            {
+                "tool_call_id": "query-1",
+                "tool_name": "query_quote",
+                "status": "ok",
+                "content": {"rows": ["行情数据。" * 400]},
+            },
+        ),
+    )
+
+
+def test_byte_and_token_limits_both_apply() -> None:
+    """Neither unit converts to the other, so the strictest one has to win."""
+
+    report = _cjk_report()
+    generous = build_summary_stage_payload(report, max_tokens=1_000_000)
+    full_bytes = len(serialize_context(generous).encode("utf-8"))
+    # Derived from the fixture rather than written down, so growing the
+    # fixture cannot silently stop exercising the byte path.
+    byte_budget = full_bytes // 2
+
+    trimmed = build_summary_stage_payload(
+        report, max_tokens=1_000_000, max_bytes=byte_budget
+    )
+    assert len(serialize_context(trimmed).encode("utf-8")) <= byte_budget
+    assert trimmed != generous
+    # The report itself survives; only optional evidence is given up.
+    assert trimmed["run_report_markdown"] == report.content
+
+
+def test_a_byte_budget_binds_where_a_token_budget_would_not() -> None:
+    """ASCII JSON runs about four bytes a token, so a payload can sit inside a
+    token budget and still be four times too big for a gateway that counts
+    bytes — which is exactly how the v2ex relay refused a Summary call."""
+
+    report = _report()
+    within_tokens = build_summary_stage_payload(report, max_tokens=100_000)
+    serialized = serialize_context(within_tokens)
+    assert estimate_tokens(serialized) <= 100_000
+    assert len(serialized.encode("utf-8")) > 3 * estimate_tokens(serialized)
+
+
+def test_an_empty_budget_on_any_axis_leaves_nothing_to_send() -> None:
+    with pytest.raises(SummaryEvidenceTooLargeError):
+        build_summary_stage_payload(_report(), max_tokens=100_000, max_bytes=0)
+
+
+def test_no_budget_at_all_is_still_refused() -> None:
+    with pytest.raises(SummaryEvidenceTooLargeError):
+        build_summary_stage_payload(_report())
+
+
+def test_required_evidence_over_the_byte_budget_is_reported_not_clipped() -> None:
+    """A trade must never be summarised away, so an impossible budget raises
+    instead of quietly dropping it."""
+
+    with pytest.raises(SummaryEvidenceTooLargeError):
+        build_summary_stage_payload(_report(), max_bytes=200)
