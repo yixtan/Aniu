@@ -143,6 +143,21 @@ Summary  把报告渲染成 HTML
 
 README 里「研究、决策、交易、总结等阶段」是旧描述，这四件事现在都在 Run 内部完成。`Dream`（夜间记忆整理）是独立任务，不在这条 FSM 里。
 
+**全局提示词拼在三个阶段前面，不只是 Run。** Run 和 Summary 走
+[`run_entity.py`](backend/business/runs/run_entity.py) 的 `_compose_stage_prompt`，Dream 走
+[`dream_agent.py`](backend/infra/integrations/dream_agent.py)，都是 `全局 + "\n\n" + 阶段`。所以判据是
+**只有对三个阶段都成立的东西才该放全局**——交易目标、仓位口径这类只属于 Run，写进全局
+就会连 Summary（只渲染 HTML）和 Dream（只整理记忆）一起吃到。给 Dream 灌「唯一目标是
+收益最大化」尤其别扭：它在判断该删哪条经验时会偏向进攻性的那些。
+
+**改提示词前先看看记忆库里有没有同一件事。** 记忆是 agent 自己写的，写什么由提示词决定，
+两边容易各说各的：本仓库出现过 `T+1 当日买入不可卖` 被当成「经验」验证后写进记忆，而那
+是 A 股制度，属于常量，本该在提示词里一次说清。判断方法——制度和口径进提示词，
+「什么情况下该怎么做」才是记忆。
+
+快照存的是**未拼装**的阶段提示词，拼装发生在 `settings_for_stage()` 读取时，所以查历史运行
+实际发出了什么，不能只读 `snapshot_json`——那里少了全局那一段。
+
 **记忆的写入与修剪是分开的。** Run 阶段的 `memory_write` 只有 `create`/`update`，
 删除权限只给夜间的 Dream（`AUTHORING_OPERATIONS` vs `ALL_MEMORY_OPERATIONS`，见
 [`memory_agent_tools.py`](backend/infra/integrations/memory_agent_tools.py)）。判断一条经验是重复的还是「尚未复现」，
