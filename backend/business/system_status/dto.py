@@ -28,6 +28,10 @@ class TokenDayDTO:
     day: date
     tokens: int
     runs: int
+    # Kept apart from `tokens` because a dream is not a run: it reads the whole
+    # day's reports and the entire memory library in one go, and folding it in
+    # silently would make a quiet trading day look busy.
+    dream_tokens: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +43,7 @@ class DreamStatusDTO:
     created: int
     updated: int
     deleted: int
+    total_tokens: int = 0
 
 
 @dataclass(frozen=True, slots=True)

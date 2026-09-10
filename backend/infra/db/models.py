@@ -380,6 +380,12 @@ class MemoryDreamModel(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
     target_date: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    # Billed by the provider for this dream. A dream reads every report of the
+    # day and the whole memory library, so it is one of the larger single
+    # spends of the day, and it was invisible until this column existed.
+    total_tokens: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     result: Mapped[str | None] = mapped_column(Text, nullable=True)
     failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[str] = mapped_column(Text, nullable=False, default=utc_now_iso)
@@ -622,9 +628,7 @@ class NotificationDeliveryModel(Base):
     """
 
     __tablename__ = "notification_deliveries"
-    __table_args__ = (
-        Index("idx_notification_deliveries_created", "created_at"),
-    )
+    __table_args__ = (Index("idx_notification_deliveries_created", "created_at"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     channel_id: Mapped[int | None] = mapped_column(Integer, nullable=True)

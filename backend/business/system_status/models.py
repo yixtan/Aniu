@@ -64,6 +64,7 @@ class DreamFact:
     status: str
     completed_at: datetime | None
     failure_reason: str | None
+    total_tokens: int = 0
 
 
 @dataclass(frozen=True, slots=True)

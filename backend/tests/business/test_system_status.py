@@ -106,6 +106,13 @@ class FakeRepository:
     ) -> list[MemoryActivityFact]:
         return [fact for fact in self.activities if fact.task_id in task_ids]
 
+    async def dreams_since(self, since: datetime) -> list[DreamFact]:
+        return [
+            dream
+            for dream in self.dreams
+            if dream.completed_at is not None and dream.completed_at >= since
+        ]
+
     async def recent_dreams(self, limit: int) -> list[DreamFact]:
         self.dream_limits.append(limit)
         return self.dreams[:limit]
@@ -259,3 +266,46 @@ async def test_tokens_span_a_month_while_status_spans_a_week() -> None:
     by_day = {row.day: row for row in status.tokens}
     assert (by_day[old_day].tokens, by_day[old_day].runs) == (999, 1)
     assert by_day[TODAY].tokens == 0
+
+
+@pytest.mark.asyncio
+async def test_a_dream_costs_the_day_it_reflected_on() -> None:
+    """A dream runs at night but reads one trading day's reports, so its cost
+    belongs to that day — filing it under the night it ran would put a Friday's
+    thinking on Saturday, and a Saturday has no runs to compare it against."""
+
+    reflected_on = TODAY - timedelta(days=1)
+    dream = DreamFact(
+        task_id=DREAM_TASK,
+        target_date=reflected_on,
+        status="completed",
+        completed_at=at(reflected_on, 21, 30),
+        failure_reason=None,
+        total_tokens=442_124,
+    )
+    repository = FakeRepository(
+        dreams=[dream],
+        runs=[run(at(reflected_on, 10, 0), tokens=1_820_248)],
+    )
+
+    status = await _service(repository).overview()
+
+    by_day = {row.day: row for row in status.tokens}
+    assert by_day[reflected_on].dream_tokens == 442_124
+    # The run total stays its own number; a quiet day must not look busy.
+    assert by_day[reflected_on].tokens == 1_820_248
+    assert by_day[TODAY].dream_tokens == 0
+    assert status.dreams[0].total_tokens == 442_124
+
+
+@pytest.mark.asyncio
+async def test_a_dream_that_reported_no_usage_contributes_nothing() -> None:
+    repository = FakeRepository(
+        dreams=[dream(DREAM_TASK, TODAY)],
+        inventory=EMPTY_INVENTORY,
+    )
+
+    status = await _service(repository).overview()
+
+    assert {row.dream_tokens for row in status.tokens} == {0}
+    assert status.dreams[0].total_tokens == 0

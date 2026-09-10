@@ -27,6 +27,7 @@ class TokenDayResponse(ApiModel):
     day: date
     tokens: int
     runs: int
+    dream_tokens: int = 0
 
 
 class DreamStatusResponse(ApiModel):
@@ -37,6 +38,7 @@ class DreamStatusResponse(ApiModel):
     created: int
     updated: int
     deleted: int
+    total_tokens: int = 0
 
 
 class SystemStatusResponse(ApiModel):

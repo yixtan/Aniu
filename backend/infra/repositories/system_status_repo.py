@@ -46,6 +46,18 @@ def _optional_utc(value: str | None) -> datetime | None:
     return None if not value else _as_utc(value)
 
 
+
+def _dream_fact(row: MemoryDreamModel) -> DreamFact:
+    return DreamFact(
+        task_id=row.id,
+        target_date=date.fromisoformat(row.target_date),
+        status=row.status,
+        completed_at=_optional_utc(row.completed_at),
+        failure_reason=row.failure_reason,
+        total_tokens=int(row.total_tokens or 0),
+    )
+
+
 class SystemStatusRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -141,6 +153,14 @@ class SystemStatusRepository:
             for created_at, operation, task_id, content in rows
         ]
 
+    async def dreams_since(self, since: datetime) -> list[DreamFact]:
+        statement = select(MemoryDreamModel).where(
+            MemoryDreamModel.completed_at.is_not(None),
+            MemoryDreamModel.completed_at >= since.isoformat(),
+        )
+        rows = (await self._session.scalars(statement)).all()
+        return [_dream_fact(row) for row in rows]
+
     async def recent_dreams(self, limit: int) -> list[DreamFact]:
         statement = (
             select(MemoryDreamModel)
@@ -148,16 +168,7 @@ class SystemStatusRepository:
             .limit(limit)
         )
         rows = (await self._session.scalars(statement)).all()
-        return [
-            DreamFact(
-                task_id=row.id,
-                target_date=date.fromisoformat(row.target_date),
-                status=row.status,
-                completed_at=_optional_utc(row.completed_at),
-                failure_reason=row.failure_reason,
-            )
-            for row in rows
-        ]
+        return [_dream_fact(row) for row in rows]
 
     async def memory_inventory(self) -> MemoryInventory:
         is_live = MemoryItemModel.deleted_at.is_(None)

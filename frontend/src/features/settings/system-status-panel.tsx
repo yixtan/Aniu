@@ -203,6 +203,7 @@ function DreamsCard({
                   <TableHead className="text-right">新增</TableHead>
                   <TableHead className="text-right">更新</TableHead>
                   <TableHead className="text-right">删除</TableHead>
+                  <TableHead className="text-right">Token</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -231,6 +232,9 @@ function DreamsCard({
                     <TableCell className="text-right">
                       <Count value={dream.deleted} />
                     </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {dream.total_tokens > 0 ? formatTokens(dream.total_tokens) : "--"}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -246,18 +250,24 @@ function DreamsCard({
 const BAR = "bg-sky-500 hover:bg-sky-600 dark:bg-sky-400 dark:hover:bg-sky-300";
 const BAR_TODAY = "bg-sky-700 dark:bg-sky-200";
 const BAR_IDLE = "bg-sky-100 dark:bg-sky-900";
+/** Dreams stack on top of the day's runs, a lighter step of the same hue. */
+const BAR_DREAM = "bg-sky-300 dark:bg-sky-600";
 
 function describeDay(day: TokenDay) {
-  return `${formatDay(day.day)} · ${formatTokens(day.tokens)} · ${day.runs} 次运行`;
+  const head = `${formatDay(day.day)} · ${formatTokens(day.tokens)} · ${day.runs} 次运行`;
+  return day.dream_tokens > 0 ? `${head}，梦境 ${formatTokens(day.dream_tokens)}` : head;
 }
 
 function TokenChart({ tokens }: { tokens: TokenDay[] }) {
   // Oldest on the left, today on the right — the way a cost is read.
   const series = [...tokens].reverse();
-  const total = series.reduce((sum, day) => sum + day.tokens, 0);
+  const dayTotal = (day: TokenDay) => day.tokens + day.dream_tokens;
+  const runTotal = series.reduce((sum, day) => sum + day.tokens, 0);
+  const dreamTotal = series.reduce((sum, day) => sum + day.dream_tokens, 0);
+  const total = runTotal + dreamTotal;
   const runs = series.reduce((sum, day) => sum + day.runs, 0);
   const activeDays = series.filter((day) => day.runs > 0).length;
-  const peak = Math.max(1, ...series.map((day) => day.tokens));
+  const peak = Math.max(1, ...series.map(dayTotal));
   const first = series[0];
   const last = series[series.length - 1];
   // The readout above the bars names whichever day is under the pointer, and
@@ -274,6 +284,7 @@ function TokenChart({ tokens }: { tokens: TokenDay[] }) {
       <CardContent className="space-y-3">
         <dl className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
           <Stat label="合计" value={formatTokens(total)} />
+          <Stat label="其中梦境" value={formatTokens(dreamTotal)} />
           <Stat label="有运行的天数" value={String(activeDays)} />
           <Stat
             label="日均"
@@ -294,21 +305,39 @@ function TokenChart({ tokens }: { tokens: TokenDay[] }) {
         >
           {series.map((day, index) => {
             const isToday = index === series.length - 1;
-            const idle = day.tokens === 0;
+            const combined = dayTotal(day);
+            const idle = combined === 0;
             return (
               <li
                 key={day.day}
                 className="flex h-full min-w-0 flex-1 cursor-default items-end"
-                aria-label={`${day.day} ${formatNumber(day.tokens)} tokens，${day.runs} 次运行`}
+                aria-label={
+                  `${day.day} 运行 ${formatNumber(day.tokens)} tokens、` +
+                  `梦境 ${formatNumber(day.dream_tokens)} tokens，${day.runs} 次运行`
+                }
                 onMouseEnter={() => setHovered(index)}
               >
+                {/* Dream sits on top of runs rather than beside them: it is
+                    the same day's spend, but it is not a run, and stacking
+                    keeps the day's true height honest either way. */}
                 <span
-                  className={cn(
-                    "block w-full rounded-t-[3px] transition-colors",
-                    idle ? BAR_IDLE : isToday ? BAR_TODAY : BAR,
-                  )}
-                  style={{ height: `${Math.max(idle ? 2 : 4, (day.tokens / peak) * 100)}%` }}
-                />
+                  className="flex w-full flex-col justify-end"
+                  style={{ height: `${Math.max(idle ? 2 : 4, (combined / peak) * 100)}%` }}
+                >
+                  {day.dream_tokens > 0 ? (
+                    <span
+                      className={cn("block w-full rounded-t-[3px]", BAR_DREAM)}
+                      style={{ height: `${(day.dream_tokens / combined) * 100}%` }}
+                    />
+                  ) : null}
+                  <span
+                    className={cn(
+                      "block w-full flex-1 transition-colors",
+                      day.dream_tokens > 0 ? "" : "rounded-t-[3px]",
+                      idle ? BAR_IDLE : isToday ? BAR_TODAY : BAR,
+                    )}
+                  />
+                </span>
               </li>
             );
           })}

@@ -255,7 +255,6 @@ def _upgrade_sqlite_schema(connection: Connection) -> None:
     # New tables arrive through create_all, which runs before this; nothing to
     # migrate for the watchlist beyond that.
 
-
     auth_session_columns = {
         column["name"] for column in inspect(connection).get_columns("auth_sessions")
     }
@@ -264,6 +263,17 @@ def _upgrade_sqlite_schema(connection: Connection) -> None:
             text(
                 "ALTER TABLE auth_sessions ADD COLUMN credential_fingerprint "
                 "VARCHAR(128) NOT NULL DEFAULT ''"
+            )
+        )
+
+    dream_columns = {
+        column["name"] for column in inspect(connection).get_columns("memory_dreams")
+    }
+    if "total_tokens" not in dream_columns:
+        connection.execute(
+            text(
+                "ALTER TABLE memory_dreams ADD COLUMN total_tokens "
+                "INTEGER NOT NULL DEFAULT 0"
             )
         )
 

@@ -27,6 +27,8 @@ class MemoryDream:
     status: DreamStatus = DreamStatus.PENDING
     result: str | None = None
     failure_reason: str | None = None
+    # Billed for this dream, or zero when the endpoint reported nothing.
+    total_tokens: int = 0
     created_at: datetime = field(default_factory=utc_now)
     started_at: datetime | None = None
     completed_at: datetime | None = None
@@ -44,14 +46,16 @@ class MemoryDream:
         self.status = DreamStatus.PENDING
         self.result = None
         self.failure_reason = None
+        self.total_tokens = 0
         self.started_at = None
         self.completed_at = None
 
-    def complete(self, result: str) -> None:
+    def complete(self, result: str, total_tokens: int = 0) -> None:
         if self.status is not DreamStatus.RUNNING:
             raise ValueError("only running dreams can complete")
         self.status = DreamStatus.COMPLETED
         self.result = result.strip() or None
+        self.total_tokens = max(0, total_tokens)
         self.completed_at = utc_now()
 
     def fail(self, reason: str) -> None:
