@@ -17,8 +17,9 @@ from backend.business.shared.enums import TriggerSource
 
 
 class RecordingRunner:
-    def __init__(self, response: str) -> None:
+    def __init__(self, response: str, total_tokens: int = 0) -> None:
         self.response = response
+        self.total_tokens = total_tokens
         self.prompts: list[str] = []
 
     async def prepare_prompt(self, message: str, **kwargs: object) -> str:
@@ -30,7 +31,7 @@ class RecordingRunner:
     ) -> AgentStageResult:
         del abort_signal
         self.prompts.append(message)
-        return AgentStageResult(content=self.response)
+        return AgentStageResult(content=self.response, total_tokens=self.total_tokens)
 
 
 def _context(report: RunReport | None = None) -> RunExecutionContext:
@@ -129,3 +130,26 @@ async def test_summary_requires_run_report_and_runtime() -> None:
     context.llm_runtime = None
     with pytest.raises(Exception, match="configured llm runtime"):
         await SummaryStage().execute(context, RecordingRunner("<p>unused</p>"))
+
+
+@pytest.mark.asyncio
+async def test_the_summary_stage_reports_what_it_cost() -> None:
+    """Rendering the report is its own call against the largest input of the
+    day. It went uncounted at first — the run total matched the Run stage
+    exactly and was a quarter short — because only `RunReport` carried the
+    figure and a summary produces a `SummaryDraft`."""
+
+    runner = RecordingRunner("<section>done</section>", total_tokens=80_130)
+
+    draft = await SummaryStage().execute(_context(), runner)
+
+    assert draft.total_tokens == 80_130
+    # The trace reads this payload, so the number has to survive into it.
+    assert draft.as_payload()["total_tokens"] == 80_130
+
+
+@pytest.mark.asyncio
+async def test_a_summary_whose_provider_reported_nothing_stays_at_zero() -> None:
+    draft = await SummaryStage().execute(_context(), RecordingRunner("<p>ok</p>"))
+
+    assert draft.total_tokens == 0
