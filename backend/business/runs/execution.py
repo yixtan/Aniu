@@ -80,9 +80,13 @@ class SummaryDraft:
     """Sanitized HTML summary generated from one completed Run report."""
 
     summary: str
+    # Billed for rendering the summary. Its own stage and its own spend: the
+    # report it reads is the largest single input of the day, so leaving it out
+    # understated a run by about a quarter.
+    total_tokens: int = 0
 
     def as_payload(self) -> dict[str, object]:
-        return {"summary": self.summary}
+        return {"summary": self.summary, "total_tokens": self.total_tokens}
 
 
 @dataclass(slots=True)

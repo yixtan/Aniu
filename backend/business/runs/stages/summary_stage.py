@@ -84,7 +84,10 @@ class SummaryStage:
             user_prompt,
             abort_signal=context.abort_signal,
         )
-        return SummaryDraft(summary=_coerce_html_summary(result.content))
+        return SummaryDraft(
+            summary=_coerce_html_summary(result.content),
+            total_tokens=result.total_tokens,
+        )
 
 
 def _coerce_html_summary(text: str) -> str:
