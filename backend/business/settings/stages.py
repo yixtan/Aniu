@@ -9,13 +9,14 @@ from typing import Any
 from backend.business.settings.prompt import AniuAgentPrompt, normalize_prompt_text
 from backend.llm import ThinkingEffort, coerce_thinking_effort
 
-STAGE_IDS: tuple[str, ...] = ("Run", "Summary", "Dream")
+STAGE_IDS: tuple[str, ...] = ("Run", "Summary", "Dream", "Watch")
 STRATEGY_STAGE_IDS: tuple[str, ...] = ("Run", "Summary")
 
 _PROMPT_FIELD_BY_STAGE = {
     "Run": "run_prompt",
     "Summary": "summary_prompt",
     "Dream": "dream_prompt",
+    "Watch": "watch_prompt",
 }
 
 

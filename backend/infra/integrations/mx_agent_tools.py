@@ -21,6 +21,15 @@ from backend.stock_api.mx.trading_parser import (
 
 READ_STAGES = ("Run",)
 TRADE_STAGES = ("Run",)
+# The order watch is deliberately not given the whole read set. It acts on a
+# plan a run already wrote, so it needs to see the orders and nothing else:
+# every tool it can reach is one it could be tempted to form a view with, and
+# forming views is the job it does not have.
+WATCH_READ_STAGES = ("Run", "Watch")
+# Cancelling is undoing a decision that has already expired, so the watch may
+# do it. Placing is making one, so it may not — a re-price reaches `trade`
+# only through an authorization the run wrote down.
+WATCH_TRADE_STAGES = ("Run", "Watch")
 _DEFAULT_PORTFOLIO_ORDER_RESULT_LIMIT = 50
 _PORTFOLIO_INTENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("positions", ("持仓", "positions", "position")),
@@ -131,7 +140,7 @@ class SelectStocksTool:
 class QueryPortfolioTool:
     client: MxMoniClient
     name: str = "query_portfolio"
-    enabled_stages: tuple[str, ...] = field(default=READ_STAGES)
+    enabled_stages: tuple[str, ...] = field(default=WATCH_READ_STAGES)
     side_effect_level: SideEffectLevel = SideEffectLevel.READ
     execution_mode: str = "parallel"
 
@@ -260,7 +269,7 @@ class CancelTool:
     client: MxPaperTradingClient
     portfolio: MxMoniClient | None = None
     name: str = "cancel"
-    enabled_stages: tuple[str, ...] = field(default=TRADE_STAGES)
+    enabled_stages: tuple[str, ...] = field(default=WATCH_TRADE_STAGES)
     side_effect_level: SideEffectLevel = SideEffectLevel.WRITE
     execution_mode: str = "sequential"
     requires_market_open: bool = True

@@ -63,7 +63,27 @@ def test_public_stock_tools_have_closed_schemas_without_source_controls() -> Non
             assert branch["additionalProperties"] is False
             assert "source" not in branch["properties"]
         assert tool.side_effect_level is SideEffectLevel.READ
-        assert tool.enabled_stages == ("Run",)
+
+
+def test_only_the_plain_quote_reaches_the_order_watch() -> None:
+    """The watch acts on a written plan, so it gets prices and no research.
+
+    Settling "cancel if it trades above 445" needs a price, and an unheld
+    symbol has none anywhere in the portfolio. Everything else in this
+    registry — intraday, rankings, money flow, fundamentals, research, news —
+    is material for forming a view, which is the job the watch does not have.
+    """
+
+    registry, _ = _registry()
+
+    reachable = {
+        tool.name
+        for tool in registry.list_tools()
+        if "Watch" in tool.enabled_stages
+    }
+
+    assert reachable == {"stock_quote"}
+    assert all("Run" in tool.enabled_stages for tool in registry.list_tools())
 
 
 def test_the_flat_schema_names_which_fields_go_with_which_action() -> None:

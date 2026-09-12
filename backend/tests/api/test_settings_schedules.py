@@ -84,7 +84,7 @@ async def test_channel_persists_model_limits_and_prices(
 
 
 @pytest.mark.asyncio
-async def test_default_settings_have_one_prompt_and_three_stage_models(
+async def test_default_settings_have_one_prompt_and_four_stage_models(
     api_client: AsyncClient,
 ) -> None:
     response = await api_client.get("/api/aniu/settings")
@@ -93,11 +93,12 @@ async def test_default_settings_have_one_prompt_and_three_stage_models(
     body = response.json()
     assert body["dream_schedule_time"] == "00:30"
     assert body["prompt_profile"]["schema"] == "aniu.prompt-profile.v3"
-    assert len(body["stage_settings"]) == 3
+    assert len(body["stage_settings"]) == 4
     assert {item["stage_id"] for item in body["stage_settings"]} == {
         "Run",
         "Summary",
         "Dream",
+        "Watch",
     }
     assert "default_selected_model_id" not in body
     assert "decision_selected_model_id" not in body
@@ -124,6 +125,7 @@ async def test_settings_update_persists_prompt_and_stage_models(
         stage["model_selected_model_id"] = selected_model_id
         stage["thinking_effort"] = "high"
     current["prompt_profile"]["global_prompt"] = "全局风险约束"
+    current["prompt_profile"]["watch_prompt"] = "只照看挂单，不要研究"
     current["dream_schedule_time"] = "04:15"
 
     updated = await api_client.put(
@@ -139,6 +141,7 @@ async def test_settings_update_persists_prompt_and_stage_models(
     assert updated.status_code == 200
     body = updated.json()
     assert body["prompt_profile"]["global_prompt"] == "全局风险约束"
+    assert body["prompt_profile"]["watch_prompt"] == "只照看挂单，不要研究"
     assert body["dream_schedule_time"] == "04:15"
     assert "context_window_tokens" not in body
     assert all(
@@ -150,10 +153,15 @@ async def test_settings_update_persists_prompt_and_stage_models(
     assert all("render_mode" not in item for item in body["stage_settings"])
     assert all("html_prompt" not in item for item in body["stage_settings"])
 
+    # Reading it back is the half that breaks: a new prompt field can be
+    # written and still be missing from the response, which shows as an empty
+    # box and is saved back as empty the next time. `watchlist_prompt` was
+    # lost exactly that way, so assert the value survives a fresh GET.
     reloaded = await api_client.get("/api/aniu/settings")
     assert reloaded.status_code == 200
     assert reloaded.json()["dream_schedule_time"] == "04:15"
-    assert len(reloaded.json()["stage_settings"]) == 3
+    assert len(reloaded.json()["stage_settings"]) == 4
+    assert reloaded.json()["prompt_profile"]["watch_prompt"] == "只照看挂单，不要研究"
 
 
 @pytest.mark.asyncio

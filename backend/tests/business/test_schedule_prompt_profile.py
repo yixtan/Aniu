@@ -9,10 +9,16 @@ from backend.business.settings import (
 )
 
 
-def test_prompt_profile_has_run_summary_and_dream_prompts() -> None:
+def test_prompt_profile_has_one_prompt_per_stage() -> None:
     profile = AniuAgentPrompt()
     payload = profile.as_dict()
-    prompt_fields = {"global_prompt", "run_prompt", "summary_prompt", "dream_prompt"}
+    prompt_fields = {
+        "global_prompt",
+        "run_prompt",
+        "summary_prompt",
+        "dream_prompt",
+        "watch_prompt",
+    }
 
     assert PROMPT_PROFILE_SCHEMA == "aniu.prompt-profile.v3"
     assert PROMPT_PROFILE_PROMPT_FIELDS == prompt_fields

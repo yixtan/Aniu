@@ -45,6 +45,13 @@ DEFAULT_DREAM_PROMPT = (
     "id 和 version。删除只能用于重复经验，不要删除仍然有独立价值或彼此冲突的经验，"
     "最后总结本次梦境做了什么。"
 )
+DEFAULT_WATCH_PROMPT = (
+    "你负责照看账户里还挂着的委托，不做研究，不形成新的看法。"
+    "先读取本次的挂单处置清单，再查询委托与所需的实时价格，"
+    "逐笔核对清单里的条件是否已经触发：触发了就执行清单写明的动作，"
+    "没触发就不动。清单没有提到的委托一律不动。"
+    "最后逐笔说明你做了什么、为什么，没有动作也要写明没有动作。"
+)
 DEFAULT_SUMMARY_PROMPT = "\n".join(
     (
         "<format>",
@@ -154,12 +161,14 @@ PROMPT_PROFILE_PROMPT_FIELDS = {
     "run_prompt",
     "summary_prompt",
     "dream_prompt",
+    "watch_prompt",
 }
 DEFAULT_PROMPT_PROFILE_PROMPTS = {
     "global_prompt": DEFAULT_GLOBAL_PROMPT,
     "run_prompt": DEFAULT_RUN_PROMPT,
     "summary_prompt": DEFAULT_SUMMARY_PROMPT,
     "dream_prompt": DEFAULT_DREAM_PROMPT,
+    "watch_prompt": DEFAULT_WATCH_PROMPT,
 }
 PROMPT_PROFILE_FIELDS = {
     "schema",
@@ -191,6 +200,7 @@ class AniuAgentPrompt:
     run_prompt: str = DEFAULT_RUN_PROMPT
     summary_prompt: str = DEFAULT_SUMMARY_PROMPT
     dream_prompt: str = DEFAULT_DREAM_PROMPT
+    watch_prompt: str = DEFAULT_WATCH_PROMPT
 
     def __post_init__(self) -> None:
         if self.schema != PROMPT_PROFILE_SCHEMA:
@@ -201,6 +211,7 @@ class AniuAgentPrompt:
         self.run_prompt = normalize_prompt_text(self.run_prompt)
         self.summary_prompt = normalize_prompt_text(self.summary_prompt)
         self.dream_prompt = normalize_prompt_text(self.dream_prompt)
+        self.watch_prompt = normalize_prompt_text(self.watch_prompt)
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any] | None) -> AniuAgentPrompt:
@@ -222,6 +233,7 @@ class AniuAgentPrompt:
                 value, prompt_field="summary_prompt"
             ),
             dream_prompt=_prompt_field_from_mapping(value, prompt_field="dream_prompt"),
+            watch_prompt=_prompt_field_from_mapping(value, prompt_field="watch_prompt"),
         )
 
     def as_dict(self) -> dict[str, object]:
@@ -233,6 +245,7 @@ class AniuAgentPrompt:
             "run_prompt": self.run_prompt,
             "summary_prompt": self.summary_prompt,
             "dream_prompt": self.dream_prompt,
+            "watch_prompt": self.watch_prompt,
         }
 
     def prompt_text(self, field_name: str) -> str:

@@ -39,6 +39,11 @@ from backend.stock_api.public import (
 )
 
 READ_STAGES = ("Run",)
+# Only the plain quote reaches the order watch. It has to read a price to
+# settle a condition a run wrote — "cancel if it trades above 445" is not
+# answerable from the order book alone, because an unheld symbol has no
+# current price anywhere in the portfolio. Every other tool here is research.
+WATCH_QUOTE_STAGES = ("Run", "Watch")
 
 
 _SYMBOL_PATTERN = (
@@ -140,6 +145,7 @@ class _PublicStockTool:
 @dataclass(slots=True)
 class StockQuoteTool(_PublicStockTool):
     name: str = "stock_quote"
+    enabled_stages: tuple[str, ...] = field(default=WATCH_QUOTE_STAGES)
 
     def to_tool_definition(self) -> ToolDefinition:
         return {

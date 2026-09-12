@@ -39,6 +39,7 @@ class AniuAgentPromptDTO:
     run_prompt: str
     summary_prompt: str
     dream_prompt: str
+    watch_prompt: str
 
 
 def _secret_configured(value: str | None) -> bool:
@@ -255,6 +256,7 @@ def to_prompt_profile_dto(profile: AniuAgentPrompt) -> AniuAgentPromptDTO:
         run_prompt=profile.run_prompt,
         summary_prompt=profile.summary_prompt,
         dream_prompt=profile.dream_prompt,
+        watch_prompt=profile.watch_prompt,
     )
 
 
