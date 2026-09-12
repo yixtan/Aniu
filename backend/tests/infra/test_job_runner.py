@@ -338,7 +338,7 @@ async def test_job_runner_refreshes_account_cache_on_trading_day(
 
 
 @pytest.mark.asyncio
-async def test_account_refresh_runs_every_thirty_minutes_through_the_session(
+async def test_account_refresh_runs_every_three_minutes_through_the_session(
     session_factory,
 ) -> None:
     """Fills are only visible via this refresh, so its cadence is the alert lag."""
@@ -350,7 +350,7 @@ async def test_account_refresh_runs_every_thirty_minutes_through_the_session(
 
     assert job is not None
     fields = {field.name: str(field) for field in job.trigger.fields}
-    assert fields["minute"] == "*/30"
+    assert fields["minute"] == "*/3"
     assert fields["hour"] == "9-11,13-15"
     assert fields["day_of_week"] == "mon-fri"
 
@@ -377,4 +377,62 @@ async def test_account_refresh_fire_times_bound_the_fill_notification_lag(
         int((later - earlier).total_seconds() // 60)
         for earlier, later in zip(fire_times, fire_times[1:], strict=False)
     }
-    assert gaps == {30}
+    assert gaps == {3}
+
+
+@pytest.mark.asyncio
+async def test_account_refresh_skips_slots_outside_the_trading_sessions(
+    session_factory,
+    monkeypatch,
+) -> None:
+    """The cron fires across whole hours; the sessions start and end mid-hour."""
+
+    async with session_factory() as session:
+        await SettingsRepository(session).save(AppSettings(mx_api_key="mx-test-key"))
+        await session.commit()
+
+    async def fake_post(self: MxMoniClient, endpoint: str, body: dict[str, object]):
+        del self, body
+        raise AssertionError(f"unexpected endpoint: {endpoint}")
+
+    monkeypatch.setattr(MxMoniClient, "_post", fake_post)
+
+    runner = _make_runner(session_factory)
+    monkeypatch.setattr(
+        runner,
+        "_now_market_time",
+        # A trading Friday, but nine minutes before the opening bell.
+        lambda: datetime(2026, 9, 11, 9, 21, tzinfo=ZoneInfo("Asia/Shanghai")),
+    )
+
+    await runner.refresh_account_cache_now()
+
+    async with session_factory() as session:
+        snapshot = await AccountCacheRepository(session).get_account_snapshot()
+
+    assert snapshot is None
+
+
+def test_fill_watch_window_keeps_a_tail_past_each_close() -> None:
+    """A fill can settle just after the bell, so the window outlives the session."""
+
+    def at(hour: int, minute: int) -> datetime:
+        return datetime(
+            2026, 9, 11, hour, minute, tzinfo=ZoneInfo("Asia/Shanghai")
+        )
+
+    can_observe = JobRunner._can_still_observe_a_fill
+
+    assert not can_observe(at(9, 27))
+    assert can_observe(at(9, 30))
+    assert can_observe(at(11, 30))
+    assert can_observe(at(11, 45))
+    assert not can_observe(at(11, 48))
+    assert can_observe(at(15, 0))
+    assert can_observe(at(15, 15))
+    assert not can_observe(at(15, 18))
+    # The window is a property of the session, not of the clock: a holiday that
+    # falls on a weekday has no session for the grace period to hang off.
+    assert not can_observe(
+        datetime(2026, 10, 1, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
+    )
