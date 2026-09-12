@@ -8,7 +8,7 @@ import asyncio
 import logging
 import uuid
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from apscheduler.jobstores.base import JobLookupError
@@ -25,15 +25,17 @@ from backend.business.shared import (
     AccountRefreshThrottledError,
     ServiceIntegrationError,
 )
-from backend.infra.calendar import is_trading_day
+from backend.infra.calendar import is_market_session_open, is_trading_day
 from backend.infra.lease_guard import LeaseLostError, run_while_lease_valid
 from backend.infra.repositories.task_lease_repo import TaskLeaseRepository
 
 logger = logging.getLogger(__name__)
 MARKET_TIMEZONE = ZoneInfo("Asia/Shanghai")
 ACCOUNT_REFRESH_JOB_ID = "account-cache:market-hours"
-ACCOUNT_REFRESH_MINUTES = "*/30"
+ACCOUNT_REFRESH_MINUTES = "*/3"
 """Cron minute field for the account refresh; also bounds fill-notification lag."""
+POST_CLOSE_FILL_GRACE = timedelta(minutes=15)
+"""How long past a session's close a refresh can still turn up a new fill."""
 MEMORY_DREAM_JOB_ID = "memory-dream:nightly"
 SCHEDULER_MEMORY_DREAM_LEASE_KEY = "scheduler:memory-dream"
 SCHEDULER_ACCOUNT_REFRESH_LEASE_KEY = "scheduler:account-refresh"
@@ -242,10 +244,13 @@ class JobRunner:
                 # to catch fills that settle just after the close.
                 hour="9-11,13-15",
                 # Fills are only observable through this refresh, so this
-                # cadence is also the fill notification's worst-case lag.
-                # Half-hourly trades some of that promptness for a much smaller
-                # upstream call budget; the handler still skips non-trading
-                # days, and the runs past 15:00 catch fills settling after close.
+                # cadence is also the fill notification's worst-case lag. It
+                # used to be half-hourly to keep the upstream call budget
+                # small, which left a fill unannounced for up to 30 minutes;
+                # three-minutely costs ten times the calls and is what makes
+                # acting on a fill while it still matters possible at all.
+                # Whole hours overshoot both sessions, so the handler drops
+                # the slots that fall outside them.
                 minute=ACCOUNT_REFRESH_MINUTES,
                 timezone=MARKET_TIMEZONE,
             ),
@@ -324,8 +329,12 @@ class JobRunner:
         )
 
     async def _refresh_account_cache_now(self, lease_check: LeaseCheck) -> None:
-        if not is_trading_day(self._now_market_time().date()):
+        now = self._now_market_time()
+        if not is_trading_day(now.date()):
             logger.info("skip automatic account refresh on non-trading day")
+            return
+        if not self._can_still_observe_a_fill(now):
+            logger.debug("skip automatic account refresh outside trading sessions")
             return
 
         if self._account_refresh_handler is None:
@@ -340,6 +349,24 @@ class JobRunner:
 
     def _now_market_time(self) -> datetime:
         return datetime.now(tz=MARKET_TIMEZONE)
+
+    @staticmethod
+    def _can_still_observe_a_fill(moment: datetime) -> bool:
+        """Whether a refresh now could turn up a fill that was not there before.
+
+        The cron fires across whole hours while the sessions start and end
+        mid-hour, so a third of its slots sit outside trading; at the old
+        half-hourly cadence that was two wasted calls a day and not worth
+        guarding, and at three-minutely it is roughly forty.
+
+        The grace period is applied by asking whether the market was open a
+        quarter of an hour ago, which keeps the post-close refreshes the old
+        comment called for without restating when the sessions are.
+        """
+
+        return is_market_session_open(moment) or is_market_session_open(
+            moment - POST_CLOSE_FILL_GRACE
+        )
 
     async def _run_market_analysis(
         self, schedule: StrategySchedule, lease_check: LeaseCheck
