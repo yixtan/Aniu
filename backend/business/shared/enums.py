@@ -20,9 +20,15 @@ class RunStatus(StrEnum):
 
 
 class RunState(StrEnum):
-    """FSM states for the two-stage agent runtime."""
+    """FSM states for a run.
+
+    `RUN` and `SUMMARY` are the analysis run's two stages. `WATCH` is an order
+    watch, which is one stage on its own: it acts on a plan an analysis run
+    already wrote, and has no report to render afterwards.
+    """
 
     RUN = "Run"
     SUMMARY = "Summary"
+    WATCH = "Watch"
     COMPLETED = "Completed"
     FAILED = "Failed"

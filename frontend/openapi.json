@@ -364,6 +364,17 @@
               }
             ],
             "title": "Summary Prompt"
+          },
+          "watch_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Watch Prompt"
           }
         },
         "title": "AniuAgentPromptRequest",
@@ -399,6 +410,10 @@
           "summary_prompt": {
             "title": "Summary Prompt",
             "type": "string"
+          },
+          "watch_prompt": {
+            "title": "Watch Prompt",
+            "type": "string"
           }
         },
         "required": [
@@ -408,7 +423,8 @@
           "global_prompt",
           "run_prompt",
           "summary_prompt",
-          "dream_prompt"
+          "dream_prompt",
+          "watch_prompt"
         ],
         "title": "AniuAgentPromptResponse",
         "type": "object"

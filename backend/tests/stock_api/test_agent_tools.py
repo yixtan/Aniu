@@ -126,13 +126,15 @@ def test_mx_registration_exposes_all_direct_tools_with_closed_schemas() -> None:
             SideEffectLevel.READ,
             ("Run",),
         ),
+        # The order watch sees the orders and may undo one; it may not
+        # place one, and it may not reach anything it could research with.
         "query_portfolio": (
             "instruction",
             SideEffectLevel.READ,
-            ("Run",),
+            ("Run", "Watch"),
         ),
         "trade": ("instruction", SideEffectLevel.WRITE, ("Run",)),
-        "cancel": ("instruction", SideEffectLevel.WRITE, ("Run",)),
+        "cancel": ("instruction", SideEffectLevel.WRITE, ("Run", "Watch")),
     }
 
     assert set(registry.list_tool_names()) == set(expected)
@@ -296,3 +298,25 @@ async def test_trade_and_cancel_apply_portfolio_preflight_checks() -> None:
 
     assert trading.trades == ["卖出 600519 1700 100"]
     assert trading.cancellations == ["撤单 order-1 600519"]
+
+
+def test_the_order_watch_cannot_reach_a_tool_it_could_research_with() -> None:
+    """The watch executes a written plan, so its toolbox is the whole control.
+
+    Telling a capable model "do not form a view" is the weakest kind of
+    instruction — it is the same class that failed on 2026-09-11, where the
+    run had the information and simply said nothing about it. What keeps this
+    task narrow is that it cannot reach the material to be tempted with.
+    """
+
+    registry, _, _, _ = make_registry()
+
+    reachable = {
+        name
+        for name in registry.list_tool_names()
+        if "Watch" in registry.get(name).enabled_stages
+    }
+
+    assert reachable == {"query_portfolio", "cancel"}
+    # Placing an order is making a decision, which is the analysis run's job.
+    assert "Watch" not in registry.get("trade").enabled_stages

@@ -42,6 +42,7 @@ class AniuAgentPromptResponse(ApiModel):
     run_prompt: str
     summary_prompt: str
     dream_prompt: str
+    watch_prompt: str
 
     model_config = {**ApiModel.model_config, "populate_by_name": True}
 
@@ -213,6 +214,7 @@ class AniuAgentPromptRequest(BaseModel):
     run_prompt: str | None = None
     summary_prompt: str | None = None
     dream_prompt: str | None = None
+    watch_prompt: str | None = None
 
 
 class StageSettingsRequest(BaseModel):
