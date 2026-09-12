@@ -110,7 +110,7 @@ def _deserialize_snapshot(payload: dict[str, Any]) -> StrategySnapshot:
     return StrategySnapshot(
         prompt_version=str(payload["prompt_version"]),
         risk_rules_version=str(payload["risk_rules_version"]),
-        prompt_profile=AniuAgentPrompt.from_mapping(payload["prompt_profile"]),
+        prompt_profile=AniuAgentPrompt.from_stored_mapping(payload["prompt_profile"]),
         stage_settings=payload["stage_settings"],
         stage_models=payload["stage_models"],
         captured_at=datetime.fromisoformat(str(payload["captured_at"])),
