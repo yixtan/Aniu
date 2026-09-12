@@ -61,15 +61,19 @@ def test_a_profile_we_stored_survives_a_field_this_build_does_not_know() -> None
     means the build cannot start rather than merely losing a setting.
     """
 
+    # Deliberately a name no release will ever claim. Naming a field that is
+    # merely unreleased makes the test pass until that field ships, and then
+    # fail on main while both the branch that added it and this one were green
+    # — which is what happened here with `watch_prompt`.
     stored = {
         **AniuAgentPrompt().as_dict(),
-        "watch_prompt": "只照看挂单，不要研究",
+        "prompt_from_a_later_release": "尚未存在的提示词",
     }
 
     profile = AniuAgentPrompt.from_stored_mapping(stored)
 
     assert profile.run_prompt == AniuAgentPrompt().run_prompt
-    assert not hasattr(profile, "watch_prompt")
+    assert not hasattr(profile, "prompt_from_a_later_release")
 
 
 def test_an_imported_profile_still_refuses_a_field_nobody_recognises() -> None:
