@@ -49,6 +49,7 @@ class ScheduleAppService:
         stored = await self._schedule_repo.add(
             StrategySchedule(
                 enabled=command.enabled,
+                task_type=command.task_type,
                 interval_minutes=command.interval_minutes,
                 custom_schedule_times=(
                     tuple(command.schedule_times)
@@ -77,6 +78,14 @@ class ScheduleAppService:
                 "strategy_schedule", command.expected_revision, current.revision
             )
         _ensure_supported_task_type(command.task_type)
+        if command.task_type != current.task_type:
+            # The kind decides the cadence floor and the session window, so
+            # changing it in place would re-interpret settings that were
+            # validated against the other kind's rules.
+            raise ValueError(
+                "schedule task_type cannot change: "
+                f"{current.task_type} -> {command.task_type}"
+            )
         expected_revision = current.revision
         current.apply_update(
             enabled=command.enabled,

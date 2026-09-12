@@ -1006,7 +1006,7 @@ export interface components {
         };
         /**
          * CreateScheduleRequest
-         * @description Create one market-analysis schedule.
+         * @description Create one scheduled task.
          */
         CreateScheduleRequest: {
             /**
@@ -1020,9 +1020,9 @@ export interface components {
             schedule_times?: string[] | null;
             /**
              * Task Type
-             * @constant
+             * @enum {string}
              */
-            task_type: "market_analysis";
+            task_type: "market_analysis" | "order_watch";
         };
         /** DailyStatusResponse */
         DailyStatusResponse: {
@@ -2244,9 +2244,9 @@ export interface components {
             schedule_times?: string[] | null;
             /**
              * Task Type
-             * @constant
+             * @enum {string}
              */
-            task_type: "market_analysis";
+            task_type: "market_analysis" | "order_watch";
         };
         /** UpdateSettingsRequest */
         UpdateSettingsRequest: {

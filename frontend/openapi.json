@@ -661,7 +661,7 @@
       },
       "CreateScheduleRequest": {
         "additionalProperties": false,
-        "description": "Create one market-analysis schedule.",
+        "description": "Create one scheduled task.",
         "properties": {
           "enabled": {
             "default": true,
@@ -669,7 +669,7 @@
             "type": "boolean"
           },
           "interval_minutes": {
-            "minimum": 15.0,
+            "minimum": 1.0,
             "title": "Interval Minutes",
             "type": "integer"
           },
@@ -688,7 +688,10 @@
             "title": "Schedule Times"
           },
           "task_type": {
-            "const": "market_analysis",
+            "enum": [
+              "market_analysis",
+              "order_watch"
+            ],
             "title": "Task Type",
             "type": "string"
           }
@@ -4236,7 +4239,7 @@
             "type": "integer"
           },
           "interval_minutes": {
-            "minimum": 15.0,
+            "minimum": 1.0,
             "title": "Interval Minutes",
             "type": "integer"
           },
@@ -4255,7 +4258,10 @@
             "title": "Schedule Times"
           },
           "task_type": {
-            "const": "market_analysis",
+            "enum": [
+              "market_analysis",
+              "order_watch"
+            ],
             "title": "Task Type",
             "type": "string"
           }

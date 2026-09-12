@@ -42,6 +42,7 @@ class ScheduleRepository:
         model = StrategyScheduleModel(
             id=schedule_id,
             enabled=schedule.enabled,
+            task_type=schedule.task_type,
             interval_minutes=schedule.interval_minutes,
             custom_schedule_times_json=_serialize_times(schedule.custom_schedule_times),
             revision=schedule.revision,
@@ -67,6 +68,7 @@ class ScheduleRepository:
             )
             .values(
                 enabled=schedule.enabled,
+                task_type=schedule.task_type,
                 interval_minutes=schedule.interval_minutes,
                 custom_schedule_times_json=_serialize_times(
                     schedule.custom_schedule_times
@@ -115,6 +117,7 @@ class ScheduleRepository:
         return StrategySchedule(
             schedule_id=model.id,
             enabled=model.enabled,
+            task_type=model.task_type,
             interval_minutes=model.interval_minutes,
             custom_schedule_times=_parse_times(model.custom_schedule_times_json),
             revision=model.revision,

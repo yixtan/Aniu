@@ -379,6 +379,14 @@ def _upgrade_sqlite_schema(connection: Connection) -> None:
                 "ADD COLUMN custom_schedule_times_json TEXT"
             )
         )
+    if "task_type" not in schedule_columns:
+        # Every row that predates the column is the only kind that existed.
+        connection.execute(
+            text(
+                "ALTER TABLE strategy_schedules ADD COLUMN task_type "
+                "VARCHAR(32) NOT NULL DEFAULT 'market_analysis'"
+            )
+        )
 
     position_cache_columns = {
         column["name"]

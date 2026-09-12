@@ -400,6 +400,15 @@ class StrategyScheduleModel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Every row that predates this column is a market-analysis schedule, which
+    # is what the domain used to hardcode; the default keeps them reading back
+    # as themselves.
+    task_type: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="market_analysis",
+        server_default="market_analysis",
+    )
     interval_minutes: Mapped[int] = mapped_column(
         Integer, nullable=False, default=15, server_default="15"
     )
