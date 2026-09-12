@@ -687,3 +687,47 @@ class AwayModeModel(Base):
         default=utc_now_iso,
         onupdate=utc_now_iso,
     )
+
+
+class OrderDirectiveModel(Base):
+    """What the most recent run decided about one resting order.
+
+    Replaced wholesale by each run rather than appended to: the table holds the
+    directives in force right now, not a history of them. The history already
+    exists in each run's trace, and keeping two copies invites them to disagree
+    about which one is current.
+    """
+
+    __tablename__ = "order_directives"
+    __table_args__ = (
+        UniqueConstraint("order_id", name="uq_order_directives_order_id"),
+        Index("idx_order_directives_run", "issued_by_run_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    order_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    symbol: Mapped[str] = mapped_column(String(6), nullable=False, default="")
+    stock_name: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    action: Mapped[str] = mapped_column(String(16), nullable=False)
+    note: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    issued_by_run_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    cancel_if_price_above: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cancel_if_price_below: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Stored as HH:MM rather than a timestamp: the condition is a time of the
+    # trading day, and an order does not outlive the day it was placed in.
+    cancel_if_unfilled_after: Mapped[str | None] = mapped_column(
+        String(5), nullable=True
+    )
+    reprice_new_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    reprice_max_times: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    reprice_when_price_above: Mapped[float | None] = mapped_column(Float, nullable=True)
+    reprice_when_price_below: Mapped[float | None] = mapped_column(Float, nullable=True)
+    repriced_times: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    rejected_reason: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    issued_at: Mapped[str] = mapped_column(Text, nullable=False, default=utc_now_iso)

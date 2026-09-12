@@ -30,6 +30,7 @@ TOOL_STEP_TITLE_BY_NAME: dict[str, str] = {
     "industry_snapshot": "热度板块",
     "memory_read": "记忆查询",
     "memory_write": "记忆写入",
+    "declare_order_plan": "挂单处置",
 }
 
 MX_TOOL_NAMES = frozenset(
@@ -113,6 +114,7 @@ TRACE_TOOL_ARGUMENT_KEYS: dict[str, tuple[str, ...]] = {
     "portfolio_stock_snapshot": ("page",),
     "stock_analysis": ("symbol",),
     "industry_snapshot": (),
+    "declare_order_plan": ("directives",),
     "memory_read": ("keywords", "limit"),
     "memory_write": ("operation", "memory_id", "content", "reason"),
 }
