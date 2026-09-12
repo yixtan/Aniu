@@ -6,6 +6,11 @@ from datetime import date
 
 RUN_TASK_TYPE = 1
 SCHEDULE_TASK_TYPE = 2
+# Order-watch runs are numbered apart from analysis runs so the ninth digit of
+# a task id still says who acted — the same thing `is_dream_task` reads. They
+# will outnumber analysis runs roughly five to one, and folded together they
+# would drown the run counts and the token chart.
+ORDER_WATCH_TASK_TYPE = 3
 
 
 def build_run_id(

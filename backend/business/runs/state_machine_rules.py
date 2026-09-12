@@ -6,11 +6,18 @@ from backend.business.shared.enums import RunState
 from backend.business.shared.trading.value_objects import coerce_enum
 
 INITIAL_STATE = RunState.RUN
+"""Where an analysis run starts. An order watch starts at its own stage."""
+
+WATCH_INITIAL_STATE = RunState.WATCH
 TERMINAL_STATES = frozenset({RunState.COMPLETED, RunState.FAILED})
 
 ALLOWED_TRANSITIONS: dict[RunState, frozenset[RunState]] = {
     RunState.RUN: frozenset({RunState.SUMMARY}),
     RunState.SUMMARY: frozenset({RunState.COMPLETED}),
+    # A watch has nothing to render: it either did what the plan said or it
+    # did not, and either way it says so in its own stage. Going straight to
+    # COMPLETED is what keeps 82 empty reports a day out of the run list.
+    RunState.WATCH: frozenset({RunState.COMPLETED}),
     RunState.COMPLETED: frozenset(),
     RunState.FAILED: frozenset(),
 }

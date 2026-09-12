@@ -888,6 +888,8 @@ export interface components {
             schema: string;
             /** Summary Prompt */
             summary_prompt?: string | null;
+            /** Watch Prompt */
+            watch_prompt?: string | null;
         };
         /** AniuAgentPromptResponse */
         AniuAgentPromptResponse: {
@@ -905,6 +907,8 @@ export interface components {
             schema: string;
             /** Summary Prompt */
             summary_prompt: string;
+            /** Watch Prompt */
+            watch_prompt: string;
         };
         /** AppSettingsResponse */
         AppSettingsResponse: {

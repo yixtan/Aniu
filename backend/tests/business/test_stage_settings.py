@@ -53,8 +53,8 @@ def test_stage_settings_contract_has_no_render_or_tool_loop_switches() -> None:
     assert not hasattr(settings, "max_tool_rounds")
 
 
-def test_configured_stage_ids_include_dream() -> None:
-    assert STAGE_IDS == ("Run", "Summary", "Dream")
+def test_configured_stage_ids_include_dream_and_watch() -> None:
+    assert STAGE_IDS == ("Run", "Summary", "Dream", "Watch")
 
 
 def test_old_settings_inherit_run_model_for_missing_dream_stage() -> None:
