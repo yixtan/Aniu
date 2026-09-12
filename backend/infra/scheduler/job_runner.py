@@ -297,6 +297,16 @@ class JobRunner:
     async def _trigger_schedule(
         self, schedule_id: int, lease_check: LeaseCheck
     ) -> None:
+        # The cron can only exclude whole weekdays, so it lets every statutory
+        # holiday through: 2026-10-01 to 10-07 alone is five weekdays of runs
+        # against a shut market. Manual runs are not affected — this is the
+        # scheduled path only, and asking for a run is always allowed.
+        if not is_trading_day(self._now_market_time().date()):
+            logger.info(
+                "skip scheduled run on non-trading day: schedule_id=%s", schedule_id
+            )
+            return
+
         # Read the schedule in a short-lived session so we never hold a DB
         # connection while ``start_run`` waits on the process-wide run lock.
         from backend.infra.repositories import ScheduleRepository

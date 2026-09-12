@@ -127,6 +127,13 @@ async def test_job_runner_triggers_scheduled_market_analysis(
     monkeypatch.setattr(MxMoniClient, "get_orders", fake_get_orders)
 
     runner = _make_runner(session_factory)
+    # Pin the clock: the scheduled path skips non-trading days, so a test that
+    # reads the real date passes on a weekday and fails on a weekend.
+    monkeypatch.setattr(
+        runner,
+        "_now_market_time",
+        lambda: datetime(2026, 9, 11, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+    )
     await runner.sync_schedule(schedule)
     await runner.trigger_schedule(schedule.schedule_id)
 
@@ -436,3 +443,33 @@ def test_fill_watch_window_keeps_a_tail_past_each_close() -> None:
     assert not can_observe(
         datetime(2026, 10, 1, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
     )
+
+
+@pytest.mark.asyncio
+async def test_job_runner_skips_a_scheduled_run_on_a_statutory_holiday(
+    session_factory,
+    monkeypatch,
+) -> None:
+    """The cron excludes weekends but not holidays, so the handler must."""
+
+    async with session_factory() as session:
+        schedule = await ScheduleRepository(session).add(
+            StrategySchedule(enabled=True, interval_minutes=30)
+        )
+        await session.commit()
+
+    runner = _make_runner(session_factory)
+    monkeypatch.setattr(
+        runner,
+        "_now_market_time",
+        # National Day, a Thursday: `day_of_week="mon-fri"` lets it through.
+        lambda: datetime(2026, 10, 1, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+    )
+
+    await runner.trigger_schedule(schedule.schedule_id)
+
+    async with session_factory() as session:
+        runs = await RunRepository(session).list_runs()
+    await runner.shutdown()
+
+    assert runs == []
