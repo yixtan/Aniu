@@ -22,6 +22,9 @@ from backend.infra.integrations.memory_agent_tools import (
     MemoryWriteTool,
 )
 from backend.infra.integrations.mx_agent_tools import register_mx_tools
+from backend.infra.integrations.order_directive_agent_tools import (
+    DeclareOrderPlanTool,
+)
 from backend.infra.integrations.public_stock_agent_tools import (
     register_public_stock_tools,
 )
@@ -62,6 +65,7 @@ class AgentRuntimeFactory:
                     allowed_operations=AUTHORING_OPERATIONS,
                 )
             )
+            registry.register(DeclareOrderPlanTool(self._session_factory))
         if self._public_stock_data is not None:
             register_public_stock_tools(registry, service=self._public_stock_data)
             registry.register(QueryKlineTool(public_service=self._public_stock_data))

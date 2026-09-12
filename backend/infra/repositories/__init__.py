@@ -10,6 +10,9 @@ from backend.infra.repositories.notification_channel_repo import (
     NotificationDeliveryRepository,
     NotificationFillWatermarkRepository,
 )
+from backend.infra.repositories.order_directive_repo import (
+    OrderDirectiveRepository,
+)
 from backend.infra.repositories.run_job_repo import RunJobRepository
 from backend.infra.repositories.run_repo import RunRepository
 from backend.infra.repositories.schedule_repo import ScheduleRepository
@@ -30,6 +33,7 @@ __all__ = [
     "MemoryDreamRepository",
     "MemoryRepository",
     "ModelProfileRepository",
+    "OrderDirectiveRepository",
     "NotificationChannelRepository",
     "NotificationDeliveryRepository",
     "NotificationFillWatermarkRepository",
