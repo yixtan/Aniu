@@ -112,7 +112,9 @@ class SettingsRepository:
         )
         return AppSettings(
             mx_api_key=mx_api_key,
-            prompt_profile=AniuAgentPrompt.from_mapping(model.prompt_profile_json),
+            prompt_profile=AniuAgentPrompt.from_stored_mapping(
+                model.prompt_profile_json
+            ),
             stage_settings=normalize_stage_settings(model.stage_settings_json),
             dream_schedule_time=_loadable_dream_time(model.dream_schedule_time),
             revision=model.revision,

@@ -224,6 +224,31 @@ class AniuAgentPrompt:
             dream_prompt=_prompt_field_from_mapping(value, prompt_field="dream_prompt"),
         )
 
+    @classmethod
+    def from_stored_mapping(cls, value: Mapping[str, Any] | None) -> AniuAgentPrompt:
+        """Read a profile this application wrote, ignoring fields it forgot.
+
+        `from_mapping` refuses unknown fields so that a typo in a profile
+        somebody imported is caught instead of silently doing nothing. Data we
+        wrote ourselves is the opposite case: a field can only be unknown here
+        because a newer build wrote it, which is exactly what a rolled-back
+        release finds. Reading it strictly turns that into a settings load that
+        raises, and settings are read on the way to almost everything.
+
+        The unknown field is dropped rather than carried along, so rolling back
+        and then saving loses it. That costs a prompt the user can type again;
+        the alternative costs a build that cannot read its own configuration.
+        """
+
+        if value is None:
+            return cls()
+        known = {
+            key: item
+            for key, item in value.items()
+            if key in PROMPT_PROFILE_FIELDS
+        }
+        return cls.from_mapping(known)
+
     def as_dict(self) -> dict[str, object]:
         return {
             "schema": self.schema,

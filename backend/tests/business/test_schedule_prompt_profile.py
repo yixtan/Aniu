@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from backend.business.settings import (
     PROMPT_PROFILE_PROMPT_FIELDS,
     PROMPT_PROFILE_SCHEMA,
@@ -44,3 +46,30 @@ def test_default_prompts_define_institutional_trading_and_visual_rules() -> None
     assert "纯内联样式" in profile.summary_prompt
     assert "html-visual" in profile.summary_prompt
     assert "黑白灰等克制色" in profile.summary_prompt
+
+
+def test_a_profile_we_stored_survives_a_field_this_build_does_not_know() -> None:
+    """A rolled-back release meets its successor's data on the very first read.
+
+    Settings are read on the way to almost everything, so refusing the row
+    means the build cannot start rather than merely losing a setting.
+    """
+
+    stored = {
+        **AniuAgentPrompt().as_dict(),
+        "watch_prompt": "只照看挂单，不要研究",
+    }
+
+    profile = AniuAgentPrompt.from_stored_mapping(stored)
+
+    assert profile.run_prompt == AniuAgentPrompt().run_prompt
+    assert not hasattr(profile, "watch_prompt")
+
+
+def test_an_imported_profile_still_refuses_a_field_nobody_recognises() -> None:
+    """Strictness there catches a typo that would otherwise do nothing."""
+
+    imported = {**AniuAgentPrompt().as_dict(), "run_promt": "拼错了"}
+
+    with pytest.raises(ValueError, match="run_promt"):
+        AniuAgentPrompt.from_mapping(imported)

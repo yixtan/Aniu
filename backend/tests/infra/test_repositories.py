@@ -6,7 +6,7 @@ import asyncio
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy import event, func, select
+from sqlalchemy import event, func, select, text
 
 import backend.business.runs.traces.recorder as recorder_module
 from backend.business.runs import (
@@ -493,3 +493,34 @@ async def test_run_list_summaries_use_projection_columns(
     assert summary["total_tokens"] > 0
     assert summary["trade_count"] == 0
     assert summary["summary_render_mode"] == "markdown"
+
+
+@pytest.mark.asyncio
+async def test_settings_load_tolerates_a_row_a_newer_build_wrote(
+    session,
+) -> None:
+    """Rolling a release back must not cost the ability to read settings.
+
+    Migrations only add, so a rolled-back build meets its successor's columns
+    and JSON keys intact. Everything else already copes — an unknown stage id
+    is filtered out, an unknown stage field is never looked up — and the
+    prompt profile was the one place that raised.
+    """
+
+    repository = SettingsRepository(session)
+    await repository.save(AppSettings(mx_api_key="mx-plain"))
+    await session.commit()
+
+    await session.execute(
+        text(
+            "UPDATE app_settings SET prompt_profile_json = "
+            "json_set(prompt_profile_json, '$.prompt_from_the_future', '未来的提示词')"
+        )
+    )
+    await session.commit()
+
+    loaded = await SettingsRepository(session).get()
+
+    assert loaded is not None
+    assert loaded.prompt_profile.run_prompt
+    assert "Run" in loaded.stage_settings
