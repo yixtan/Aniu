@@ -682,3 +682,86 @@ async def test_the_watchlist_instruction_survives_a_save(
         item for item in reloaded["stage_settings"] if item["stage_id"] != "Run"
     ]
     assert all(item["watchlist_prompt"] == "" for item in others)
+
+
+@pytest.mark.asyncio
+async def test_an_order_watch_schedule_survives_the_round_trip(
+    api_client: AsyncClient,
+) -> None:
+    """The write half never broke; reading back is where a field goes missing."""
+
+    created = await api_client.post(
+        "/api/aniu/schedules",
+        json={"enabled": True, "task_type": "order_watch", "interval_minutes": 3},
+    )
+
+    assert created.status_code == 201
+    assert created.json()["task_type"] == "order_watch"
+    assert created.json()["interval_minutes"] == 3
+    assert created.json()["schedule_times"][-1] == "15:00"
+
+    listed = await api_client.get("/api/aniu/schedules")
+    stored = [
+        item
+        for item in listed.json()
+        if item["schedule_id"] == created.json()["schedule_id"]
+    ]
+
+    assert [item["task_type"] for item in stored] == ["order_watch"]
+    assert stored[0]["interval_minutes"] == 3
+
+
+@pytest.mark.asyncio
+async def test_three_minutes_is_refused_for_an_analysis_schedule(
+    api_client: AsyncClient,
+) -> None:
+    response = await api_client.post(
+        "/api/aniu/schedules",
+        json={"enabled": True, "task_type": "market_analysis", "interval_minutes": 3},
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_a_schedule_cannot_change_kind_under_its_settings(
+    api_client: AsyncClient,
+) -> None:
+    """The kind decides the floor and window the settings were checked against."""
+
+    created = await api_client.post(
+        "/api/aniu/schedules",
+        json={"enabled": True, "task_type": "order_watch", "interval_minutes": 3},
+    )
+    changed = await api_client.put(
+        f"/api/aniu/schedules/{created.json()['schedule_id']}",
+        json={
+            "enabled": True,
+            "task_type": "market_analysis",
+            "interval_minutes": 30,
+            "expected_revision": created.json()["revision"],
+        },
+    )
+
+    assert changed.status_code == 422, changed.text
+    listed = await api_client.get("/api/aniu/schedules")
+    stored = next(
+        item
+        for item in listed.json()
+        if item["schedule_id"] == created.json()["schedule_id"]
+    )
+    assert stored["task_type"] == "order_watch"
+    assert stored["interval_minutes"] == 3
+
+
+def test_the_api_task_type_enum_matches_the_domain_set() -> None:
+    """The Literal is written out by hand to reach OpenAPI; this stops it drifting."""
+
+    from typing import get_args
+
+    from backend.api.schemas.schedule import SaveScheduleFields
+    from backend.business.schedules import ALLOWED_TASK_TYPES
+
+    declared = set(get_args(SaveScheduleFields.model_fields["task_type"].annotation))
+
+    assert declared == set(ALLOWED_TASK_TYPES)
