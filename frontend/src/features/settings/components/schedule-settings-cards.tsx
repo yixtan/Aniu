@@ -41,6 +41,9 @@ type Cadence = {
   defaultIntervalMinutes: number;
   maxCustomTimes: number;
   sessions: { start: number; end: number }[];
+  // The watch's first pass of each session is one interval after the open,
+  // so it never races the analysis run that writes the plan it reads.
+  startsOneIntervalLate?: boolean;
 };
 
 // A preview-only mirror of the backend cadence table. The backend is the
@@ -68,6 +71,7 @@ const CADENCES: Record<ScheduleKind, Cadence> = {
       { start: 9 * 60 + 30, end: 11 * 60 + 30 },
       { start: 13 * 60, end: 15 * 60 },
     ],
+    startsOneIntervalLate: true,
   },
 };
 
@@ -108,8 +112,10 @@ function generatePreview(intervalMinutes: number, kind: ScheduleKind) {
   }
   const result: string[] = [];
 
-  for (const { start, end } of CADENCES[kind].sessions) {
-    for (let minutes = start; minutes <= end; minutes += intervalMinutes) {
+  const cadence = CADENCES[kind];
+  const offset = cadence.startsOneIntervalLate ? intervalMinutes : 0;
+  for (const { start, end } of cadence.sessions) {
+    for (let minutes = start + offset; minutes <= end; minutes += intervalMinutes) {
       const hour = Math.floor(minutes / 60);
       const minute = minutes % 60;
       result.push(`${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`);
@@ -489,7 +495,7 @@ function IntervalCard({
         <p className="text-muted-foreground text-xs">
           {kind === "market_analysis"
             ? "每档间隔对应一套固定时点：从开盘起按间隔铺，最晚 11:20 / 14:50 起跑（收盘前 10 分钟）"
-            : `按间隔自动生成工作日盘中时点（间隔最小 ${cadence.minIntervalMinutes} 分钟）`}
+            : `按间隔自动生成工作日盘中时点，每个时段从开盘后一个间隔起（间隔最小 ${cadence.minIntervalMinutes} 分钟）`}
         </p>
       </section>
 

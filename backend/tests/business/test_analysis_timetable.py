@@ -95,5 +95,5 @@ def test_the_api_accepts_only_the_fixed_set_for_an_analysis() -> None:
 
 def test_the_watch_is_untouched_by_the_analysis_timetable() -> None:
     times = derive_intraday_schedule_times(3, ORDER_WATCH_TASK_TYPE)
-    assert len(times) == 82
-    assert times[-1] == "15:00"
+    assert len(times) == 80
+    assert (times[0], times[-1]) == ("09:33", "15:00")
