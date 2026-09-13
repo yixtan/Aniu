@@ -33,6 +33,14 @@ logger = logging.getLogger(__name__)
 MARKET_TIMEZONE = ZoneInfo("Asia/Shanghai")
 ACCOUNT_REFRESH_JOB_ID = "account-cache:market-hours"
 ACCOUNT_REFRESH_MINUTES = "*/3"
+# When a watch and an analysis share a minute (twice a day at 20 and 3
+# minutes: 10:30 and 14:00), the analysis must win: it writes the plan the
+# watch reads. Firing the watch ten seconds into the minute turns the
+# same-second race into a certainty — the analysis has its run by then and
+# the watch is skipped cleanly — and means the analysis never has to wait
+# out a watch born alongside it, so a watch that stalls can no longer cost
+# an analysis slot. Ten seconds is invisible on the page and to the plan.
+WATCH_FIRES_SECONDS_LATE = 10
 """Cron minute field for the account refresh; also bounds fill-notification lag."""
 POST_CLOSE_FILL_GRACE = timedelta(minutes=15)
 """How long past a session's close a refresh can still turn up a new fill."""
@@ -278,6 +286,11 @@ class JobRunner:
                     day_of_week="mon-fri",
                     hour=int(hour),
                     minute=int(minute),
+                    second=(
+                        WATCH_FIRES_SECONDS_LATE
+                        if schedule.task_type == "order_watch"
+                        else 0
+                    ),
                     timezone=MARKET_TIMEZONE,
                 ),
                 args=[schedule.schedule_id],

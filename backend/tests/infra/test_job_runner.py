@@ -34,7 +34,10 @@ from backend.infra.repositories import (
     SettingsRepository,
 )
 from backend.infra.scheduler import JobRunner
-from backend.infra.scheduler.job_runner import ACCOUNT_REFRESH_JOB_ID
+from backend.infra.scheduler.job_runner import (
+    ACCOUNT_REFRESH_JOB_ID,
+    WATCH_FIRES_SECONDS_LATE,
+)
 from backend.stock_api.mx import MxMoniClient
 
 
@@ -473,3 +476,44 @@ async def test_job_runner_skips_a_scheduled_run_on_a_statutory_holiday(
     await runner.shutdown()
 
     assert runs == []
+
+
+@pytest.mark.asyncio
+async def test_the_analysis_always_wins_a_shared_minute(session_factory) -> None:
+    """At 10:30 and 14:00 both kinds fire; the one that writes the plan goes first.
+
+    Same second is a race the collision policy has to referee, with a bounded
+    wait and, past it, a lost analysis slot. Ten seconds later is not a race.
+    """
+
+    runner = _make_runner(session_factory)
+    analysis = StrategySchedule(
+        schedule_id=1, enabled=True, interval_minutes=20, task_type="market_analysis"
+    )
+    watch = StrategySchedule(
+        schedule_id=2, enabled=True, interval_minutes=3, task_type="order_watch"
+    )
+    await runner.sync_schedule(analysis)
+    await runner.sync_schedule(watch)
+    jobs = runner._scheduler.get_jobs()
+    await runner.shutdown()
+
+    def fields(job) -> dict[str, str]:
+        return {field.name: str(field) for field in job.trigger.fields}
+
+    analysis_jobs = [j for j in jobs if j.id.startswith("strategy-schedule:1:")]
+    watch_jobs = [j for j in jobs if j.id.startswith("strategy-schedule:2:")]
+    assert analysis_jobs and watch_jobs
+    assert {fields(j)["second"] for j in analysis_jobs} == {"0"}
+    assert {fields(j)["second"] for j in watch_jobs} == {str(WATCH_FIRES_SECONDS_LATE)}
+
+    # The shared minute itself: the watch's fire time is strictly after the
+    # analysis's, by exactly the offset.
+    shanghai = ZoneInfo("Asia/Shanghai")
+    before = datetime(2026, 9, 14, 10, 29, 50, tzinfo=shanghai)
+    analysis_at = min(
+        j.trigger.get_next_fire_time(None, before) for j in analysis_jobs
+    )
+    watch_at = min(j.trigger.get_next_fire_time(None, before) for j in watch_jobs)
+    assert analysis_at.astimezone(shanghai).strftime("%H:%M:%S") == "10:30:00"
+    assert (watch_at - analysis_at).total_seconds() == WATCH_FIRES_SECONDS_LATE
