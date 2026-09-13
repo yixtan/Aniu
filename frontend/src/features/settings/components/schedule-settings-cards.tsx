@@ -19,6 +19,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { SectionLabel } from "@/features/settings/components/section-label";
@@ -48,8 +55,8 @@ const CADENCES: Record<ScheduleKind, Cadence> = {
     defaultIntervalMinutes: 15,
     maxCustomTimes: 48,
     sessions: [
-      { start: 9 * 60 + 30, end: 11 * 60 },
-      { start: 13 * 60, end: 14 * 60 + 30 },
+      { start: 9 * 60 + 30, end: 11 * 60 + 20 },
+      { start: 13 * 60, end: 14 * 60 + 50 },
     ],
   },
   order_watch: {
@@ -64,7 +71,41 @@ const CADENCES: Record<ScheduleKind, Cadence> = {
   },
 };
 
+// A preview-only mirror of the backend's fixed analysis timetable. One row per
+// allowed interval, written out; the backend re-derives each row from its rule
+// in a test, so this copy is checked against that source by hand, not code.
+const ANALYSIS_INTERVAL_CHOICES = [15, 20, 25, 30, 35, 40, 45, 50, 55, 60] as const;
+const ANALYSIS_TIMETABLE: Record<(typeof ANALYSIS_INTERVAL_CHOICES)[number], string[]> = {
+  15: ["09:30", "09:45", "10:00", "10:15", "10:30", "10:45", "11:00", "11:15",
+       "13:00", "13:15", "13:30", "13:45", "14:00", "14:15", "14:30", "14:45"],
+  20: ["09:30", "09:50", "10:10", "10:30", "10:50", "11:10",
+       "13:00", "13:20", "13:40", "14:00", "14:20", "14:40"],
+  25: ["09:30", "09:55", "10:20", "10:45", "11:10",
+       "13:00", "13:25", "13:50", "14:15", "14:40"],
+  30: ["09:30", "10:00", "10:30", "11:00", "11:20",
+       "13:00", "13:30", "14:00", "14:30", "14:50"],
+  35: ["09:30", "10:05", "10:40", "11:15",
+       "13:00", "13:35", "14:10", "14:45"],
+  40: ["09:30", "10:10", "10:50", "11:20",
+       "13:00", "13:40", "14:20", "14:50"],
+  45: ["09:30", "10:15", "11:00", "11:20",
+       "13:00", "13:45", "14:30", "14:50"],
+  50: ["09:30", "10:20", "11:10",
+       "13:00", "13:50", "14:40"],
+  55: ["09:30", "10:25", "11:20",
+       "13:00", "13:55", "14:50"],
+  60: ["09:30", "10:30", "11:20",
+       "13:00", "14:00", "14:50"],
+};
+
+function isAnalysisChoice(value: number): value is (typeof ANALYSIS_INTERVAL_CHOICES)[number] {
+  return (ANALYSIS_INTERVAL_CHOICES as readonly number[]).includes(value);
+}
+
 function generatePreview(intervalMinutes: number, kind: ScheduleKind) {
+  if (kind === "market_analysis" && isAnalysisChoice(intervalMinutes)) {
+    return ANALYSIS_TIMETABLE[intervalMinutes];
+  }
   const result: string[] = [];
 
   for (const { start, end } of CADENCES[kind].sessions) {
@@ -414,20 +455,41 @@ function IntervalCard({
           <Label htmlFor={`${kind}-interval-minutes`} className="sr-only">
             {cadence.label}运行间隔（分钟）
           </Label>
-          <Input
-            id={`${kind}-interval-minutes`}
-            type="number"
-            min={cadence.minIntervalMinutes}
-            max={240}
-            disabled={busy}
-            value={intervalText}
-            onChange={(event) => setIntervalText(event.target.value)}
-            className="h-8 w-20 text-center"
-          />
+          {kind === "market_analysis" ? (
+            <Select
+              value={intervalText}
+              disabled={busy}
+              onValueChange={(value) => setIntervalText(value)}
+            >
+              <SelectTrigger id={`${kind}-interval-minutes`} className="h-8 w-24">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ANALYSIS_INTERVAL_CHOICES.map((choice) => (
+                  <SelectItem key={choice} value={String(choice)}>
+                    {choice}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input
+              id={`${kind}-interval-minutes`}
+              type="number"
+              min={cadence.minIntervalMinutes}
+              max={240}
+              disabled={busy}
+              value={intervalText}
+              onChange={(event) => setIntervalText(event.target.value)}
+              className="h-8 w-20 text-center"
+            />
+          )}
           <span>分钟运行一次</span>
         </div>
         <p className="text-muted-foreground text-xs">
-          按间隔自动生成工作日盘中时点（间隔最小 {cadence.minIntervalMinutes} 分钟）
+          {kind === "market_analysis"
+            ? "每档间隔对应一套固定时点：从开盘起按间隔铺，最晚 11:20 / 14:50 起跑（收盘前 10 分钟）"
+            : `按间隔自动生成工作日盘中时点（间隔最小 ${cadence.minIntervalMinutes} 分钟）`}
         </p>
       </section>
 

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -54,9 +54,8 @@ describe("TradingSchedulesPage", () => {
     renderPage();
 
     expect(await screen.findByText("已同步")).toBeInTheDocument();
-    const interval = screen.getByLabelText("操盘运行间隔（分钟）");
-    await user.clear(interval);
-    await user.type(interval, "45");
+    fireEvent.click(screen.getByLabelText("操盘运行间隔（分钟）"));
+    fireEvent.click(await screen.findByRole("option", { name: "45" }));
     await user.click(screen.getByRole("button", { name: "保存操盘间隔任务设置" }));
 
     await waitFor(() => expect(api.updateSchedule).toHaveBeenCalledTimes(1));
@@ -92,15 +91,15 @@ describe("TradingSchedulesPage", () => {
 
     renderPage();
 
-    const interval = await screen.findByLabelText("操盘运行间隔（分钟）");
-    await user.clear(interval);
-    await user.type(interval, "45");
+    fireEvent.click(await screen.findByLabelText("操盘运行间隔（分钟）"));
+    fireEvent.click(await screen.findByRole("option", { name: "45" }));
     await user.click(screen.getByRole("button", { name: "保存操盘间隔任务设置" }));
     const reload = await screen.findByRole("button", { name: "重新加载服务端版本" });
     await user.click(reload);
     await waitFor(() => expect(api.listSchedules).toHaveBeenCalledTimes(2));
 
-    expect(screen.getByLabelText("操盘运行间隔（分钟）")).toHaveValue(45);
+    // The local choice survives a failed reload: still 45, not the server's 30.
+    expect(screen.getByLabelText("操盘运行间隔（分钟）")).toHaveTextContent("45");
     expect(screen.getByText("配置已被其他会话修改")).toBeInTheDocument();
   });
 
@@ -287,7 +286,13 @@ describe("TradingSchedulesPage", () => {
       renderPage();
 
       const analysis = within(await screen.findByRole("region", { name: "操盘任务" }));
-      expect(analysis.getByLabelText("操盘运行间隔（分钟）")).toHaveAttribute("min", "15");
+      // A fixed set, not a free number: the choices run 15…60 in fives.
+      fireEvent.click(analysis.getByLabelText("操盘运行间隔（分钟）"));
+      const options = await screen.findAllByRole("option");
+      expect(options.map((o) => o.textContent)).toEqual([
+        "15", "20", "25", "30", "35", "40", "45", "50", "55", "60",
+      ]);
+      fireEvent.keyDown(options[0] as HTMLElement, { key: "Escape" });
       expect(analysis.queryByText("15:00")).not.toBeInTheDocument();
     });
 
@@ -314,5 +319,20 @@ describe("TradingSchedulesPage", () => {
         expect.objectContaining({ enabled: false, task_type: "order_watch" }),
       );
     });
+  });
+
+  it("shows the fixed timetable for the chosen analysis interval", async () => {
+    api.listSchedules.mockResolvedValue([{ ...schedule, interval_minutes: 20 }]);
+
+    renderPage();
+
+    const analysis = within(await screen.findByRole("region", { name: "操盘任务" }));
+    // Twenty minutes used to stop at 10:50 / 14:20 and lose a run each
+    // session; the fixed row runs the grid to 11:10 / 14:40, ten minutes
+    // before each bell, so no tail run is needed.
+    expect(analysis.getByText("12 个")).toBeInTheDocument();
+    expect(analysis.getByText("11:10")).toBeInTheDocument();
+    expect(analysis.getByText("14:40")).toBeInTheDocument();
+    expect(analysis.queryByText("11:00")).not.toBeInTheDocument();
   });
 });

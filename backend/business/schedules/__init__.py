@@ -2,6 +2,8 @@
 
 from backend.business.schedules.models import (
     ALLOWED_TASK_TYPES,
+    ANALYSIS_INTERVAL_CHOICES,
+    ANALYSIS_TIMETABLE,
     MARKET_ANALYSIS_TASK_TYPE,
     ORDER_WATCH_TASK_TYPE,
     StrategySchedule,
@@ -11,6 +13,8 @@ from backend.business.schedules.models import (
 )
 
 __all__ = [
+    "ANALYSIS_INTERVAL_CHOICES",
+    "ANALYSIS_TIMETABLE",
     "ALLOWED_TASK_TYPES",
     "MARKET_ANALYSIS_TASK_TYPE",
     "ORDER_WATCH_TASK_TYPE",

@@ -12,12 +12,49 @@ from backend.business.shared.trading.value_objects import ensure_positive_int
 MARKET_ANALYSIS_TASK_TYPE = "market_analysis"
 ORDER_WATCH_TASK_TYPE = "order_watch"
 MORNING_START_MINUTES = 9 * 60 + 30
-MORNING_END_MINUTES = 11 * 60
+# The latest an analysis run may start: ten minutes before the bell. A run
+# normally thinks for two to three minutes, so with ten left it can still
+# trade; the few that run longer (the longest of the last fourteen days was
+# 753s) meet a closed market and `trade` refuses — that run's analysis is
+# wasted, and nothing else happens. Jeffrey chose this margin on 2026-09-13.
+MORNING_END_MINUTES = 11 * 60 + 20
 AFTERNOON_START_MINUTES = 13 * 60
-AFTERNOON_END_MINUTES = 14 * 60 + 30
+AFTERNOON_END_MINUTES = 14 * 60 + 50
 
 _TIME_PATTERN = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
 MAX_CUSTOM_SCHEDULE_TIMES = 48
+
+# An analysis schedule is chosen from a fixed set of intervals, and each one
+# has a fixed timetable, written out rather than derived. The rule the rows
+# obey (and a test re-derives) is: start at the open, step by the interval, and
+# add one last run at the latest safe start whenever the grid would otherwise
+# leave fifteen minutes or more before the latest start uncovered. Writing the rows out
+# is what makes them reviewable one by one; the rule is what makes them
+# defensible. 15 and 30 already landed on the old end; 20 lost a run each
+# session because ninety minutes is not a multiple of twenty.
+ANALYSIS_INTERVAL_CHOICES: tuple[int, ...] = (15, 20, 25, 30, 35, 40, 45, 50, 55, 60)
+ANALYSIS_TIMETABLE: dict[int, tuple[str, ...]] = {
+    15: ("09:30", "09:45", "10:00", "10:15", "10:30", "10:45", "11:00", "11:15",
+         "13:00", "13:15", "13:30", "13:45", "14:00", "14:15", "14:30", "14:45"),
+    20: ("09:30", "09:50", "10:10", "10:30", "10:50", "11:10",
+         "13:00", "13:20", "13:40", "14:00", "14:20", "14:40"),
+    25: ("09:30", "09:55", "10:20", "10:45", "11:10",
+         "13:00", "13:25", "13:50", "14:15", "14:40"),
+    30: ("09:30", "10:00", "10:30", "11:00", "11:20",
+         "13:00", "13:30", "14:00", "14:30", "14:50"),
+    35: ("09:30", "10:05", "10:40", "11:15",
+         "13:00", "13:35", "14:10", "14:45"),
+    40: ("09:30", "10:10", "10:50", "11:20",
+         "13:00", "13:40", "14:20", "14:50"),
+    45: ("09:30", "10:15", "11:00", "11:20",
+         "13:00", "13:45", "14:30", "14:50"),
+    50: ("09:30", "10:20", "11:10",
+         "13:00", "13:50", "14:40"),
+    55: ("09:30", "10:25", "11:20",
+         "13:00", "13:55", "14:50"),
+    60: ("09:30", "10:30", "11:20",
+         "13:00", "14:00", "14:50"),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,6 +114,15 @@ def derive_intraday_schedule_times(
     cadence = cadence_for(task_type)
     if interval_minutes < cadence.min_interval_minutes:
         raise ValueError(f"interval_minutes must be >= {cadence.min_interval_minutes}")
+    # The fixed timetable wins where one exists. The grid below is kept for the
+    # order watch and for a legacy analysis interval saved before the set was
+    # fixed — a stored row must never fail to load over a value the API no
+    # longer accepts.
+    if (
+        task_type == MARKET_ANALYSIS_TASK_TYPE
+        and interval_minutes in ANALYSIS_TIMETABLE
+    ):
+        return ANALYSIS_TIMETABLE[interval_minutes]
     times: list[str] = []
     for start, end in (
         (MORNING_START_MINUTES, cadence.morning_end_minutes),

@@ -46,7 +46,7 @@ def test_the_watch_runs_to_the_close_and_the_analysis_stops_short_of_it() -> Non
     watch = derive_intraday_schedule_times(30, ORDER_WATCH_TASK_TYPE)
 
     assert analysis[0] == "09:30"
-    assert analysis[-1] == "14:30"
+    assert analysis[-1] == "14:50"
     assert watch[-1] == "15:00"
     # And the watch covers the last half hour of the morning session too.
     assert "11:30" in watch

@@ -602,7 +602,11 @@ async def test_schedule_custom_times_create_update_and_fallback(
     )
     assert fallback.status_code == 200
     assert fallback.json()["custom_schedule_times"] is None
-    assert fallback.json()["schedule_times"] == ["09:30", "10:30", "13:00", "14:00"]
+    # The fixed sixty-minute row: the grid plus one last run ten minutes
+    # before each bell, which the old open-stepped grid never reached.
+    assert fallback.json()["schedule_times"] == [
+        "09:30", "10:30", "11:20", "13:00", "14:00", "14:50"
+    ]
 
 
 @pytest.mark.asyncio
