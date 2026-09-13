@@ -61,6 +61,7 @@ class JobRunner:
         session_factory: async_sessionmaker[AsyncSession],
         *,
         market_analysis_handler: MarketAnalysisHandler | None = None,
+        order_watch_handler: MarketAnalysisHandler | None = None,
         memory_dream_handler: MemoryDreamHandler | None = None,
         account_refresh_handler: AccountRefreshHandler | None = None,
         scheduler: AsyncIOScheduler | None = None,
@@ -72,6 +73,7 @@ class JobRunner:
         self._lease_locks: dict[str, asyncio.Lock] = {}
         self._enabled = enabled
         self._market_analysis_handler = market_analysis_handler
+        self._order_watch_handler = order_watch_handler
         self._memory_dream_handler = memory_dream_handler
         self._account_refresh_handler = account_refresh_handler
 
@@ -319,6 +321,8 @@ class JobRunner:
 
         if schedule.task_type == "market_analysis":
             await self._run_market_analysis(schedule, lease_check)
+        elif schedule.task_type == "order_watch":
+            await self._run_order_watch(schedule, lease_check)
         else:
             # Fail closed: unsupported types must never silently no-op.
             logger.error(
@@ -377,6 +381,17 @@ class JobRunner:
         return is_market_session_open(moment) or is_market_session_open(
             moment - POST_CLOSE_FILL_GRACE
         )
+
+    async def _run_order_watch(
+        self, schedule: StrategySchedule, lease_check: LeaseCheck
+    ) -> None:
+        if self._order_watch_handler is None:
+            logger.warning(
+                "order watch handler is not configured; skip schedule_id=%s",
+                schedule.schedule_id,
+            )
+            return
+        await self._order_watch_handler(schedule, lease_check)
 
     async def _run_market_analysis(
         self, schedule: StrategySchedule, lease_check: LeaseCheck

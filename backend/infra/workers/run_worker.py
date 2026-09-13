@@ -7,7 +7,7 @@ import logging
 import uuid
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -15,6 +15,7 @@ from backend.business.runs import StrategyRun
 from backend.business.runs.abort_registry import ActiveRunAbortRegistry
 from backend.business.runs.executor import RunExecutor
 from backend.business.runs.job import RunJobStatus
+from backend.business.runs.numbering import is_order_watch_task
 from backend.business.runs.trace_support import RunTraceSupport
 from backend.business.shared import RunAbortError
 from backend.business.shared.enums import RunStatus
@@ -28,6 +29,8 @@ logger = logging.getLogger(__name__)
 DEFAULT_POLL_SECONDS = 0.5
 DEFAULT_LEASE_SECONDS = 20.0
 DEFAULT_HEARTBEAT_SECONDS = 5.0
+# One watch cadence. A watch claimed later than this has been overtaken.
+WATCH_STALE_AFTER = timedelta(minutes=3)
 DEFAULT_MAX_ATTEMPTS = 3
 
 
@@ -125,6 +128,7 @@ class RunWorker:
             claim_token = job.claim_token
             cancel_requested = job.status is RunJobStatus.CANCEL_REQUESTED
             attempt = job.attempt
+            job_age = datetime.now(tz=UTC) - job.created_at
 
         if claim_token is None:
             raise RuntimeError(f"claimed run job {run_id} has no fencing token")
@@ -145,6 +149,20 @@ class RunWorker:
                 claim_token=claim_token,
                 error_code="reclaimed_run_not_replayed",
                 error_message="运行租约已过期；为避免重复交易，任务不会自动重放",
+            )
+            return True
+        if is_order_watch_task(run_id) and job_age >= WATCH_STALE_AFTER:
+            # It sat behind a long analysis run. The plan it would read is the
+            # same one the next pass reads, and that pass is due about now, so
+            # running this one first would only ask the same question twice.
+            await self._mark_interrupted(
+                run_id,
+                claim_token=claim_token,
+                error_code="stale_order_watch",
+                error_message=(
+                    f"盯盘排队超过 {int(WATCH_STALE_AFTER.total_seconds())} 秒，"
+                    "已让位给下一次"
+                ),
             )
             return True
 

@@ -41,6 +41,7 @@ from backend.infra.integrations.notifications import (
     RoutingNotificationSender,
     TradeNotificationDispatcher,
 )
+from backend.infra.integrations.run_order_plan import RunOrderPlanQuery
 from backend.infra.integrations.run_watchlist import RunWatchlistQuery
 from backend.infra.integrations.watchlist_stock_names import QuoteStockNameLookup
 from backend.infra.repositories import (
@@ -415,5 +416,6 @@ class AppRuntime:
             abort_registry=self.abort_registry,
             notifier=self.optional_notification_dispatcher(),
             watchlist=RunWatchlistQuery(self.require_session_factory()),
+            order_plan=RunOrderPlanQuery(self.require_session_factory()),
             run_completion_hook=self.optional_away_mode_service(session),
         )

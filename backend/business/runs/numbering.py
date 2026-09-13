@@ -26,6 +26,17 @@ def build_run_id(
     return int(f"{reference_date:%Y%m%d}{task_type}{sequence:02d}")
 
 
+def task_type_of(task_id: int) -> int:
+    """The type digit of a task id, or 0 for ids from before task numbering."""
+
+    text = str(task_id)
+    return int(text[8]) if len(text) > 8 and text[8].isdigit() else 0
+
+
+def is_order_watch_task(task_id: int) -> bool:
+    return task_type_of(task_id) == ORDER_WATCH_TASK_TYPE
+
+
 def run_id_prefix(reference_date: date, *, task_type: int = RUN_TASK_TYPE) -> str:
     if task_type < 0 or task_type > 9:
         raise ValueError("task_type must be a single digit integer")

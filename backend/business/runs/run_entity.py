@@ -10,7 +10,6 @@ from backend.business.runs.run_trace import RunTrace, empty_trace
 from backend.business.runs.state_machine_rules import INITIAL_STATE, assert_transition
 from backend.business.settings import (
     STAGE_IDS,
-    STRATEGY_STAGE_IDS,
     AniuAgentPrompt,
     StageSettings,
     default_stage_settings,
@@ -145,9 +144,12 @@ def normalize_stage_model_snapshots(
             continue
         if snapshot is not None:
             snapshots[snapshot.stage_id] = snapshot
+    # Every configurable stage, not only the analysis run's two: a watch
+    # freezes its own stage's model, and filtering it out here would have it
+    # fall back to Run's runtime — or to none — at execution time, silently.
     return {
         stage_id: snapshots[stage_id]
-        for stage_id in STRATEGY_STAGE_IDS
+        for stage_id in STAGE_IDS
         if stage_id in snapshots
     }
 

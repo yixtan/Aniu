@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Protocol
 
+from backend.business.order_directives import OrderDirective
 from backend.business.runs.job import RunJob
 from backend.business.runs.reports import RunReportRecord
 from backend.business.runs.run_entity import StrategyRun
@@ -73,3 +74,14 @@ class FollowedCompaniesPort(Protocol):
     """
 
     async def followed(self) -> tuple[tuple[str, str], ...]: ...
+
+
+class OrderPlanPort(Protocol):
+    """The current order directives, as a watch needs to see them.
+
+    Same shape as the watchlist port and for the same reason: data rather than
+    configuration, read live at the start of the stage so a plan written
+    twenty minutes ago is what this pass acts on.
+    """
+
+    async def current(self) -> tuple[OrderDirective, ...]: ...

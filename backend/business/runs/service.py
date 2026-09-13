@@ -8,13 +8,14 @@ from datetime import UTC, datetime
 
 from backend.business.runs import (
     ACTIVE_JOB_STATUSES,
+    ORDER_WATCH_TASK_TYPE,
     RUN_TASK_TYPE,
     StageModelSnapshot,
     StrategyRun,
     StrategySnapshot,
 )
 from backend.business.runs.abort_registry import ActiveRunAbortRegistry
-from backend.business.runs.commands import StartRunCommand
+from backend.business.runs.commands import StartRunCommand, StartWatchCommand
 from backend.business.runs.dto import (
     RunDetailDTO,
     RunSummaryDTO,
@@ -39,7 +40,7 @@ from backend.business.shared import (
     RunNotFoundError,
     ServiceConfigurationError,
 )
-from backend.business.shared.enums import RunState, RunStatus
+from backend.business.shared.enums import RunState, RunStatus, TriggerSource
 
 NowProvider = Callable[[], datetime]
 ExecutionGuard = Callable[[], Awaitable[None]]
@@ -177,6 +178,72 @@ class RunService:
             return
         await self._commit()
 
+    async def create_watch_run(
+        self,
+        command: StartWatchCommand,
+        *,
+        execution_guard: ExecutionGuard | None = None,
+    ) -> RunDetailDTO:
+        """Create an order-watch run: one stage, its own number, its own model.
+
+        Refused while any run is active, like an analysis run. That refusal is
+        what keeps watches from stacking up behind a long analysis: the caller
+        treats it as "not this time", and the next pass is minutes away.
+        """
+
+        active_run = await self._run_repo.get_running_run()
+        if active_run is not None:
+            raise ConcurrentRunError(active_run.run_id)
+        active_job = await self._run_job_repo.get_active_job()
+        if active_job is not None:
+            raise ConcurrentRunError(active_job.run_id)
+
+        settings, stage_models = await self._load_settings_and_models(("Watch",))
+        run = StrategyRun(
+            run_id=await self._run_repo.next_run_id(
+                self._now_provider().date(), ORDER_WATCH_TASK_TYPE
+            ),
+            trigger_source=TriggerSource.SCHEDULED,
+            schedule_id=command.schedule_id,
+            snapshot=StrategySnapshot(
+                prompt_version=command.prompt_version,
+                risk_rules_version=command.risk_rules_version,
+                prompt_profile=settings.prompt_profile,
+                stage_settings=settings.stage_settings,
+                stage_models=stage_models,
+            ),
+            current_state=RunState.WATCH,
+        )
+        try:
+            run = await self._run_repo.add(run)
+            await self._run_job_repo.create_pending(run.run_id)
+            if execution_guard is not None:
+                await execution_guard()
+            await self._commit()
+        except Exception as exc:
+            rollback = getattr(self._committer, "rollback", None)
+            if callable(rollback):
+                await rollback()
+            active_job = await self._run_job_repo.get_active_job()
+            if active_job is not None:
+                raise ConcurrentRunError(active_job.run_id) from exc
+            raise
+        logger.info(
+            "watch_submitted",
+            extra={
+                "run_id": run.run_id,
+                "job_id": run.run_id,
+                "schedule_id": command.schedule_id,
+                "current_state": run.current_state.value,
+                "status": "pending",
+            },
+        )
+        await self._trace.publish(run)
+        stored = await self._run_repo.get_by_id(run.run_id)
+        if stored is None:
+            raise RunNotFoundError(run.run_id)
+        return to_run_detail_dto(stored)
+
     def _build_snapshot(
         self,
         command: StartRunCommand,
@@ -199,11 +266,11 @@ class RunService:
 
     async def _load_settings_and_models(
         self,
+        stage_ids: tuple[str, ...] = STRATEGY_STAGE_IDS,
     ) -> tuple[AppSettings, dict[str, StageModelSnapshot]]:
         settings = await self._settings_repo.get() or AppSettings()
         strategy_stages = {
-            stage_id: settings.stage_settings[stage_id]
-            for stage_id in STRATEGY_STAGE_IDS
+            stage_id: settings.stage_settings[stage_id] for stage_id in stage_ids
         }
         missing = [
             stage_id
