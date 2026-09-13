@@ -20,9 +20,11 @@ describe("prompt configs", () => {
   it("migrates v2 profiles and keeps the Dream prompt fallback empty", () => {
     localStorage.setItem(legacyKey, JSON.stringify([legacyConfig]));
 
-    expect(listPromptConfigs()).toEqual([{ ...legacyConfig, dream_prompt: "" }]);
+    expect(listPromptConfigs()).toEqual([
+      { ...legacyConfig, dream_prompt: "", watch_prompt: "" },
+    ]);
     expect(JSON.parse(localStorage.getItem(currentKey) ?? "null")).toEqual([
-      { ...legacyConfig, dream_prompt: "" },
+      { ...legacyConfig, dream_prompt: "", watch_prompt: "" },
     ]);
   });
 
@@ -30,6 +32,17 @@ describe("prompt configs", () => {
     expect(parseImportedConfig(legacyConfig)).toEqual({
       ...legacyConfig,
       dream_prompt: "",
+      watch_prompt: "",
     });
+  });
+
+  it("reads a v3 profile saved before the watch prompt existed", () => {
+    // No key bump: the new shape is a superset, so old data comes back with
+    // the watch prompt empty rather than being dropped or migrated.
+    const v3Config = { ...legacyConfig, dream_prompt: "梦境" };
+    localStorage.setItem(currentKey, JSON.stringify([v3Config]));
+
+    expect(listPromptConfigs()).toEqual([{ ...v3Config, watch_prompt: "" }]);
+    expect(localStorage.getItem(legacyKey)).toBeNull();
   });
 });
