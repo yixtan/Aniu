@@ -23,17 +23,51 @@ import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { SectionLabel } from "@/features/settings/components/section-label";
 
-const MAX_CUSTOM_SCHEDULE_TIMES = 48;
+// From the request type, not the response: the response spells `task_type`
+// as a plain string while the request carries the literal union, and the
+// union is what makes indexing the cadence table exhaustive.
+export type ScheduleKind = CreateSchedulePayload["task_type"];
 
-function generatePreview(intervalMinutes: number) {
-  const sessions = [
-    { start: 9 * 60 + 30, end: 11 * 60 },
-    { start: 13 * 60, end: 14 * 60 + 30 },
-  ];
+type Cadence = {
+  label: string;
+  minIntervalMinutes: number;
+  defaultIntervalMinutes: number;
+  maxCustomTimes: number;
+  sessions: { start: number; end: number }[];
+};
 
+// A preview-only mirror of the backend cadence table. The backend is the
+// authority and validates every save; this only decides what the page shows
+// before the save. The two kinds differ in more than frequency: an analysis
+// run takes minutes and stops well short of the bell, while an order watch is
+// a couple of tool calls and the close is exactly when it earns its keep.
+const CADENCES: Record<ScheduleKind, Cadence> = {
+  market_analysis: {
+    label: "操盘",
+    minIntervalMinutes: 15,
+    defaultIntervalMinutes: 15,
+    maxCustomTimes: 48,
+    sessions: [
+      { start: 9 * 60 + 30, end: 11 * 60 },
+      { start: 13 * 60, end: 14 * 60 + 30 },
+    ],
+  },
+  order_watch: {
+    label: "盯盘",
+    minIntervalMinutes: 3,
+    defaultIntervalMinutes: 3,
+    maxCustomTimes: 96,
+    sessions: [
+      { start: 9 * 60 + 30, end: 11 * 60 + 30 },
+      { start: 13 * 60, end: 15 * 60 },
+    ],
+  },
+};
+
+function generatePreview(intervalMinutes: number, kind: ScheduleKind) {
   const result: string[] = [];
 
-  for (const { start, end } of sessions) {
+  for (const { start, end } of CADENCES[kind].sessions) {
     for (let minutes = start; minutes <= end; minutes += intervalMinutes) {
       const hour = Math.floor(minutes / 60);
       const minute = minutes % 60;
@@ -152,18 +186,22 @@ function ModeCardShell({ title, enabled, busy, schedule, onToggle, children }: M
 
 /** 定时任务：选择时/分后点击添加，按用户指定的时点每天运行。 */
 function CustomTimeCard({
+  kind,
   schedule,
   enabled,
   busy,
   onSubmit,
   onToggle,
 }: {
+  kind: ScheduleKind;
   schedule?: StrategySchedule | undefined;
   enabled: boolean;
   busy: boolean;
   onSubmit: ScheduleSettingsCardsProps["onSubmit"];
   onToggle: (enabled: boolean) => void;
 }) {
+  const cadence = CADENCES[kind];
+  const title = `${cadence.label}定时任务`;
   const [times, setTimes] = useState<string[]>(() => schedule?.custom_schedule_times ?? []);
   const [hour, setHour] = useState("9");
   const [minute, setMinute] = useState("30");
@@ -185,8 +223,8 @@ function CustomTimeCard({
     if (times.includes(value)) {
       return;
     }
-    if (times.length >= MAX_CUSTOM_SCHEDULE_TIMES) {
-      setPickerError(`最多添加 ${MAX_CUSTOM_SCHEDULE_TIMES} 个时点`);
+    if (times.length >= cadence.maxCustomTimes) {
+      setPickerError(`最多添加 ${cadence.maxCustomTimes} 个时点`);
       return;
     }
     setTimes([...times, value].sort());
@@ -202,8 +240,8 @@ function CustomTimeCard({
     }
     const payload = {
       enabled: true,
-      task_type: "market_analysis" as const,
-      interval_minutes: schedule?.interval_minutes ?? 15,
+      task_type: kind,
+      interval_minutes: schedule?.interval_minutes ?? cadence.defaultIntervalMinutes,
       schedule_times: times,
     };
     try {
@@ -222,20 +260,20 @@ function CustomTimeCard({
 
   return (
     <ModeCardShell
-      title="定时任务"
+      title={title}
       enabled={enabled}
       busy={busy}
       schedule={schedule}
       onToggle={onToggle}
     >
-      <section className="flex flex-col gap-3" aria-label="定时任务调度规则">
+      <section className="flex flex-col gap-3" aria-label={`${title}调度规则`}>
         <SectionLabel icon={<SlidersHorizontalIcon className="size-3.5" />}>调度规则</SectionLabel>
         <div className="flex flex-wrap items-center gap-2">
-          <Label htmlFor="custom-hour" className="sr-only">
+          <Label htmlFor={`${kind}-custom-hour`} className="sr-only">
             时
           </Label>
           <Input
-            id="custom-hour"
+            id={`${kind}-custom-hour`}
             type="number"
             min={0}
             max={23}
@@ -246,11 +284,11 @@ function CustomTimeCard({
             className="h-8 w-20 text-center"
           />
           <span className="text-muted-foreground">:</span>
-          <Label htmlFor="custom-minute" className="sr-only">
+          <Label htmlFor={`${kind}-custom-minute`} className="sr-only">
             分
           </Label>
           <Input
-            id="custom-minute"
+            id={`${kind}-custom-minute`}
             type="number"
             min={0}
             max={59}
@@ -270,7 +308,7 @@ function CustomTimeCard({
         </p>
       </section>
 
-      <section className="flex flex-col gap-3" aria-label="已选时点">
+      <section className="flex flex-col gap-3" aria-label={`${title}已选时点`}>
         <SectionLabel icon={<Clock3Icon className="size-3.5" />}>
           已选时点
           <span className="text-muted-foreground/80 font-normal tabular-nums">
@@ -304,7 +342,7 @@ function CustomTimeCard({
       <div className="border-border/60 flex justify-end border-t pt-4">
         <Button disabled={busy || times.length === 0} onClick={() => void handleSave()}>
           {busy ? <Spinner className="size-4" /> : null}
-          保存定时任务设置
+          保存{title}设置
         </Button>
       </div>
     </ModeCardShell>
@@ -313,28 +351,37 @@ function CustomTimeCard({
 
 /** 间隔任务：按间隔自动生成时点。 */
 function IntervalCard({
+  kind,
   schedule,
   enabled,
   busy,
   onSubmit,
   onToggle,
 }: {
+  kind: ScheduleKind;
   schedule?: StrategySchedule | undefined;
   enabled: boolean;
   busy: boolean;
   onSubmit: ScheduleSettingsCardsProps["onSubmit"];
   onToggle: (enabled: boolean) => void;
 }) {
+  const cadence = CADENCES[kind];
+  const title = `${cadence.label}间隔任务`;
   const [intervalText, setIntervalText] = useState(() =>
-    schedule?.interval_minutes ? String(schedule.interval_minutes) : "15",
+    schedule?.interval_minutes
+      ? String(schedule.interval_minutes)
+      : String(cadence.defaultIntervalMinutes),
   );
-  const interval = Math.max(15, Number(intervalText) || 15);
-  const preview = useMemo(() => generatePreview(interval), [interval]);
+  const interval = Math.max(
+    cadence.minIntervalMinutes,
+    Number(intervalText) || cadence.defaultIntervalMinutes,
+  );
+  const preview = useMemo(() => generatePreview(interval, kind), [interval, kind]);
 
   const handleSave = async () => {
     const payload = {
       enabled: true,
-      task_type: "market_analysis" as const,
+      task_type: kind,
       interval_minutes: interval,
       schedule_times: null,
     };
@@ -354,23 +401,23 @@ function IntervalCard({
 
   return (
     <ModeCardShell
-      title="间隔任务"
+      title={title}
       enabled={enabled}
       busy={busy}
       schedule={schedule}
       onToggle={onToggle}
     >
-      <section className="flex flex-col gap-3" aria-label="间隔任务调度规则">
+      <section className="flex flex-col gap-3" aria-label={`${title}调度规则`}>
         <SectionLabel icon={<SlidersHorizontalIcon className="size-3.5" />}>调度规则</SectionLabel>
         <div className="flex items-center gap-2 text-sm">
           <span>每</span>
-          <Label htmlFor="interval-minutes" className="sr-only">
-            运行间隔（分钟）
+          <Label htmlFor={`${kind}-interval-minutes`} className="sr-only">
+            {cadence.label}运行间隔（分钟）
           </Label>
           <Input
-            id="interval-minutes"
+            id={`${kind}-interval-minutes`}
             type="number"
-            min={15}
+            min={cadence.minIntervalMinutes}
             max={240}
             disabled={busy}
             value={intervalText}
@@ -380,11 +427,11 @@ function IntervalCard({
           <span>分钟运行一次</span>
         </div>
         <p className="text-muted-foreground text-xs">
-          按间隔自动生成工作日盘中时点（间隔最小 15 分钟）
+          按间隔自动生成工作日盘中时点（间隔最小 {cadence.minIntervalMinutes} 分钟）
         </p>
       </section>
 
-      <section className="flex flex-col gap-3" aria-label="间隔任务运行时点预览">
+      <section className="flex flex-col gap-3" aria-label={`${title}运行时点预览`}>
         <SectionLabel icon={<Clock3Icon className="size-3.5" />}>
           运行时点预览
           <span className="text-muted-foreground/80 font-normal tabular-nums">
@@ -406,7 +453,7 @@ function IntervalCard({
       <div className="border-border/60 flex justify-end border-t pt-4">
         <Button disabled={busy} onClick={() => void handleSave()}>
           {busy ? <Spinner className="size-4" /> : null}
-          保存间隔任务设置
+          保存{title}设置
         </Button>
       </div>
     </ModeCardShell>
@@ -415,16 +462,21 @@ function IntervalCard({
 
 /** Two mutually exclusive schedule modes: custom times or interval-derived. */
 function ScheduleModeSection({
+  kind,
   schedule,
   savePending,
   writeDisabled,
   onSubmit,
+  children,
 }: {
+  kind: ScheduleKind;
   schedule?: StrategySchedule | undefined;
   savePending: boolean;
   writeDisabled: boolean;
   onSubmit: ScheduleSettingsCardsProps["onSubmit"];
+  children?: ReactNode;
 }) {
+  const cadence = CADENCES[kind];
   const busy = writeDisabled || savePending;
   const customActive = schedule
     ? schedule.enabled && Boolean(schedule.custom_schedule_times)
@@ -452,7 +504,7 @@ function ScheduleModeSection({
     }
     const payload = {
       enabled: false,
-      task_type: "market_analysis" as const,
+      task_type: kind,
       interval_minutes: schedule.interval_minutes,
       // Keep any custom trigger times so re-enabling restores the same plan.
       schedule_times: schedule.custom_schedule_times ?? null,
@@ -468,9 +520,12 @@ function ScheduleModeSection({
   const alreadyDisabled = schedule !== undefined && !schedule.enabled;
 
   return (
-    <div className="flex flex-col gap-6">
+    <section className="flex flex-col gap-4" aria-label={`${cadence.label}任务`}>
+      <h3 className="text-base font-semibold tracking-tight">{cadence.label}任务</h3>
+      {children}
       <div className="flex flex-col gap-4">
         <CustomTimeCard
+          kind={kind}
           schedule={schedule}
           enabled={customOn}
           busy={busy}
@@ -478,6 +533,7 @@ function ScheduleModeSection({
           onToggle={toggleCustom}
         />
         <IntervalCard
+          kind={kind}
           schedule={schedule}
           enabled={intervalOn}
           busy={busy}
@@ -489,20 +545,22 @@ function ScheduleModeSection({
       {schedule && !customOn && !intervalOn ? (
         <div className="border-border/60 bg-card/50 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 sm:px-5">
           {alreadyDisabled ? (
-            <span className="text-muted-foreground text-sm">任务已停用，不会自动运行</span>
+            <span className="text-muted-foreground text-sm">
+              {cadence.label}任务已停用，不会自动运行
+            </span>
           ) : (
             <>
               <span className="text-muted-foreground text-sm">
-                当前未启用任何运行方式，任务将不会自动运行
+                当前未启用任何运行方式，{cadence.label}任务将不会自动运行
               </span>
               <Button variant="outline" disabled={busy} onClick={() => void handleDisable()}>
-                停用任务
+                停用{cadence.label}任务
               </Button>
             </>
           )}
         </div>
       ) : null}
-    </div>
+    </section>
   );
 }
 
@@ -518,14 +576,30 @@ export function ScheduleSettingsCards({
   );
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
       <ScheduleModeSection
+        kind="market_analysis"
         key={`market-${scheduleMap.market_analysis?.updated_at ?? "new"}`}
         schedule={scheduleMap.market_analysis}
         savePending={savePending}
         writeDisabled={writeDisabled}
         onSubmit={onSubmit}
       />
+      <ScheduleModeSection
+        kind="order_watch"
+        key={`watch-${scheduleMap.order_watch?.updated_at ?? "new"}`}
+        schedule={scheduleMap.order_watch}
+        savePending={savePending}
+        writeDisabled={writeDisabled}
+        onSubmit={onSubmit}
+      >
+        {/* Enabling this is the first time a watch ever runs. Everything else
+            merged so far changed nothing on the schedule; this row does. */}
+        <p className="text-muted-foreground text-xs">
+          盯盘按操盘写下的挂单处置清单逐笔核对，只撤单、不研究。启用后会立刻按此节奏运行——
+          请先在「阶段设置」里为盯盘阶段选好模型（建议 flash 类型、低档位），否则每次运行都会失败。
+        </p>
+      </ScheduleModeSection>
     </div>
   );
 }
