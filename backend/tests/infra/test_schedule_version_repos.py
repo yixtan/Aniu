@@ -103,4 +103,6 @@ async def test_schedule_repository_degrades_corrupt_custom_times(session) -> Non
     fetched = await repo.get_by_id(stored.schedule_id)
     assert fetched is not None
     assert fetched.custom_schedule_times is None
-    assert fetched.schedule_times == ("09:30", "10:30", "13:00", "14:00")
+    assert fetched.schedule_times == (
+        "09:30", "10:30", "11:20", "13:00", "14:00", "14:50"
+    )

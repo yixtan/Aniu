@@ -8,7 +8,7 @@ from typing import Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.api.schemas.common import ApiModel
-from backend.business.schedules import cadence_for
+from backend.business.schedules import ANALYSIS_INTERVAL_CHOICES, cadence_for
 
 
 class StrategyScheduleResponse(ApiModel):
@@ -46,6 +46,14 @@ class SaveScheduleFields(BaseModel):
         minimum = cadence_for(self.task_type).min_interval_minutes
         if self.interval_minutes < minimum:
             raise ValueError(f"interval_minutes must be >= {minimum}")
+        # An analysis interval is one of a fixed set, each with its own
+        # timetable; the watch keeps a free interval above its floor.
+        if (
+            self.task_type == "market_analysis"
+            and self.interval_minutes not in ANALYSIS_INTERVAL_CHOICES
+        ):
+            choices = ", ".join(str(item) for item in ANALYSIS_INTERVAL_CHOICES)
+            raise ValueError(f"interval_minutes must be one of: {choices}")
         return self
 
 
