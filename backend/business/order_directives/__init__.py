@@ -12,6 +12,11 @@ from backend.business.order_directives.parsing import (
 )
 from backend.business.order_directives.ports import OrderDirectiveRepositoryPort
 from backend.business.order_directives.service import OrderDirectiveService
+from backend.business.order_directives.settlement import (
+    Settlement,
+    SettlementKind,
+    settle,
+)
 
 __all__ = [
     "DirectiveAction",
@@ -20,6 +25,9 @@ __all__ = [
     "OrderDirectiveRepositoryPort",
     "OrderDirectiveService",
     "RepricePlan",
+    "Settlement",
+    "SettlementKind",
     "parse_directive",
     "parse_directives",
+    "settle",
 ]
