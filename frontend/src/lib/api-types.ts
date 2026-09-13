@@ -50,7 +50,10 @@ export type ModelProfilePayload = Omit<
   "selected_models"
 >;
 
-export type TraceStageKey = "run" | "summary";
+// Hand-written, so it has to follow the backend by hand: `watch` is the
+// order watch's single stage. Leaving it out would not fail the build — it
+// would render a watch run's stage with no name.
+export type TraceStageKey = "run" | "summary" | "watch";
 
 export type TraceToolSource = "aggregate" | "mx" | "public" | "internal";
 

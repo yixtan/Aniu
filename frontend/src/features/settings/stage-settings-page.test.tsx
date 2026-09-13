@@ -415,7 +415,7 @@ describe("StageSettingsPage prompt configs", () => {
 
     renderPage();
 
-    await user.click(await screen.findByRole("tab", { name: "执行阶段" }));
+    await user.click(await screen.findByRole("tab", { name: "操盘阶段" }));
     expect(screen.getByLabelText("关注清单补充提示词")).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "总结阶段" }));
@@ -442,7 +442,7 @@ describe("StageSettingsPage prompt configs", () => {
 
     renderPage();
 
-    await user.click(await screen.findByRole("tab", { name: "执行阶段" }));
+    await user.click(await screen.findByRole("tab", { name: "操盘阶段" }));
     await user.type(screen.getByLabelText("关注清单补充提示词"), "先快速筛查");
     await user.click(screen.getByRole("button", { name: "保存阶段设置" }));
 
@@ -499,5 +499,21 @@ describe("StageSettingsPage prompt configs", () => {
 
     expect(await screen.findByText(/flash/i)).toBeInTheDocument();
     expect(screen.getByText(/低档位|最低/)).toBeInTheDocument();
+  });
+
+  it("lists the stages as 操盘, 盯盘, 总结, 梦境 — the watch beside the run it serves", async () => {
+    api.getSettings.mockResolvedValue(settings);
+    api.listModelChannels.mockResolvedValue([]);
+
+    renderPage();
+
+    const tabs = await screen.findAllByRole("tab");
+    const stageTabs = tabs.map((tab) => tab.textContent ?? "").filter((t) => t.includes("阶段"));
+    expect(stageTabs.map((t) => t.replace(/\s+/g, ""))).toEqual([
+      expect.stringContaining("操盘阶段"),
+      expect.stringContaining("盯盘阶段"),
+      expect.stringContaining("总结阶段"),
+      expect.stringContaining("梦境阶段"),
+    ]);
   });
 });

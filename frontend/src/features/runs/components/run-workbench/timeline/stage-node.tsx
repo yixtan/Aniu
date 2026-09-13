@@ -18,7 +18,8 @@ import { StageReport } from "./stage-report";
 type StageStatus = TraceStage["status"];
 
 const STAGE_DISPLAY_NAME: Record<TraceStageKey, string> = {
-  run: "执行阶段",
+  run: "操盘阶段",
+  watch: "盯盘阶段",
   summary: "总结阶段",
 };
 
