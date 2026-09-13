@@ -263,8 +263,11 @@ describe("TradingSchedulesPage", () => {
       const interval = watch.getByLabelText("盯盘运行间隔（分钟）");
       expect(interval).toHaveValue(3);
       expect(interval).toHaveAttribute("min", "3");
-      // Both sessions to the bell: 41 + 41 at three minutes.
-      expect(watch.getByText("82 个")).toBeInTheDocument();
+      // Both sessions to the bell, each starting one interval after the
+      // open so the first pass never races the analysis: 40 + 40.
+      expect(watch.getByText("80 个")).toBeInTheDocument();
+      expect(watch.getByText("09:33")).toBeInTheDocument();
+      expect(watch.queryByText("09:30")).not.toBeInTheDocument();
       expect(watch.getByText("11:30")).toBeInTheDocument();
       expect(watch.getByText("15:00")).toBeInTheDocument();
 

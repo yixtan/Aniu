@@ -73,6 +73,17 @@ class TaskCadence:
     morning_end_minutes: int
     afternoon_end_minutes: int
     max_schedule_times: int
+    starts_one_interval_late: bool = False
+    """Whether the first pass of each session is one interval after the open.
+
+    The watch acts on a plan the analysis run writes, and the first analysis
+    of a session starts at the open and takes minutes. A watch at the same
+    second has nothing to read and only races the analysis for the run lock —
+    whoever loses is skipped or delayed. Starting one interval late removes
+    that race and the two guaranteed-empty passes a day; later coincidences
+    (every hour, when three-minute and twenty-minute grids meet) are rare and
+    already handled by the collision policy.
+    """
 
 
 _CADENCES: dict[str, TaskCadence] = {
@@ -89,6 +100,7 @@ _CADENCES: dict[str, TaskCadence] = {
         # Two full sessions at the floor interval, with room to spare; the
         # interval, not this, is what actually bounds a derived schedule.
         max_schedule_times=96,
+        starts_one_interval_late=True,
     ),
 }
 ALLOWED_TASK_TYPES = frozenset(_CADENCES)
@@ -124,11 +136,12 @@ def derive_intraday_schedule_times(
     ):
         return ANALYSIS_TIMETABLE[interval_minutes]
     times: list[str] = []
+    offset = interval_minutes if cadence.starts_one_interval_late else 0
     for start, end in (
         (MORNING_START_MINUTES, cadence.morning_end_minutes),
         (AFTERNOON_START_MINUTES, cadence.afternoon_end_minutes),
     ):
-        current = start
+        current = start + offset
         while current <= end:
             times.append(_minutes_to_time_string(current))
             current += interval_minutes

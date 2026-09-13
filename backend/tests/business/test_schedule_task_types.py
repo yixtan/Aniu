@@ -56,8 +56,11 @@ def test_the_watch_runs_to_the_close_and_the_analysis_stops_short_of_it() -> Non
 def test_a_three_minute_watch_covers_both_sessions_without_the_break() -> None:
     times = derive_intraday_schedule_times(3, ORDER_WATCH_TASK_TYPE)
 
-    assert len(times) == 82
-    assert times[0] == "09:30"
+    # One interval after each open, so the first pass never races the
+    # analysis run that has to write the plan it reads.
+    assert len(times) == 80
+    assert times[0] == "09:33"
+    assert "13:03" in times and "13:00" not in times
     assert times[-1] == "15:00"
     assert not [value for value in times if "11:33" <= value <= "12:57"]
 
