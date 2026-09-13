@@ -774,6 +774,21 @@
           "trades_failed": {
             "title": "Trades Failed",
             "type": "integer"
+          },
+          "watch_tokens": {
+            "default": 0,
+            "title": "Watch Tokens",
+            "type": "integer"
+          },
+          "watches_completed": {
+            "default": 0,
+            "title": "Watches Completed",
+            "type": "integer"
+          },
+          "watches_failed": {
+            "default": 0,
+            "title": "Watches Failed",
+            "type": "integer"
           }
         },
         "required": [
@@ -3705,6 +3720,16 @@
           },
           "tokens": {
             "title": "Tokens",
+            "type": "integer"
+          },
+          "watch_tokens": {
+            "default": 0,
+            "title": "Watch Tokens",
+            "type": "integer"
+          },
+          "watches": {
+            "default": 0,
+            "title": "Watches",
             "type": "integer"
           }
         },

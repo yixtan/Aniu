@@ -1059,6 +1059,21 @@ export interface components {
             trades_completed: number;
             /** Trades Failed */
             trades_failed: number;
+            /**
+             * Watch Tokens
+             * @default 0
+             */
+            watch_tokens: number;
+            /**
+             * Watches Completed
+             * @default 0
+             */
+            watches_completed: number;
+            /**
+             * Watches Failed
+             * @default 0
+             */
+            watches_failed: number;
         };
         /** DeleteMemoryRequest */
         DeleteMemoryRequest: {
@@ -2079,6 +2094,16 @@ export interface components {
             runs: number;
             /** Tokens */
             tokens: number;
+            /**
+             * Watch Tokens
+             * @default 0
+             */
+            watch_tokens: number;
+            /**
+             * Watches
+             * @default 0
+             */
+            watches: number;
         };
         /** TraceStageResponse */
         TraceStageResponse: {

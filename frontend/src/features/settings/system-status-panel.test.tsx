@@ -36,6 +36,9 @@ function dailyRow(offset: number, overrides: Record<string, number> = {}) {
     memory_distinct_queries: 0,
     data_calls: 0,
     data_call_failures: 0,
+    watches_completed: 0,
+    watches_failed: 0,
+    watch_tokens: 0,
     ...overrides,
   };
 }
@@ -50,6 +53,12 @@ const status = {
       data_calls: 134,
       memory_reads: 19,
       memory_distinct_queries: 5,
+      // A full day of watches: eighty-two passes, one of them failed, and
+      // more tokens than the analysis runs — which is exactly why they are
+      // folded apart rather than into the columns above.
+      watches_completed: 81,
+      watches_failed: 1,
+      watch_tokens: 2_000_000,
     }),
     dailyRow(1, {
       runs_completed: 16,
@@ -71,6 +80,8 @@ const status = {
     tokens: offset === 0 ? 780_000 : offset === 1 ? 1_080_000 : 0,
     runs: offset < 2 ? 16 : 0,
     dream_tokens: offset === 1 ? 442_124 : 0,
+    watch_tokens: offset === 0 ? 2_000_000 : 0,
+    watches: offset === 0 ? 82 : 0,
   })),
   dreams: [
     {
@@ -155,14 +166,22 @@ describe("SystemStatusPanel", () => {
 
     const chart = await screen.findByText("Token 消耗（近 30 天）");
     const card = chart.closest("[data-slot=card]") as HTMLElement;
-    // 1.86M of runs plus the 442k a dream spent reading the day back.
-    expect(within(card).getByText("2.30M")).toBeInTheDocument();
+    // 1.86M of runs, 2.00M of watches, and the 442k a dream spent reading
+    // the day back — 4.30M in all, each tier shown on its own.
+    expect(within(card).getByText("4.30M")).toBeInTheDocument();
+    expect(within(card).getByText("2.00M")).toBeInTheDocument();
     expect(within(card).getByText("442k")).toBeInTheDocument();
-    expect(within(card).getByText("1.15M")).toBeInTheDocument();
+    // 日均 over the two active days.
+    expect(within(card).getByText("2.15M")).toBeInTheDocument();
+    // 每次运行 stays an analysis figure: watches do not dilute it.
     expect(within(card).getByText("72k")).toBeInTheDocument();
+    // 每次盯盘: 2.00M over 82 passes.
+    expect(within(card).getByText("24k")).toBeInTheDocument();
     expect(within(card).getAllByRole("listitem")).toHaveLength(30);
     // With nothing under the pointer the readout names today.
-    expect(within(card).getByText("09-09 周三 · 780k · 16 次运行")).toBeInTheDocument();
+    expect(
+      within(card).getByText("09-09 周三 · 780k · 16 次运行，盯盘 2.00M · 82 次"),
+    ).toBeInTheDocument();
   });
 
   it("lists the recent dreams and what each did to memory", async () => {
@@ -213,5 +232,33 @@ describe("SystemStatusPanel", () => {
     renderPanel();
 
     expect(await screen.findByText("系统状态加载失败")).toBeInTheDocument();
+  });
+
+  it("folds the watch apart from the runs everywhere it is shown", async () => {
+    api.getSystemStatus.mockResolvedValue(status);
+
+    renderPanel();
+
+    // Today's run card: the analysis count is untouched by eighty-two watches.
+    const today = await screen.findByRole("region", { name: "今日状态" });
+    expect(within(today).getByText("16")).toBeInTheDocument();
+    expect(within(today).getByText("81")).toBeInTheDocument();
+    const watchFailed = within(today).getByText("1", { selector: ".text-destructive" });
+    expect(watchFailed).toBeInTheDocument();
+
+    // The 7-day table has its own watch columns; the failure alarms.
+    const table = screen.getByRole("region", { name: "近 7 天" });
+    expect(within(table).getByRole("columnheader", { name: "盯盘" })).toBeInTheDocument();
+    expect(within(table).getByRole("columnheader", { name: "盯盘失败" })).toBeInTheDocument();
+    const rows = within(table).getAllByRole("row");
+    expect(within(rows[1] as HTMLElement).getByText("81")).toBeInTheDocument();
+
+    // The chart's bar for today carries the watch tokens by name.
+    const chart = screen.getByText("Token 消耗（近 30 天）");
+    const card = chart.closest("[data-slot=card]") as HTMLElement;
+    const bars = within(card).getAllByRole("listitem");
+    const todayBar = bars[bars.length - 1] as HTMLElement;
+    expect(todayBar.getAttribute("aria-label")).toContain("盯盘 2,000,000 tokens");
+    expect(todayBar.getAttribute("aria-label")).toContain("82 次盯盘");
   });
 });

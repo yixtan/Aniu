@@ -64,6 +64,7 @@ class SystemStatusRepository:
 
     async def runs_since(self, since: datetime) -> list[RunFact]:
         statement = select(
+            StrategyRunModel.id,
             StrategyRunModel.started_at,
             StrategyRunModel.status,
             StrategyRunModel.summary_render_mode,
@@ -72,12 +73,13 @@ class SystemStatusRepository:
         rows = (await self._session.execute(statement)).all()
         return [
             RunFact(
+                task_id=int(task_id),
                 started_at=_as_utc(started_at),
                 status=status,
                 summary_html=render_mode == _SUMMARY_HTML,
                 total_tokens=int(total_tokens or 0),
             )
-            for started_at, status, render_mode, total_tokens in rows
+            for task_id, started_at, status, render_mode, total_tokens in rows
         ]
 
     async def tool_calls_since(self, since: datetime) -> list[ToolCallFact]:
