@@ -63,3 +63,15 @@ def test_the_watch_is_configured_like_any_other_stage() -> None:
     # runs 82 times a day, and silently borrowing a heavy analysis model would
     # cost ten times what it should. Unconfigured must fail, not overspend.
     assert settings["Watch"].model_selected_model_id is None
+
+
+def test_the_type_digit_is_read_off_the_id_and_old_ids_read_as_zero() -> None:
+    from backend.business.runs.numbering import is_order_watch_task, task_type_of
+
+    assert task_type_of(20260913301) == 3
+    assert task_type_of(20260913101) == 1
+    assert task_type_of(20260913401) == 4
+    assert is_order_watch_task(20260913301)
+    assert not is_order_watch_task(20260913101)
+    # Ids from before task numbering carry no type digit.
+    assert task_type_of(12345) == 0

@@ -2,6 +2,7 @@
 
 from backend.business.runs.job import ACTIVE_JOB_STATUSES, RunJob, RunJobStatus
 from backend.business.runs.numbering import (
+    ORDER_WATCH_TASK_TYPE,
     RUN_TASK_TYPE,
     SCHEDULE_TASK_TYPE,
     build_run_id,
@@ -50,6 +51,7 @@ __all__ = [
     "ALLOWED_TRANSITIONS",
     "STAGE_PIPELINE",
     "INITIAL_STATE",
+    "ORDER_WATCH_TASK_TYPE",
     "RUN_TASK_TYPE",
     "RunEvent",
     "RunEventType",

@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from time import perf_counter
 from typing import Protocol, cast
 
+from backend.business.order_directives import OrderDirective
 from backend.business.runs import StrategyRun
 from backend.business.runs.abort import RunAbortSignal
 from backend.business.runs.agent_runner import AgentRunnerFactoryPort
@@ -20,10 +21,11 @@ from backend.business.runs.execution import (
     SummaryDraft,
     ToolLoopEventSink,
 )
-from backend.business.runs.ports import FollowedCompaniesPort
+from backend.business.runs.ports import FollowedCompaniesPort, OrderPlanPort
 from backend.business.runs.run_events import RunEventType
 from backend.business.runs.stages.run_stage import RunStage
 from backend.business.runs.stages.summary_stage import SummaryStage
+from backend.business.runs.stages.watch_stage import WatchStage
 from backend.business.shared import RunAbortError, ServiceConfigurationError
 from backend.business.shared.enums import RunState, RunStatus
 
@@ -97,10 +99,12 @@ class AniuOrchestrator:
         stage_runtimes: dict[str, object] | None = None,
         run_stage: RunStage | None = None,
         summary_stage: SummaryStage | None = None,
+        watch_stage: WatchStage | None = None,
         abort_signal: RunAbortSignal | None = None,
         market_session_is_open: MarketSessionOpen,
         now_provider: NowProvider | None = None,
         watchlist: FollowedCompaniesPort | None = None,
+        order_plan: OrderPlanPort | None = None,
     ) -> None:
         self._callbacks = state_callbacks
         self._agent_runner_factory = agent_runner_factory
@@ -109,10 +113,12 @@ class AniuOrchestrator:
         self._stage_runtimes = stage_runtimes or {}
         self._run_stage = run_stage or RunStage()
         self._summary_stage = summary_stage or SummaryStage()
+        self._watch_stage = watch_stage or WatchStage()
         self._abort_signal = abort_signal
         self._market_session_is_open = market_session_is_open
         self._now_provider = now_provider or (lambda: datetime.now(tz=UTC))
         self._watchlist = watchlist
+        self._order_plan = order_plan
 
     async def _followed_companies(self, run_id: int) -> tuple[tuple[str, str], ...]:
         """Read the watchlist without letting it stop a run.
@@ -141,6 +147,9 @@ class AniuOrchestrator:
         context.tool_registry = self._tool_registry
         context.followed_companies = await self._followed_companies(run.run_id)
         self._attach_runtime_callbacks(context, run.run_id)
+
+        if run.current_state is RunState.WATCH:
+            return await self._execute_watch(run, context, started_at)
 
         report = await self._execute_run_stage(context)
         context.run_report = report
@@ -177,6 +186,71 @@ class AniuOrchestrator:
             summary=run.summary,
             total_duration_ms=int((perf_counter() - started_at) * 1000),
         )
+
+    async def _execute_watch(
+        self, run: StrategyRun, context: RunExecutionContext, started_at: float
+    ) -> RunResult:
+        """One stage, then done. There is no report to render.
+
+        The plan is read here and the authorization set derived from it, so
+        the authorizer refusing a write against an unnamed order and the model
+        being told about that order are the same list — not two that could
+        drift apart.
+        """
+
+        directives = await self._current_order_plan(run.run_id)
+        context.authorized_order_ids = frozenset(
+            item.order_id for item in directives
+        )
+        runtime = self._runtime_for(RunState.WATCH.value)
+        if runtime is None:
+            raise ServiceConfigurationError("Watch llm runtime is not configured")
+        context.llm_runtime = runtime
+        runner = self._agent_runner_factory.create(
+            context, label=RunState.WATCH.value, runtime=runtime
+        )
+        await self._callbacks.on_state_entered(run.run_id, RunState.WATCH.value)
+        report = cast(
+            RunReport,
+            await self._execute_stage(
+                run_id=run.run_id,
+                state_name=RunState.WATCH,
+                context=context,
+                execute=lambda: self._watch_stage.execute(
+                    context, runner, directives=directives
+                ),
+            ),
+        )
+        run.set_summary(report.content, render_mode="markdown")
+        run.advance_to(RunState.COMPLETED)
+        await self._callbacks.on_state_entered(run.run_id, RunState.COMPLETED.value)
+        return RunResult(
+            run_id=run.run_id,
+            status=run.status,
+            final_state=run.current_state,
+            summary=run.summary,
+            total_duration_ms=int((perf_counter() - started_at) * 1000),
+        )
+
+    async def _current_order_plan(self, run_id: int) -> tuple[OrderDirective, ...]:
+        """Read the plan; a failure here is the plan being empty, not a crash.
+
+        An empty plan forbids every write, so a read that fails degrades to
+        the safe side on its own. It is still logged, because a watch that
+        silently could not read its plan looks exactly like one that had none.
+        """
+
+        if self._order_plan is None:
+            return ()
+        try:
+            return await self._order_plan.current()
+        except Exception:
+            logger.warning(
+                "failed to read the order plan for a watch",
+                extra={"run_id": run_id},
+                exc_info=True,
+            )
+            return ()
 
     async def _execute_run_stage(self, context: RunExecutionContext) -> RunReport:
         runtime = self._runtime_for(RunState.RUN.value)

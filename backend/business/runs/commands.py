@@ -47,3 +47,31 @@ class StartRunCommand:
                 "model_name",
                 ensure_non_empty_str(self.model_name, "model_name"),
             )
+
+
+@dataclass(frozen=True, slots=True)
+class StartWatchCommand:
+    """Application command for creating an order-watch run.
+
+    Always scheduled: a watch is a pass over a plan on a cadence, and there is
+    nothing for a person to ask of it that the next pass would not do anyway.
+    """
+
+    schedule_id: int
+    prompt_version: str = "m1-bootstrap"
+    risk_rules_version: str = "llm-risk-decision"
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "schedule_id", ensure_positive_int(self.schedule_id, "schedule_id")
+        )
+        object.__setattr__(
+            self,
+            "prompt_version",
+            ensure_non_empty_str(self.prompt_version, "prompt_version"),
+        )
+        object.__setattr__(
+            self,
+            "risk_rules_version",
+            ensure_non_empty_str(self.risk_rules_version, "risk_rules_version"),
+        )

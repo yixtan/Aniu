@@ -85,17 +85,16 @@ class InMemoryRunRepository:
         self.runs: dict[int, StrategyRun] = {}
 
     async def next_run_id(self, reference_date=None, task_type: int = 1) -> int:
-        del task_type
         target_date = FIXED_NOW.date() if reference_date is None else reference_date
         existing = [
             run_id
             for run_id in self.runs
-            if str(run_id).startswith(f"{target_date:%Y%m%d}1")
+            if str(run_id).startswith(f"{target_date:%Y%m%d}{task_type}")
         ]
         if not existing:
-            return build_run_id(target_date, sequence=1)
+            return build_run_id(target_date, sequence=1, task_type=task_type)
         max_sequence = max(int(str(run_id)[9:]) for run_id in existing)
-        return build_run_id(target_date, sequence=max_sequence + 1)
+        return build_run_id(target_date, sequence=max_sequence + 1, task_type=task_type)
 
     async def get_running_run(self) -> StrategyRun | None:
         running_runs = [

@@ -198,6 +198,7 @@ async def _initialize_runtime(application: FastAPI, config: RuntimeConfig) -> No
         build_account_refresh_handler,
         build_market_analysis_handler,
         build_memory_dream_handler,
+        build_order_watch_handler,
     )
     from backend.infra.workers.memory_dream_worker import MemoryDreamWorker
     from backend.infra.workers.run_worker import build_run_worker
@@ -220,6 +221,11 @@ async def _initialize_runtime(application: FastAPI, config: RuntimeConfig) -> No
     job_runner = JobRunner(
         session_factory=session_factory,
         market_analysis_handler=build_market_analysis_handler(
+            session_factory=session_factory,
+            run_service_factory=runtime.run_service,
+            enqueue_run=run_worker.submit,
+        ),
+        order_watch_handler=build_order_watch_handler(
             session_factory=session_factory,
             run_service_factory=runtime.run_service,
             enqueue_run=run_worker.submit,

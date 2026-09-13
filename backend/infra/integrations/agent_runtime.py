@@ -95,7 +95,11 @@ class AgentRuntimeFactory:
         """Resolve one model runtime per snapshot stage from selected channels."""
 
         runtimes: dict[str, LlmRuntimeConfig] = {}
-        for stage_id in STRATEGY_STAGE_IDS:
+        # A watch freezes only its own stage's model; an analysis run freezes
+        # Run and Summary. Snapshots from before models were frozen at all
+        # carry nothing here, and those were all analysis runs.
+        stage_ids = tuple(snapshot.stage_models) or STRATEGY_STAGE_IDS
+        for stage_id in stage_ids:
             stage_settings = snapshot.stage_settings[stage_id]
             frozen_model = snapshot.stage_models.get(stage_id)
             runtime = (
