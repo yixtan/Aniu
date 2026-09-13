@@ -61,14 +61,22 @@ const STAGE_DEFINITIONS = [
   {
     id: "Run",
     sequence: 1,
-    label: "执行阶段",
+    label: "操盘阶段",
     icon: PlayIcon,
     shortDescription: "研究、判断并执行交易",
     description: "配置连续执行任务与生成 Markdown 报告的方式。",
   },
   {
-    id: "Summary",
+    id: "Watch",
     sequence: 2,
+    label: "盯盘阶段",
+    icon: EyeIcon,
+    shortDescription: "照看挂单，不做研究",
+    description: "配置按运行写下的挂单处置清单逐笔核对并执行的方式。",
+  },
+  {
+    id: "Summary",
+    sequence: 3,
     label: "总结阶段",
     icon: FileTextIcon,
     shortDescription: "生成安全展示报告",
@@ -76,19 +84,11 @@ const STAGE_DEFINITIONS = [
   },
   {
     id: "Dream",
-    sequence: 3,
+    sequence: 4,
     label: "梦境阶段",
     icon: MoonIcon,
     shortDescription: "整理长期记忆",
     description: "配置夜间阅读报告并维护长期记忆的方式。",
-  },
-  {
-    id: "Watch",
-    sequence: 4,
-    label: "盯盘阶段",
-    icon: EyeIcon,
-    shortDescription: "照看挂单，不做研究",
-    description: "配置按运行写下的挂单处置清单逐笔核对并执行的方式。",
   },
 ] as const;
 

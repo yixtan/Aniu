@@ -13,7 +13,7 @@ type PipelineStageDef = {
 };
 
 const STAGE_PIPELINE: readonly PipelineStageDef[] = [
-  { stageId: "Run", shortLabel: "执行" },
+  { stageId: "Run", shortLabel: "操盘" },
   { stageId: "Summary", shortLabel: "总结" },
   { stageId: "Watch", shortLabel: "盯盘" },
 ] as const;
