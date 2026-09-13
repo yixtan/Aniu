@@ -14,6 +14,9 @@ from backend.agent.harness import AgentHarness
 from backend.agent.json import json_safe, serialize_context
 from backend.agent.kernel.context_budget import ContextBudgetExceededError
 from backend.agent.kernel.runtime_config import LlmRuntimeConfig
+from backend.business.notifications.trade_event import (
+    parse_cancel_instruction_details,
+)
 from backend.business.runs import RunEventType, StrategySnapshot
 from backend.business.runs.agent_runner import (
     AgentRunnerPort,
@@ -43,11 +46,63 @@ from backend.infra.integrations.tool_policy import (
 )
 from backend.infra.repositories.tool_invocation_repo import ToolInvocationRepository
 from backend.llm import AbortSignal, LLMClientPort
+from backend.stock_api.mx.trading_parser import parse_trade_instruction
 from backend.stock_api.public import (
     InvalidStockRequest,
     PublicStockDataError,
     UnsupportedStockRequest,
 )
+
+
+def _intent_name(instruction: str) -> str:
+    try:
+        return parse_trade_instruction(instruction).name
+    except Exception:
+        # An instruction the parser refuses never reaches the broker either,
+        # so there is nothing here to authorize.
+        return ""
+
+
+def _unauthorized_order_refusal(
+    tool: object,
+    arguments: dict[str, object],
+    *,
+    authorized: frozenset[str] | None,
+) -> str | None:
+    """Refuse a write the current order plan does not cover.
+
+    Only an order watch sets ``authorized``; every other stage passes None and
+    is unaffected. The watch is given no research tools precisely so it cannot
+    form a view of its own, and this is the same boundary drawn around *which*
+    orders rather than which tools: it may act where a run wrote something
+    down, and nowhere else.
+
+    A blanket cancel is refused outright. It carries no order id, so there is
+    no way to check it against the plan — and its effect is to withdraw every
+    resting order, including the ones the plan explicitly said to keep.
+    """
+
+    if authorized is None:
+        return None
+    if not authorized:
+        return "本次没有可执行的挂单处置计划，已阻止所有写操作；仍可继续核对与说明。"
+
+    instruction = str(arguments.get("instruction") or "")
+    if _intent_name(instruction) == "cancel_all":
+        return (
+            "一键撤单会撤掉计划要求保留的委托，盯盘不得使用；"
+            "请对计划列出的委托逐笔撤单。"
+        )
+
+    order_id = str(parse_cancel_instruction_details(instruction).get("order_id") or "")
+    if not order_id:
+        return None
+    if order_id not in authorized:
+        return (
+            f"委托 {order_id} 不在本次挂单处置计划内，已阻止；"
+            "计划未提到的委托不得动。"
+        )
+    return None
 
 
 def _tool_enabled(tool: object, label: str) -> bool:
@@ -469,6 +524,14 @@ class AgentRunnerFactoryAdapter:
                 market_open = workflow.market_session_is_open
                 if not callable(market_open) or not market_open():
                     return "非交易时段，交易和撤单写操作已被阻止；仍可继续分析。"
+            if writes:
+                refusal = _unauthorized_order_refusal(
+                    tool,
+                    arguments,
+                    authorized=workflow.authorized_order_ids,
+                )
+                if refusal is not None:
+                    return refusal
             return None
 
         harness = AgentHarness(

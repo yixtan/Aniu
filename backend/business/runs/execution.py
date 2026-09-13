@@ -106,6 +106,17 @@ class RunExecutionContext:
     into the run snapshot: a company followed this morning should be seen by
     this afternoon's run.
     """
+    authorized_order_ids: frozenset[str] | None = None
+    """Orders the current plan speaks about, or None outside an order watch.
+
+    The watch decides *when* a stated condition is met; this decides whether
+    the order was ever in scope. Keeping the two apart is what makes the
+    agreed rule — no plan means look but do not touch — a property of the code
+    rather than a sentence in a prompt that a capable model may reason past.
+
+    An empty set is not the same as None: it says a plan was read and it named
+    nothing, which forbids every write. None says this is not a watch.
+    """
     abort_signal: AbortSignal | None = None
     tool_loop_event_sink: ToolLoopEventSink | None = None
     llm_stream_delta_sink: LlmStreamDeltaSink | None = None
