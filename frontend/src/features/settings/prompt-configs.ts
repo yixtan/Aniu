@@ -6,8 +6,12 @@ export type PromptProfileConfig = {
   run_prompt: string;
   summary_prompt: string;
   dream_prompt: string;
+  watch_prompt: string;
 };
 
+// Still v3: the watch prompt is optional with an empty fallback, the same way
+// the dream prompt was added, so profiles saved before it existed read back
+// unchanged. A new key is only needed when the shape stops being a superset.
 const PROMPT_CONFIGS_STORAGE_KEY = "aniu.prompt-configs.v3";
 const LEGACY_PROMPT_CONFIGS_STORAGE_KEY = "aniu.prompt-configs.v2";
 const REQUIRED_PROMPT_FIELDS = ["global_prompt", "run_prompt", "summary_prompt"] as const;
@@ -27,6 +31,7 @@ function normalizePromptConfig(item: unknown): PromptProfileConfig | null {
     run_prompt: String(data.run_prompt),
     summary_prompt: String(data.summary_prompt),
     dream_prompt: typeof data.dream_prompt === "string" ? data.dream_prompt : "",
+    watch_prompt: typeof data.watch_prompt === "string" ? data.watch_prompt : "",
   };
 }
 
@@ -78,6 +83,7 @@ export function parseImportedConfig(raw: unknown): PromptProfileConfig {
     run_prompt: String(data.run_prompt),
     summary_prompt: String(data.summary_prompt),
     dream_prompt: typeof data.dream_prompt === "string" ? data.dream_prompt : "",
+    watch_prompt: typeof data.watch_prompt === "string" ? data.watch_prompt : "",
   };
 }
 

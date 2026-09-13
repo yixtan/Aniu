@@ -1,6 +1,11 @@
-/** Frontend mirror of the backend two-stage pipeline. */
+/** Frontend mirror of the backend stage metadata.
+ *
+ * Run and Summary are the analysis run's two stages. Watch is an order watch,
+ * a run of its own with that one stage — it appears in traces and run lists,
+ * so it needs a label, but it is not a step an analysis run passes through.
+ */
 
-type PipelineStageId = "Run" | "Summary";
+type PipelineStageId = "Run" | "Summary" | "Watch";
 
 type PipelineStageDef = {
   stageId: PipelineStageId;
@@ -10,6 +15,7 @@ type PipelineStageDef = {
 const STAGE_PIPELINE: readonly PipelineStageDef[] = [
   { stageId: "Run", shortLabel: "执行" },
   { stageId: "Summary", shortLabel: "总结" },
+  { stageId: "Watch", shortLabel: "盯盘" },
 ] as const;
 
 function stageById(stageId: string | null | undefined): PipelineStageDef | null {

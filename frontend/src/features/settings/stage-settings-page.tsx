@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CpuIcon,
+  EyeIcon,
   FileTextIcon,
   LayersIcon,
   MoonIcon,
@@ -80,6 +81,14 @@ const STAGE_DEFINITIONS = [
     icon: MoonIcon,
     shortDescription: "整理长期记忆",
     description: "配置夜间阅读报告并维护长期记忆的方式。",
+  },
+  {
+    id: "Watch",
+    sequence: 4,
+    label: "盯盘阶段",
+    icon: EyeIcon,
+    shortDescription: "照看挂单，不做研究",
+    description: "配置按运行写下的挂单处置清单逐笔核对并执行的方式。",
   },
 ] as const;
 
@@ -444,7 +453,9 @@ export function StageSettingsPage() {
             ? { run_prompt: updatedStage.prompt }
             : activeStage.stage_id === "Summary"
               ? { summary_prompt: updatedStage.prompt }
-              : { dream_prompt: updatedStage.prompt }),
+              : activeStage.stage_id === "Watch"
+                ? { watch_prompt: updatedStage.prompt }
+                : { dream_prompt: updatedStage.prompt }),
         },
       },
       draftGeneration: stageDraftGenerationRef.current,
@@ -496,6 +507,7 @@ export function StageSettingsPage() {
     mutationFn: (config: PromptProfileConfig) => {
       const settings = settingsQuery.data!;
       const dreamPrompt = config.dream_prompt.trim() || settings.prompt_profile.dream_prompt;
+      const watchPrompt = config.watch_prompt.trim() || settings.prompt_profile.watch_prompt;
       return updateSettings({
         expected_revision: settings.revision,
         prompt_profile: {
@@ -506,6 +518,7 @@ export function StageSettingsPage() {
           run_prompt: config.run_prompt,
           summary_prompt: config.summary_prompt,
           dream_prompt: dreamPrompt,
+          watch_prompt: watchPrompt,
         },
         stage_settings: stages.map((stage) => ({
           ...stage,
@@ -514,7 +527,9 @@ export function StageSettingsPage() {
               ? config.run_prompt
               : stage.stage_id === "Summary"
                 ? config.summary_prompt
-                : dreamPrompt,
+                : stage.stage_id === "Watch"
+                  ? watchPrompt
+                  : dreamPrompt,
         })),
       });
     },
@@ -545,6 +560,7 @@ export function StageSettingsPage() {
       run_prompt: settings.prompt_profile.run_prompt,
       summary_prompt: settings.prompt_profile.summary_prompt,
       dream_prompt: settings.prompt_profile.dream_prompt,
+      watch_prompt: settings.prompt_profile.watch_prompt,
     };
   }
 
@@ -981,6 +997,17 @@ export function StageSettingsPage() {
                   </Field>
                 </div>
               </section>
+
+              {activeStage.stage_id === "Watch" ? (
+                <section className="flex flex-col gap-3" aria-label="盯盘模型建议">
+                  <SectionLabel icon={<EyeIcon className="size-3.5" />}>模型建议</SectionLabel>
+                  <FieldDescription>
+                    盯盘每 3 分钟跑一次、一天约 82 次，只核对挂单、不做研究。建议选一个
+                    flash 类型的模型，思考档位设为「低」或「最低」——它的设计前提就是不思考，
+                    档位越高越偏离这个前提，也越贵。
+                  </FieldDescription>
+                </section>
+              ) : null}
 
               {activeStage.stage_id === "Dream" ? (
                 <section className="flex flex-col gap-3" aria-label="梦境运行时间">

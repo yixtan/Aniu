@@ -26,6 +26,7 @@ const settings = {
     run_prompt: "执行提示词",
     summary_prompt: "总结提示词",
     dream_prompt: "梦境提示词",
+    watch_prompt: "盯盘提示词",
   },
   stage_settings: [
     {
@@ -53,6 +54,15 @@ const settings = {
       top_p: 1,
       thinking_effort: null,
       prompt: "梦境提示词",
+      watchlist_prompt: "",
+    },
+    {
+      stage_id: "Watch",
+      model_selected_model_id: null,
+      temperature: 0,
+      top_p: 1,
+      thinking_effort: null,
+      prompt: "盯盘提示词",
       watchlist_prompt: "",
     },
   ],
@@ -372,7 +382,7 @@ describe("StageSettingsPage prompt configs", () => {
     );
   });
 
-  it("saves current three-stage prompts as a named config", async () => {
+  it("saves current four-stage prompts as a named config", async () => {
     const user = userEvent.setup();
     api.getSettings.mockResolvedValue(settings);
     api.listModelChannels.mockResolvedValue([]);
@@ -393,6 +403,7 @@ describe("StageSettingsPage prompt configs", () => {
         run_prompt: "执行提示词",
         summary_prompt: "总结提示词",
         dream_prompt: "梦境提示词",
+        watch_prompt: "盯盘提示词",
       },
     ]);
   });
@@ -440,5 +451,53 @@ describe("StageSettingsPage prompt configs", () => {
       (stage: { stage_id: string }) => stage.stage_id === "Run",
     );
     expect(saved.watchlist_prompt).toBe("先快速筛查");
+  });
+
+  it("saves the watch prompt with the Watch stage and nothing else", async () => {
+    const user = userEvent.setup();
+    const configuredSettings = {
+      ...settings,
+      stage_settings: settings.stage_settings.map((stage) =>
+        stage.stage_id === "Watch" ? { ...stage, model_selected_model_id: 1 } : stage,
+      ),
+    };
+    api.getSettings.mockResolvedValue(configuredSettings);
+    api.listModelChannels.mockResolvedValue([
+      {
+        name: "测试通道",
+        enabled: true,
+        selected_models: [{ selected_model_id: 1, model_name: "测试模型", thinking_efforts: [] }],
+      },
+    ]);
+    api.updateSettings.mockResolvedValue({ ...configuredSettings, revision: 4 });
+
+    renderPage();
+
+    await user.click(await screen.findByRole("tab", { name: "盯盘阶段" }));
+    await user.click(screen.getByRole("button", { name: "保存阶段设置" }));
+
+    await waitFor(() => expect(api.updateSettings).toHaveBeenCalledTimes(1));
+    const payload = api.updateSettings.mock.calls[0]?.[0];
+    // The watch prompt lands in its own profile field and the dream prompt is
+    // untouched: Watch must not fall into the "else" branch that used to mean
+    // Dream, which would have overwritten the dream prompt with the watch one.
+    expect(payload?.prompt_profile).toEqual(
+      expect.objectContaining({ watch_prompt: "盯盘提示词", dream_prompt: "梦境提示词" }),
+    );
+    // No schedule time rides along: that is a Dream-only field.
+    expect(payload).not.toHaveProperty("dream_schedule_time");
+  });
+
+  it("tells the operator what kind of model a watch wants", async () => {
+    const user = userEvent.setup();
+    api.getSettings.mockResolvedValue(settings);
+    api.listModelChannels.mockResolvedValue([]);
+
+    renderPage();
+
+    await user.click(await screen.findByRole("tab", { name: "盯盘阶段" }));
+
+    expect(await screen.findByText(/flash/i)).toBeInTheDocument();
+    expect(screen.getByText(/低档位|最低/)).toBeInTheDocument();
   });
 });
