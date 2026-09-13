@@ -27,6 +27,7 @@ from backend.business.system_status.models import (
     RunFact,
     ToolCallFact,
     is_dream_task,
+    is_order_watch_task,
     market_day,
 )
 from backend.business.system_status.ports import SystemStatusRepositoryPort
@@ -54,6 +55,7 @@ def _by_day[T](
 def _fold_day(
     day: date,
     runs: list[RunFact],
+    watches: list[RunFact],
     tool_calls: list[ToolCallFact],
     data_calls: list[DataCallFact],
     reads: list[MemoryActivityFact],
@@ -67,6 +69,11 @@ def _fold_day(
         runs_failed=sum(run.status == RunStatus.FAILED.value for run in runs),
         summaries_html=sum(run.summary_html for run in completed),
         tokens=sum(run.total_tokens for run in runs),
+        watches_completed=sum(
+            watch.status == RunStatus.COMPLETED.value for watch in watches
+        ),
+        watches_failed=sum(watch.status == RunStatus.FAILED.value for watch in watches),
+        watch_tokens=sum(watch.total_tokens for watch in watches),
         trades_completed=sum(call.succeeded for call in trades),
         trades_failed=sum(not call.succeeded for call in trades),
         memory_writes=sum(call.succeeded for call in writes),
@@ -110,7 +117,11 @@ class SystemStatusService:
 
         # Runs are read once for the longer window; the status rows take the
         # slice they need from the same list.
-        runs = await self._repository.runs_since(_start_of(token_days[-1]))
+        all_runs = await self._repository.runs_since(_start_of(token_days[-1]))
+        # One read, split by the id's type digit: the watch gets its own
+        # columns everywhere below, and never touches the analysis ones.
+        runs = [fact for fact in all_runs if not is_order_watch_task(fact.task_id)]
+        watches = [fact for fact in all_runs if is_order_watch_task(fact.task_id)]
         tool_calls = await self._repository.tool_calls_since(status_since)
         data_calls = await self._repository.data_calls_since(status_since)
         activities = await self._repository.memory_activities_since(status_since)
@@ -119,6 +130,7 @@ class SystemStatusService:
         inventory = await self._repository.memory_inventory()
 
         runs_by_day = _by_day(runs, lambda fact: fact.started_at)
+        watches_by_day = _by_day(watches, lambda fact: fact.started_at)
         tools_by_day = _by_day(tool_calls, lambda fact: fact.created_at)
         data_by_day = _by_day(data_calls, lambda fact: fact.created_at)
         # Writes are counted from tool invocations (which also record
@@ -137,6 +149,7 @@ class SystemStatusService:
             _fold_day(
                 day,
                 runs_by_day[day],
+                watches_by_day[day],
                 tools_by_day[day],
                 data_by_day[day],
                 reads_by_day[day],
@@ -154,6 +167,8 @@ class SystemStatusService:
                 tokens=sum(run.total_tokens for run in runs_by_day[day]),
                 runs=len(runs_by_day[day]),
                 dream_tokens=dream_tokens_by_day[day],
+                watch_tokens=sum(watch.total_tokens for watch in watches_by_day[day]),
+                watches=len(watches_by_day[day]),
             )
             for day in token_days
         ]

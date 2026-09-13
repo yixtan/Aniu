@@ -7,6 +7,7 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from backend.business.dreams.models import DREAM_TASK_TYPE
+from backend.business.runs.numbering import ORDER_WATCH_TASK_TYPE
 
 # The panel answers "did today go right?", and a week is the context a person
 # needs to tell a bad day from a bad week. Tokens are a cost, and a cost reads
@@ -26,6 +27,7 @@ MEMORY_WRITE_TOOL = "memory_write"
 
 @dataclass(frozen=True, slots=True)
 class RunFact:
+    task_id: int
     started_at: datetime
     status: str
     summary_html: bool
@@ -91,6 +93,19 @@ def is_dream_task(task_id: int) -> bool:
     return len(text) > 8 and text[8] == str(DREAM_TASK_TYPE)
 
 
+def is_order_watch_task(task_id: int) -> bool:
+    """Whether a run was an order watch rather than an analysis run.
+
+    Same digit as above. The two are folded apart for the same reason a
+    dream's tokens are kept out of a day's run tokens: a watch is not an
+    analysis run, there are eighty-odd of them a day, and counting them
+    together would make every day look busy and every failure column noisy.
+    """
+
+    text = str(task_id)
+    return len(text) > 8 and text[8] == str(ORDER_WATCH_TASK_TYPE)
+
+
 __all__ = [
     "MARKET_TIMEZONE",
     "MEMORY_WRITE_TOOL",
@@ -105,5 +120,6 @@ __all__ = [
     "RunFact",
     "ToolCallFact",
     "is_dream_task",
+    "is_order_watch_task",
     "market_day",
 ]

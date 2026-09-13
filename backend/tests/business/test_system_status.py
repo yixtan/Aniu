@@ -27,6 +27,7 @@ NOW = datetime(2026, 9, 9, 12, 0, tzinfo=UTC)
 TODAY = date(2026, 9, 9)
 
 RUN_TASK = 20260909101
+WATCH_TASK = 20260909301
 DREAM_TASK = 20260908401
 OLDER_DREAM_TASK = 20260907401
 
@@ -40,10 +41,19 @@ def at(day: date, hour: int, minute: int = 0) -> datetime:
 
 
 def run(
-    moment: datetime, *, status: str = "COMPLETED", html: bool = True, tokens: int = 0
+    moment: datetime,
+    *,
+    status: str = "COMPLETED",
+    html: bool = True,
+    tokens: int = 0,
+    task_id: int = RUN_TASK,
 ) -> RunFact:
     return RunFact(
-        started_at=moment, status=status, summary_html=html, total_tokens=tokens
+        task_id=task_id,
+        started_at=moment,
+        status=status,
+        summary_html=html,
+        total_tokens=tokens,
     )
 
 
@@ -309,3 +319,39 @@ async def test_a_dream_that_reported_no_usage_contributes_nothing() -> None:
 
     assert {row.dream_tokens for row in status.tokens} == {0}
     assert status.dreams[0].total_tokens == 0
+
+
+@pytest.mark.asyncio
+async def test_a_watch_is_folded_apart_from_the_runs_on_its_day() -> None:
+    """Eighty-odd watches a day must not read as eighty-odd runs.
+
+    The run columns keep meaning analysis runs, the HTML ratio keeps its
+    denominator, and the watch gets columns of its own — the same reason a
+    dream's tokens sit beside a day's run tokens rather than inside them.
+    """
+
+    repository = FakeRepository(
+        runs=[
+            run(at(TODAY, 10, 0), tokens=1_234),
+            run(at(TODAY, 10, 3), tokens=210, html=False, task_id=WATCH_TASK),
+            run(
+                at(TODAY, 10, 6),
+                tokens=0,
+                html=False,
+                status="FAILED",
+                task_id=WATCH_TASK + 1,
+            ),
+        ],
+        inventory=EMPTY_INVENTORY,
+    )
+    status = await SystemStatusService(repository, clock=lambda: NOW).overview()
+
+    today = status.days[0]
+    assert (today.runs_completed, today.runs_failed, today.summaries_html) == (1, 0, 1)
+    assert today.tokens == 1_234
+    assert (today.watches_completed, today.watches_failed) == (1, 1)
+    assert today.watch_tokens == 210
+
+    spend = status.tokens[0]
+    assert (spend.runs, spend.tokens) == (1, 1_234)
+    assert (spend.watches, spend.watch_tokens) == (2, 210)

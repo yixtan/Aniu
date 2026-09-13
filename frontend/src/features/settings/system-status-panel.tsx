@@ -70,6 +70,15 @@ function todayCards(today: DailyStatus): StatCard[] {
           value: `${today.summaries_html} / ${today.runs_completed}`,
           className: cn(today.summaries_html < today.runs_completed && alarm),
         },
+        // Watches are counted apart: eighty-odd a day, none of them an
+        // analysis run, so they get their own rows rather than inflating the
+        // ones above.
+        { label: "盯盘", value: String(today.watches_completed) },
+        {
+          label: "盯盘失败",
+          value: String(today.watches_failed),
+          className: cn(today.watches_failed > 0 && alarm),
+        },
       ],
     },
     {
@@ -250,23 +259,30 @@ function DreamsCard({
 const BAR = "bg-sky-500 hover:bg-sky-600 dark:bg-sky-400 dark:hover:bg-sky-300";
 const BAR_TODAY = "bg-sky-700 dark:bg-sky-200";
 const BAR_IDLE = "bg-sky-100 dark:bg-sky-900";
-/** Dreams stack on top of the day's runs, a lighter step of the same hue. */
+/** Three tiers of one hue, darkest at the bottom: runs, then watches, then dreams. */
+const BAR_WATCH = "bg-sky-400 dark:bg-sky-500";
 const BAR_DREAM = "bg-sky-300 dark:bg-sky-600";
 
 function describeDay(day: TokenDay) {
-  const head = `${formatDay(day.day)} · ${formatTokens(day.tokens)} · ${day.runs} 次运行`;
-  return day.dream_tokens > 0 ? `${head}，梦境 ${formatTokens(day.dream_tokens)}` : head;
+  const parts = [`${formatDay(day.day)} · ${formatTokens(day.tokens)} · ${day.runs} 次运行`];
+  if (day.watch_tokens > 0 || day.watches > 0) {
+    parts.push(`盯盘 ${formatTokens(day.watch_tokens)} · ${day.watches} 次`);
+  }
+  if (day.dream_tokens > 0) parts.push(`梦境 ${formatTokens(day.dream_tokens)}`);
+  return parts.join("，");
 }
 
 function TokenChart({ tokens }: { tokens: TokenDay[] }) {
   // Oldest on the left, today on the right — the way a cost is read.
   const series = [...tokens].reverse();
-  const dayTotal = (day: TokenDay) => day.tokens + day.dream_tokens;
+  const dayTotal = (day: TokenDay) => day.tokens + day.watch_tokens + day.dream_tokens;
   const runTotal = series.reduce((sum, day) => sum + day.tokens, 0);
+  const watchTotal = series.reduce((sum, day) => sum + day.watch_tokens, 0);
   const dreamTotal = series.reduce((sum, day) => sum + day.dream_tokens, 0);
-  const total = runTotal + dreamTotal;
+  const total = runTotal + watchTotal + dreamTotal;
   const runs = series.reduce((sum, day) => sum + day.runs, 0);
-  const activeDays = series.filter((day) => day.runs > 0).length;
+  const watches = series.reduce((sum, day) => sum + day.watches, 0);
+  const activeDays = series.filter((day) => day.runs > 0 || day.watches > 0).length;
   const peak = Math.max(1, ...series.map(dayTotal));
   const first = series[0];
   const last = series[series.length - 1];
@@ -284,6 +300,7 @@ function TokenChart({ tokens }: { tokens: TokenDay[] }) {
       <CardContent className="space-y-3">
         <dl className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
           <Stat label="合计" value={formatTokens(total)} />
+          <Stat label="其中盯盘" value={formatTokens(watchTotal)} />
           <Stat label="其中梦境" value={formatTokens(dreamTotal)} />
           <Stat label="有运行的天数" value={String(activeDays)} />
           <Stat
@@ -292,7 +309,13 @@ function TokenChart({ tokens }: { tokens: TokenDay[] }) {
           />
           <Stat
             label="每次运行"
-            value={runs === 0 ? "--" : formatTokens(Math.round(total / runs))}
+            value={
+              runs === 0 ? "--" : formatTokens(Math.round((runTotal + dreamTotal) / runs))
+            }
+          />
+          <Stat
+            label="每次盯盘"
+            value={watches === 0 ? "--" : formatTokens(Math.round(watchTotal / watches))}
           />
         </dl>
         <p className="text-xs tabular-nums" aria-live="polite">
@@ -313,7 +336,9 @@ function TokenChart({ tokens }: { tokens: TokenDay[] }) {
                 className="flex h-full min-w-0 flex-1 cursor-default items-end"
                 aria-label={
                   `${day.day} 运行 ${formatNumber(day.tokens)} tokens、` +
-                  `梦境 ${formatNumber(day.dream_tokens)} tokens，${day.runs} 次运行`
+                  `盯盘 ${formatNumber(day.watch_tokens)} tokens、` +
+                  `梦境 ${formatNumber(day.dream_tokens)} tokens，` +
+                  `${day.runs} 次运行，${day.watches} 次盯盘`
                 }
                 onMouseEnter={() => setHovered(index)}
               >
@@ -330,10 +355,20 @@ function TokenChart({ tokens }: { tokens: TokenDay[] }) {
                       style={{ height: `${(day.dream_tokens / combined) * 100}%` }}
                     />
                   ) : null}
+                  {day.watch_tokens > 0 ? (
+                    <span
+                      className={cn(
+                        "block w-full",
+                        day.dream_tokens > 0 ? "" : "rounded-t-[3px]",
+                        BAR_WATCH,
+                      )}
+                      style={{ height: `${(day.watch_tokens / combined) * 100}%` }}
+                    />
+                  ) : null}
                   <span
                     className={cn(
                       "block w-full flex-1 transition-colors",
-                      day.dream_tokens > 0 ? "" : "rounded-t-[3px]",
+                      day.dream_tokens > 0 || day.watch_tokens > 0 ? "" : "rounded-t-[3px]",
                       idle ? BAR_IDLE : isToday ? BAR_TODAY : BAR,
                     )}
                   />
@@ -376,6 +411,8 @@ function DaysTable({ days }: { days: DailyStatus[] }) {
               <TableHead>日期</TableHead>
               <TableHead className="text-right">运行</TableHead>
               <TableHead className="text-right">失败</TableHead>
+              <TableHead className="text-right">盯盘</TableHead>
+              <TableHead className="text-right">盯盘失败</TableHead>
               <TableHead className="text-right">HTML</TableHead>
               <TableHead className="text-right">下单</TableHead>
               <TableHead className="text-right">下单失败</TableHead>
@@ -397,6 +434,12 @@ function DaysTable({ days }: { days: DailyStatus[] }) {
                 </TableCell>
                 <TableCell className="text-right">
                   <Count value={row.runs_failed} alarmWhen={row.runs_failed > 0} />
+                </TableCell>
+                <TableCell className="text-right">
+                  <Count value={row.watches_completed} />
+                </TableCell>
+                <TableCell className="text-right">
+                  <Count value={row.watches_failed} alarmWhen={row.watches_failed > 0} />
                 </TableCell>
                 <TableCell className="text-right">
                   <Count

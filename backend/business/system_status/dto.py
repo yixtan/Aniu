@@ -21,6 +21,13 @@ class DailyStatusDTO:
     memory_distinct_queries: int
     data_calls: int
     data_call_failures: int
+    # Order watches, kept out of every column above. `runs_*` and `tokens`
+    # mean analysis runs; a watch is a few tool calls, eighty-odd times a
+    # day, and it never renders a summary — folded together, the failure
+    # column would drown and the HTML ratio would read as broken.
+    watches_completed: int = 0
+    watches_failed: int = 0
+    watch_tokens: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,6 +39,9 @@ class TokenDayDTO:
     # day's reports and the entire memory library in one go, and folding it in
     # silently would make a quiet trading day look busy.
     dream_tokens: int = 0
+    # And a watch is not an analysis run either; see DailyStatusDTO.
+    watch_tokens: int = 0
+    watches: int = 0
 
 
 @dataclass(frozen=True, slots=True)

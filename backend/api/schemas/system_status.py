@@ -21,6 +21,9 @@ class DailyStatusResponse(ApiModel):
     memory_distinct_queries: int
     data_calls: int
     data_call_failures: int
+    watches_completed: int = 0
+    watches_failed: int = 0
+    watch_tokens: int = 0
 
 
 class TokenDayResponse(ApiModel):
@@ -28,6 +31,8 @@ class TokenDayResponse(ApiModel):
     tokens: int
     runs: int
     dream_tokens: int = 0
+    watch_tokens: int = 0
+    watches: int = 0
 
 
 class DreamStatusResponse(ApiModel):

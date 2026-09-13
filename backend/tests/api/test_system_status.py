@@ -18,6 +18,7 @@ from backend.infra.db.models import (
 )
 
 RUN_ID = 20260909101
+WATCH_ID = 20260909301
 DREAM_ID = 20260908401
 
 
@@ -64,6 +65,23 @@ async def test_system_status_folds_the_days_activity(
             trace_json={},
             summary_render_mode="html",
             total_tokens=1234,
+            started_at=at,
+            completed_at=at,
+        )
+    )
+    # An order watch on the same day. It must land in its own columns and in
+    # none of the run columns: it is not an analysis run, and it never
+    # renders a summary, so counting it would also make the HTML ratio lie.
+    session.add(
+        StrategyRunModel(
+            id=WATCH_ID,
+            trigger_source="SCHEDULED",
+            status="COMPLETED",
+            current_state="Completed",
+            snapshot_json={},
+            trace_json={},
+            summary_render_mode="markdown",
+            total_tokens=210,
             started_at=at,
             completed_at=at,
         )
@@ -143,6 +161,9 @@ async def test_system_status_folds_the_days_activity(
         "memory_distinct_queries": 1,
         "data_calls": 2,
         "data_call_failures": 1,
+        "watches_completed": 1,
+        "watches_failed": 0,
+        "watch_tokens": 210,
     }
     token_row = next(row for row in body["tokens"] if row["day"] == expected_day)
     assert token_row == {
@@ -150,6 +171,8 @@ async def test_system_status_folds_the_days_activity(
         "tokens": 1234,
         "runs": 1,
         "dream_tokens": 0,
+        "watch_tokens": 210,
+        "watches": 1,
     }
 
     assert len(body["dreams"]) == 1
