@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Awaitable, Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from time import perf_counter
@@ -35,6 +37,25 @@ StageOutput = RunReport | SummaryDraft
 MarketSessionOpen = Callable[[datetime], bool]
 NowProvider = Callable[[], datetime]
 MAX_SUMMARY_ATTEMPTS = 2
+
+WATCH_DEADLINE_SECONDS = 60.0
+"""How long a watch may hold the worker before it is given up on.
+
+A watch is worth three minutes of coverage; an analysis is worth twenty and
+writes the plan the watch reads. So when one of them has to go, it is the
+watch — and the way that is enforced is by never letting a watch still be
+running when the analysis it would block arrives.
+
+The bound is derivable rather than chosen. A watch starts at most 50 seconds
+before an analysis does (the closest the two grids come, at 3 and 20 minutes),
+and an analysis will wait `ANALYSIS_WAITS_FOR_WATCH_SECONDS` for a watch to
+finish, so a watch that always ends within 50 + 30 = 80 seconds can never cost
+an analysis its slot. Sixty leaves margin; a test re-derives the ceiling.
+
+This is not a timeout on the HTTP read. On 2026-09-14 a single call took 304
+seconds to deliver 214 tokens — the socket was alive the whole time, dribbling,
+so no read timeout would ever have fired. What is bounded here is wall clock.
+"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,6 +126,7 @@ class AniuOrchestrator:
         now_provider: NowProvider | None = None,
         watchlist: FollowedCompaniesPort | None = None,
         order_plan: OrderPlanPort | None = None,
+        watch_deadline_seconds: float = WATCH_DEADLINE_SECONDS,
     ) -> None:
         self._callbacks = state_callbacks
         self._agent_runner_factory = agent_runner_factory
@@ -119,6 +141,7 @@ class AniuOrchestrator:
         self._now_provider = now_provider or (lambda: datetime.now(tz=UTC))
         self._watchlist = watchlist
         self._order_plan = order_plan
+        self._watch_deadline_seconds = watch_deadline_seconds
 
     async def _followed_companies(self, run_id: int) -> tuple[tuple[str, str], ...]:
         """Read the watchlist without letting it stop a run.
@@ -142,14 +165,15 @@ class AniuOrchestrator:
     async def execute(self, run: StrategyRun) -> RunResult:
         started_at = perf_counter()
         context = RunExecutionContext(run=run, snapshot=run.snapshot)
-        context.abort_signal = self._abort_signal or RunAbortSignal(run.run_id)
+        abort_signal = self._abort_signal or RunAbortSignal(run.run_id)
+        context.abort_signal = abort_signal
         context.market_session_is_open = self._is_market_session_open
         context.tool_registry = self._tool_registry
         context.followed_companies = await self._followed_companies(run.run_id)
         self._attach_runtime_callbacks(context, run.run_id)
 
         if run.current_state is RunState.WATCH:
-            return await self._execute_watch(run, context, started_at)
+            return await self._execute_watch(run, context, started_at, abort_signal)
 
         report = await self._execute_run_stage(context)
         context.run_report = report
@@ -187,8 +211,38 @@ class AniuOrchestrator:
             total_duration_ms=int((perf_counter() - started_at) * 1000),
         )
 
+    async def _give_up_on_the_watch_at_the_deadline(
+        self, run_id: int, signal: RunAbortSignal
+    ) -> None:
+        """Arm the run's own abort signal, rather than cancelling the task.
+
+        The drivers await each stream chunk through `await_with_abort`, so an
+        aborted watch stops at the next chunk — sub-second even on a provider
+        that is only dribbling. Going through the existing signal also means
+        the run unwinds the way a stopped run already does: ABORTED, the stage
+        marked with the reason, and deliberately no push, since an abort is not
+        a failure anyone needs waking for.
+        """
+
+        await asyncio.sleep(self._watch_deadline_seconds)
+        logger.warning(
+            "order watch gave up its slot",
+            extra={
+                "run_id": run_id,
+                "deadline_seconds": self._watch_deadline_seconds,
+            },
+        )
+        signal.abort(
+            f"盯盘超过 {int(self._watch_deadline_seconds)} 秒未完成，"
+            "已让位以免挡住操盘"
+        )
+
     async def _execute_watch(
-        self, run: StrategyRun, context: RunExecutionContext, started_at: float
+        self,
+        run: StrategyRun,
+        context: RunExecutionContext,
+        started_at: float,
+        abort_signal: RunAbortSignal,
     ) -> RunResult:
         """One stage, then done. There is no report to render.
 
@@ -210,17 +264,26 @@ class AniuOrchestrator:
             context, label=RunState.WATCH.value, runtime=runtime
         )
         await self._callbacks.on_state_entered(run.run_id, RunState.WATCH.value)
-        report = cast(
-            RunReport,
-            await self._execute_stage(
-                run_id=run.run_id,
-                state_name=RunState.WATCH,
-                context=context,
-                execute=lambda: self._watch_stage.execute(
-                    context, runner, directives=directives
-                ),
-            ),
+        deadline = asyncio.create_task(
+            self._give_up_on_the_watch_at_the_deadline(run.run_id, abort_signal),
+            name=f"watch-deadline:{run.run_id}",
         )
+        try:
+            report = cast(
+                RunReport,
+                await self._execute_stage(
+                    run_id=run.run_id,
+                    state_name=RunState.WATCH,
+                    context=context,
+                    execute=lambda: self._watch_stage.execute(
+                        context, runner, directives=directives
+                    ),
+                ),
+            )
+        finally:
+            deadline.cancel()
+            with suppress(asyncio.CancelledError):
+                await deadline
         run.set_summary(report.content, render_mode="markdown")
         run.advance_to(RunState.COMPLETED)
         await self._callbacks.on_state_entered(run.run_id, RunState.COMPLETED.value)

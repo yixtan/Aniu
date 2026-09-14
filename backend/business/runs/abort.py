@@ -31,4 +31,4 @@ class RunAbortSignal:
 
     def throw_if_aborted(self) -> None:
         if self._aborted:
-            raise RunAbortError(self.run_id)
+            raise RunAbortError(self.run_id, self.reason)

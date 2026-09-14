@@ -56,11 +56,17 @@ class RunDeletionNotAllowedError(DomainError):
 
 
 class RunAbortError(DomainError):
-    """Raised when an active run is aborted by user or system request."""
+    """Raised when an active run is aborted by user or system request.
 
-    def __init__(self, run_id: int):
-        super().__init__(f"strategy run aborted: run_id={run_id}")
+    The reason travels with it so the trace can say which: a run someone
+    stopped and one the system gave up on read identically otherwise.
+    """
+
+    def __init__(self, run_id: int, reason: str | None = None):
+        detail = f"strategy run aborted: run_id={run_id}"
+        super().__init__(detail if reason is None else f"{detail}（{reason}）")
         self.run_id = run_id
+        self.reason = reason
 
 
 class NotificationChannelNotFoundError(DomainError):
