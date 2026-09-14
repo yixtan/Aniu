@@ -101,6 +101,20 @@ describe("NotificationsSettingsPage", () => {
     });
   });
 
+  it("offers 盯盘完成 but leaves it off in a new channel", async () => {
+    const user = userEvent.setup();
+    api.listNotificationChannels.mockResolvedValue([]);
+
+    renderPage();
+
+    await user.click(await screen.findByRole("button", { name: /新增通道/ }));
+
+    // Both are offered, so the choice is the user's; only one starts on,
+    // because 盯盘 finishes every few minutes all session.
+    expect(screen.getByRole("checkbox", { name: /操盘完成/ })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /盯盘完成/ })).not.toBeChecked();
+  });
+
   it("reports a failed test delivery as an error", async () => {
     const user = userEvent.setup();
     api.listNotificationChannels.mockResolvedValue([channel]);
@@ -154,7 +168,9 @@ describe("NotificationsSettingsPage", () => {
     await user.click(await screen.findByRole("button", { name: /新增通道/ }));
 
     expect(screen.getByRole("checkbox", { name: /运行失败/ })).toBeChecked();
-    expect(screen.getByText("任务运行以失败告终；手动中止不会推送")).toBeInTheDocument();
+    expect(
+      screen.getByText("任何任务运行以失败告终，操盘和盯盘不分开；手动中止不会推送"),
+    ).toBeInTheDocument();
   });
 
   it("subscribes a new channel to run failures by default", async () => {

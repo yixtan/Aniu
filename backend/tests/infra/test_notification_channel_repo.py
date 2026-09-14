@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy import select
 
 from backend.business.notifications import (
+    DEFAULT_SUBSCRIBED_EVENTS,
     DeliveryStatus,
     NotificationChannelKind,
     NotificationDelivery,
@@ -102,7 +103,14 @@ async def test_deleting_a_channel_removes_its_secret(session) -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_row_without_usable_events_falls_back_to_every_event(session) -> None:
+async def test_a_row_without_usable_events_falls_back_to_the_default(session) -> None:
+    """The fallback is what a new channel gets, not the whole enum.
+
+    A row that names nothing recognisable is an old row. Handing it every kind
+    would sign it up for events that did not exist when it was written — 盯盘
+    being exactly that case, and exactly the one nobody wants by surprise.
+    """
+
     repo = NotificationChannelRepository(session)
     channel = await _create(repo)
     model = await session.get(NotificationChannelModel, channel.id)
@@ -113,7 +121,32 @@ async def test_a_row_without_usable_events_falls_back_to_every_event(session) ->
     reloaded = await repo.get(channel.id)
 
     assert reloaded is not None
-    assert reloaded.subscribed_events == frozenset(NotificationEventKind)
+    assert reloaded.subscribed_events == DEFAULT_SUBSCRIBED_EVENTS
+    assert NotificationEventKind.WATCH_COMPLETED not in reloaded.subscribed_events
+
+
+@pytest.mark.asyncio
+async def test_an_older_row_keeps_its_events_and_gains_no_new_one(session) -> None:
+    """The live rows on disk predate 盯盘; reloading must not enrol them."""
+
+    repo = NotificationChannelRepository(session)
+    channel = await _create(repo)
+    model = await session.get(NotificationChannelModel, channel.id)
+    assert model is not None
+    model.subscribed_events = [
+        "order_placed",
+        "order_cancelled",
+        "order_filled",
+        "run_failed",
+        "run_completed",
+    ]
+    await session.flush()
+
+    reloaded = await repo.get(channel.id)
+
+    assert reloaded is not None
+    assert reloaded.wants(NotificationEventKind.RUN_COMPLETED) is True
+    assert reloaded.wants(NotificationEventKind.WATCH_COMPLETED) is False
 
 
 @pytest.mark.asyncio

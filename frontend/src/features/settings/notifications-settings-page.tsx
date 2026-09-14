@@ -99,15 +99,22 @@ const EVENTS: { id: NotificationEvent; label: string; description: string }[] = 
   {
     id: "run_failed",
     label: "运行失败",
-    description: "任务运行以失败告终；手动中止不会推送",
+    description: "任何任务运行以失败告终，操盘和盯盘不分开；手动中止不会推送",
   },
   {
     id: "run_completed",
-    label: "运行完成",
-    description: "任务运行成功结束。零交易的运行不触发其他事件，只有这条能证明它跑过",
+    label: "操盘完成",
+    description: "操盘任务成功结束。零交易的运行不触发其他事件，只有这条能证明它跑过",
+  },
+  {
+    id: "watch_completed",
+    label: "盯盘完成",
+    description:
+      "盯盘任务成功结束。默认不推送：它每隔几分钟跑一次，一天数十条；它真撤了单会单独发「撤单」",
   },
 ];
 
+/** 新建通道默认订阅的事件，与后端 DEFAULT_SUBSCRIBED_EVENTS 一致（不含盯盘完成）。 */
 const DEFAULT_EVENTS: NotificationEvent[] = [
   "order_placed",
   "order_cancelled",

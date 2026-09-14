@@ -19,6 +19,7 @@ from backend.business.notifications.fill_tracker import (
     detect_fill_events,
 )
 from backend.business.notifications.models import (
+    DEFAULT_SUBSCRIBED_EVENTS,
     DeliveryStatus,
     NotificationChannel,
     NotificationChannelKind,
@@ -40,6 +41,7 @@ from backend.business.notifications.service import NotificationService
 from backend.business.notifications.trade_event import trade_event_from_tool_payload
 
 __all__ = [
+    "DEFAULT_SUBSCRIBED_EVENTS",
     "CreateChannelCommand",
     "DeliveryStatus",
     "FillDetectionResult",
