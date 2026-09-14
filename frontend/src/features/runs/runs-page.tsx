@@ -248,7 +248,11 @@ export function RunsPage() {
       </Card>
 
       <Card className="border-border/75 bg-card/90 gap-0 py-0 shadow-sm">
-        <CardContent className="space-y-5 px-4 py-4">
+        {/* Capped so the detail panel below stays on screen: the watch alone is
+            eighty chips, which is taller than the viewport on a phone and most
+            of it on a laptop. The page scrolls too, so nothing is unreachable
+            either way. */}
+        <CardContent className="max-h-[46svh] space-y-5 overflow-y-auto px-4 py-4">
           <RunTimetable
             title="操盘"
             hint={isToday ? "按当前设置排定的时点" : "当天实际发生的运行"}
@@ -270,7 +274,11 @@ export function RunsPage() {
         </CardContent>
       </Card>
 
-      <div className="flex min-h-0 flex-1 flex-col">
+      {/* A floor, not just a share. The panel is built from `h-full` cards, so
+          inside a scrolling column `flex-1` alone would let it collapse to
+          nothing once the timetable above is tall — which on a phone it always
+          is. It still grows to fill when there is room. */}
+      <div className="flex min-h-[24rem] flex-1 flex-col">
         <RunWorkbenchPanel
           runId={shownRunId}
           now={now}
