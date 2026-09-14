@@ -34,7 +34,7 @@ const NINE_FIFTY = "2026-09-14T01:50:02Z";
 function run(overrides: Partial<RunSummary> & { run_id: number }): RunSummary {
   return {
     task_id: overrides.run_id,
-    trigger_source: "SCHEDULED",
+    trigger_source: "scheduled",
     schedule_id: 1,
     status: "COMPLETED",
     current_state: "Summary",

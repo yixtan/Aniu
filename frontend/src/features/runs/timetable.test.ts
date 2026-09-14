@@ -6,7 +6,7 @@ import type { RunSummary } from "@/lib/api-types";
 function run(overrides: Partial<RunSummary> & { run_id: number }): RunSummary {
   return {
     task_id: overrides.run_id,
-    trigger_source: "SCHEDULED",
+    trigger_source: "scheduled",
     schedule_id: 1,
     status: "COMPLETED",
     current_state: "Summary",
@@ -38,6 +38,24 @@ describe("marketClock", () => {
 });
 
 describe("buildTimetable", () => {
+  it("reads the wire's own spelling of scheduled", () => {
+    // The API sends TriggerSource.value, which is lowercase. Written as
+    // "SCHEDULED" here once, and every scheduled run fell off its planned time
+    // and reappeared as an unplanned chip — with the fixture agreeing, so the
+    // tests passed. The fixtures above now carry exactly what the API sends.
+    const slots = buildTimetable({
+      plannedTimes: ["09:30"],
+      runs: [
+        run({ run_id: 20260914101, trigger_source: "scheduled", started_at: NINE_THIRTY }),
+      ],
+      now: NOON,
+    });
+
+    expect(slots).toEqual([
+      expect.objectContaining({ label: "09:30", status: "completed", unplanned: false }),
+    ]);
+  });
+
   it("puts a run on the planned time it belongs to", () => {
     const slots = buildTimetable({
       plannedTimes: ["09:30", "09:50"],
@@ -102,7 +120,7 @@ describe("buildTimetable", () => {
         run({ run_id: 20260914101, started_at: NINE_THIRTY }),
         run({
           run_id: 20260914102,
-          trigger_source: "MANUAL",
+          trigger_source: "manual",
           schedule_id: null,
           started_at: NINE_FIFTY,
         }),
