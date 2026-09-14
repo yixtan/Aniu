@@ -436,3 +436,67 @@ describe("StageTimeline", () => {
     );
   });
 });
+
+describe("StageTimeline for an order watch", () => {
+  const WATCH_RECORD = "## 盯盘记录\n\n- 601869 长飞光纤：条件未触发，保留挂单";
+
+  const watchStage: TraceStage = {
+    stage_id: "watch:na",
+    key: "watch",
+    status: "completed",
+    started_at: "2026-09-14T01:33:10Z",
+    ended_at: "2026-09-14T01:33:20Z",
+    steps: [
+      {
+        step_id: "result",
+        type: "result",
+        title: "盯盘记录",
+        status: "completed",
+        summary: "调用工具 2 次",
+        content: WATCH_RECORD,
+        tool_call: null,
+        started_at: null,
+        ended_at: null,
+      },
+    ],
+  };
+
+  function watchRun(): RunDetail {
+    return makeRun({
+      run_id: 20260914301,
+      task_id: 20260914301,
+      trigger_source: "scheduled",
+      summary: WATCH_RECORD,
+      summary_render_mode: "markdown",
+      trace: {
+        schema_version: 3,
+        event_seq: 2,
+        current_stage_id: null,
+        // One stage, and no Summary: a watch records what it did and stops.
+        stages: [watchStage],
+      },
+    });
+  }
+
+  it("shows a watch's record as the run's final report", () => {
+    // It has no Summary stage, so gating the panel on one left the record
+    // reachable only by expanding the stage node — on a page whose whole
+    // purpose is reading what a watch did.
+    renderTimeline(watchRun());
+
+    expect(screen.getByRole("heading", { name: "最终运行报告" })).toBeInTheDocument();
+    expect(screen.getAllByText(/条件未触发，保留挂单/).length).toBeGreaterThan(0);
+  });
+
+  it("does not print the record twice once the stages are opened", () => {
+    renderTimeline(watchRun());
+
+    // A finished run collapses its stages, which is the other half of why the
+    // record was hard to reach — so open them before checking for a repeat.
+    fireEvent.click(screen.getByRole("button", { name: "展开阶段" }));
+
+    expect(screen.getByText("盯盘阶段")).toBeInTheDocument();
+    // The stage node skips the result the panel below already shows.
+    expect(screen.getAllByText(/条件未触发，保留挂单/)).toHaveLength(1);
+  });
+});
