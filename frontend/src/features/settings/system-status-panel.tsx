@@ -258,14 +258,20 @@ function DreamsCard({
 const BAR_IDLE = "bg-muted";
 
 /** One hue per provider — distinct rather than graded, because these are
- *  different things being compared, not more and less of one thing. */
+ *  different things being compared, not more and less of one thing.
+ *
+ *  No `dark:` variants, deliberately. This app has no dark mode: one palette
+ *  on `:root`, no toggle, nothing that sets a `dark` class. Tailwind's `dark:`
+ *  follows the operating system regardless, so adding it here would repaint
+ *  these bars on a machine set to dark while the page around them stayed
+ *  white. Half a dark mode is worse than none. */
 const CHANNEL_COLORS = [
-  "bg-sky-500 dark:bg-sky-400",
-  "bg-violet-500 dark:bg-violet-400",
-  "bg-amber-500 dark:bg-amber-400",
-  "bg-emerald-500 dark:bg-emerald-400",
-  "bg-rose-500 dark:bg-rose-400",
-  "bg-teal-500 dark:bg-teal-400",
+  "bg-sky-500",
+  "bg-violet-500",
+  "bg-amber-500",
+  "bg-emerald-500",
+  "bg-rose-500",
+  "bg-teal-500",
 ] as const;
 const BAR_UNRECORDED = "bg-muted-foreground/40";
 
