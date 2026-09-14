@@ -117,6 +117,55 @@ async def test_a_finished_run_is_mailed_while_away_mode_is_on() -> None:
     assert mailer.calls == [4321]
 
 
+async def test_a_finished_watch_is_never_mailed_even_while_away() -> None:
+    """盯盘 finishes about eighty times a session and has no report to send.
+
+    Its task id carries a 3 in the ninth digit, the same thing the worker and
+    the status page read.
+    """
+
+    service, _, mailer = build(AwayMode(active_date=date(2026, 9, 8)))
+
+    await service.on_run_completed(20260908301)
+
+    assert mailer.calls == []
+
+
+async def test_an_analysis_on_the_same_day_is_still_mailed() -> None:
+    """The skip must be the watch's digit, not the shape of a modern task id."""
+
+    service, _, mailer = build(AwayMode(active_date=date(2026, 9, 8)))
+
+    await service.on_run_completed(20260908101)
+
+    assert mailer.calls == [20260908101]
+
+
+async def test_a_watch_does_not_even_read_the_away_switch() -> None:
+    """Eighty completions a day must not be eighty queries for the same row.
+
+    Counted rather than raised: ``on_run_completed`` swallows every exception
+    on purpose, so a repo that blew up would prove nothing.
+    """
+
+    class CountingRepo(FakeRepo):
+        reads = 0
+
+        async def get(self) -> AwayMode | None:
+            type(self).reads += 1
+            return await super().get()
+
+    service = AwayModeService(
+        repo=CountingRepo(AwayMode(active_date=date(2026, 9, 8))),
+        mailer=FakeMailer(),
+        now_provider=lambda: MORNING,
+    )
+
+    await service.on_run_completed(20260908301)
+
+    assert CountingRepo.reads == 0
+
+
 async def test_a_finished_run_is_not_mailed_while_away_mode_is_off() -> None:
     service, _, mailer = build()
 
