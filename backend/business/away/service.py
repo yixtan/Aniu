@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from backend.business.away.dto import AwayModeDTO, to_away_mode_dto
 from backend.business.away.models import AwayMode, market_date
 from backend.business.away.ports import AwayModeRepositoryPort, RunReportMailerPort
+from backend.business.runs.numbering import is_order_watch_task
 from backend.business.shared import CommitterPort
 
 NowProvider = Callable[[], datetime]
@@ -56,10 +57,22 @@ class AwayModeService:
     async def on_run_completed(self, run_id: int) -> None:
         """Mail the run's report when away mode is on for the current day.
 
+        盯盘 is skipped outright. Away mode hands over the day's analyses while
+        nobody is at the machine, and a watch produces no report to hand over —
+        it records which resting orders it left alone, about eighty times a
+        session. The one thing it does that is worth interrupting someone for,
+        a cancel, already pushes on its own. There is deliberately no switch:
+        eighty emails has no setting at which it is useful.
+
+        The test comes before the repository read, so a watch costs one integer
+        comparison rather than a query, eighty times a day.
+
         Never raises: the run has already succeeded by the time this is
         reached, and an email problem must not turn that into a failure.
         """
 
+        if is_order_watch_task(run_id):
+            return
         try:
             stored = await self._repo.get()
             if stored is None or not stored.is_active(self._now()):
