@@ -127,6 +127,7 @@ class DreamAgentRunner(DreamAgentPort):
         return DreamRunResult(
             content=result.content.strip(),
             total_tokens=result.usage.total_tokens,
+            channel_id=runtime.channel_profile_id,
         )
 
 

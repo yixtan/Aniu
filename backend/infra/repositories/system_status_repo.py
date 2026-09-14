@@ -68,6 +68,9 @@ def _dream_fact(row: MemoryDreamModel) -> DreamFact:
         completed_at=_optional_utc(row.completed_at),
         failure_reason=row.failure_reason,
         total_tokens=int(row.total_tokens or 0),
+        channel_id=(
+            None if row.channel_profile_id is None else int(row.channel_profile_id)
+        ),
     )
 
 

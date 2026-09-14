@@ -92,6 +92,7 @@ class MemoryDreamRepository:
                 result=dream.result,
                 failure_reason=dream.failure_reason,
                 total_tokens=dream.total_tokens,
+                channel_profile_id=dream.channel_id,
                 created_at=dream.created_at.isoformat(),
                 started_at=_serialize_datetime(dream.started_at),
                 completed_at=_serialize_datetime(dream.completed_at),
@@ -149,6 +150,7 @@ def _to_model(dream: MemoryDream) -> MemoryDreamModel:
         result=dream.result,
         failure_reason=dream.failure_reason,
         total_tokens=dream.total_tokens,
+        channel_profile_id=dream.channel_id,
         created_at=dream.created_at.isoformat(),
         started_at=_serialize_datetime(dream.started_at),
         completed_at=_serialize_datetime(dream.completed_at),
@@ -163,6 +165,9 @@ def _to_domain(model: MemoryDreamModel) -> MemoryDream:
         result=model.result,
         failure_reason=model.failure_reason,
         total_tokens=int(model.total_tokens or 0),
+        channel_id=(
+            None if model.channel_profile_id is None else int(model.channel_profile_id)
+        ),
         created_at=datetime.fromisoformat(model.created_at),
         started_at=(
             None

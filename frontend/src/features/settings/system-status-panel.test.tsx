@@ -88,7 +88,9 @@ const status = {
             { channel_id: 2, name: "v2ex", tokens: 780_000 },
           ]
         : offset === 1
-          ? [{ channel_id: 2, name: "v2ex", tokens: 1_080_000 }]
+          ? // The dream of that night counts inside its provider, not beside
+            // it: 1.08M of runs plus the 442k the dream spent.
+            [{ channel_id: 2, name: "v2ex", tokens: 1_522_124 }]
           : [],
     dream_tokens: offset === 1 ? 442_124 : 0,
     watch_tokens: offset === 0 ? 2_000_000 : 0,
@@ -183,8 +185,8 @@ describe("SystemStatusPanel", () => {
     // 2.00M appears twice now: once as the watch stat, once as DeepSeek's
     // share in the legend. They are the same tokens counted two ways.
     expect(within(card).getAllByText("2.00M")).toHaveLength(2);
-    // Same for the dream total: the 其中梦境 stat and the legend's 梦境 band.
-    expect(within(card).getAllByText("442k")).toHaveLength(2);
+    // Only the 其中梦境 stat now — the dream's tokens are inside v2ex's band.
+    expect(within(card).getByText("442k")).toBeInTheDocument();
     // 日均 over the two active days.
     expect(within(card).getByText("2.15M")).toBeInTheDocument();
     // 每次运行 stays an analysis figure: watches do not dilute it.
@@ -212,12 +214,12 @@ describe("SystemStatusPanel", () => {
     const legend = within(card).getByRole("list", { name: "渠道" });
 
     // Ordered by total spend, so a provider keeps its colour and its place
-    // between visits. 梦境 rides along: its provider was never recorded.
+    // between visits. Dreams are inside these totals, not beside them.
     expect(
       within(legend)
         .getAllByRole("listitem")
         .map((item) => item.textContent),
-    ).toEqual(["DeepSeek2.00M", "v2ex1.86M", "梦境442k"]);
+    ).toEqual(["v2ex2.30M", "DeepSeek2.00M"]);
   });
 
   it("lists the recent dreams and what each did to memory", async () => {

@@ -53,10 +53,14 @@ understate the day, which is the one thing a spend chart must not do.
 
 
 def _channel_spend(
-    facts: list[RunFact],
+    facts: list[RunFact | DreamFact],
     names: dict[int, str],
 ) -> tuple[ChannelTokensDTO, ...]:
     """One entry per provider that did work, heaviest first.
+
+    Dreams count here alongside runs: they are the same day's spend with the
+    same providers, and the chart is about who was asked. What kind of task it
+    was stays in the statistics and the readout beneath the bars.
 
     A channel someone has since deleted keeps its id as its label — the run
     still happened, and forgetting where it ran would lose more than an
@@ -203,15 +207,22 @@ class SystemStatusService:
         # A dream is filed under the day it reflected on, not the night it ran,
         # so the cost of thinking about a trading day sits with that day.
         dream_tokens_by_day: defaultdict[date, int] = defaultdict(int)
+        dreams_by_target: defaultdict[date, list[DreamFact]] = defaultdict(list)
         for dream in window_dreams:
             dream_tokens_by_day[dream.target_date] += dream.total_tokens
+            dreams_by_target[dream.target_date].append(dream)
         tokens = [
             TokenDayDTO(
                 day=day,
                 tokens=sum(run.total_tokens for run in runs_by_day[day]),
                 runs=len(runs_by_day[day]),
                 channels=_channel_spend(
-                    [*runs_by_day[day], *watches_by_day[day]], channel_names
+                    [
+                        *runs_by_day[day],
+                        *watches_by_day[day],
+                        *dreams_by_target[day],
+                    ],
+                    channel_names,
                 ),
                 dream_tokens=dream_tokens_by_day[day],
                 watch_tokens=sum(watch.total_tokens for watch in watches_by_day[day]),

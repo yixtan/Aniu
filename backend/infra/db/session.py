@@ -112,6 +112,38 @@ def _reject_removed_sqlite_tables(connection: Connection) -> None:
         )
 
 
+LEGACY_DREAM_CHANNEL_NAME = "v2ex"
+
+
+def _file_older_dreams_under_v2ex(connection: Connection) -> None:
+    """Give dreams that ran before the column existed the provider they used.
+
+    Jeffrey's answer, not an inference: those dreams ran on the channel he
+    calls v2ex, and the alternative — leaving them unattributed forever — puts
+    a permanent grey band on a chart about providers. Only the ones that
+    predate the column are touched; anything written from now on records its
+    own answer.
+
+    Matched by name rather than by id because ids are local to one
+    installation. A clone with no such channel has no old dreams either, so
+    nothing to file and nothing to guess at.
+    """
+
+    channel_id = connection.execute(
+        text("SELECT id FROM model_profiles WHERE name = :name LIMIT 1"),
+        {"name": LEGACY_DREAM_CHANNEL_NAME},
+    ).scalar()
+    if channel_id is None:
+        return
+    connection.execute(
+        text(
+            "UPDATE memory_dreams SET channel_profile_id = :channel_id "
+            "WHERE channel_profile_id IS NULL"
+        ),
+        {"channel_id": int(channel_id)},
+    )
+
+
 def _upgrade_memory_schema(connection: Connection) -> None:
     """Migrate the original structured memory tables to the simple schema."""
 
@@ -276,6 +308,11 @@ def _upgrade_sqlite_schema(connection: Connection) -> None:
                 "INTEGER NOT NULL DEFAULT 0"
             )
         )
+    if "channel_profile_id" not in dream_columns:
+        connection.execute(
+            text("ALTER TABLE memory_dreams ADD COLUMN channel_profile_id INTEGER")
+        )
+        _file_older_dreams_under_v2ex(connection)
 
     activity_columns = {
         column["name"]

@@ -67,13 +67,22 @@ def read(
     )
 
 
-def dream(task_id: int, target: date, *, status: str = "completed") -> DreamFact:
+def dream(
+    task_id: int,
+    target: date,
+    *,
+    status: str = "completed",
+    tokens: int = 0,
+    channel_id: int | None = None,
+) -> DreamFact:
     return DreamFact(
         task_id=task_id,
         target_date=target,
         status=status,
         completed_at=at(target, 23, 32),
         failure_reason=None,
+        total_tokens=tokens,
+        channel_id=channel_id,
     )
 
 
@@ -440,3 +449,41 @@ async def test_a_provider_with_no_tokens_does_not_get_a_band() -> None:
 
     today = next(row for row in status.tokens if row.day == TODAY)
     assert [entry.name for entry in today.channels] == ["DeepSeek"]
+
+
+async def test_a_dream_counts_against_the_provider_it_asked() -> None:
+    """A dream is the same day's spend with the same providers.
+
+    It used to sit in a band of its own only because nothing recorded where it
+    ran; now that something does, it belongs inside that provider's band.
+    """
+
+    repository = FakeRepository(
+        runs=[run(at(TODAY, 10, 0), tokens=1_000, channel_id=2)],
+        dreams=[dream(DREAM_TASK, TODAY, tokens=400, channel_id=2)],
+        channels={2: "v2ex"},
+        inventory=EMPTY_INVENTORY,
+    )
+
+    status = await SystemStatusService(repository, clock=lambda: NOW).overview()
+
+    today = next(row for row in status.tokens if row.day == TODAY)
+    assert [(entry.name, entry.tokens) for entry in today.channels] == [("v2ex", 1_400)]
+    # And it is still separable: the statistic did not move into the bar.
+    assert today.dream_tokens == 400
+
+
+async def test_a_dream_from_before_the_column_is_not_hidden() -> None:
+    """Every dream on disk predates the column. The migration files them under
+    the provider Jeffrey says they used, but a dream that slipped through still
+    has to be counted somewhere visible."""
+
+    repository = FakeRepository(
+        dreams=[dream(DREAM_TASK, TODAY, tokens=900, channel_id=None)],
+        inventory=EMPTY_INVENTORY,
+    )
+
+    status = await SystemStatusService(repository, clock=lambda: NOW).overview()
+
+    today = next(row for row in status.tokens if row.day == TODAY)
+    assert [(entry.name, entry.tokens) for entry in today.channels] == [("未记录", 900)]

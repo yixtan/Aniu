@@ -79,6 +79,7 @@ class DreamFact:
     completed_at: datetime | None
     failure_reason: str | None
     total_tokens: int = 0
+    channel_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

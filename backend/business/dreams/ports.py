@@ -50,6 +50,7 @@ class DreamRunResult:
 
     content: str
     total_tokens: int = 0
+    channel_id: int | None = None
 
 
 class DreamAgentPort(Protocol):
