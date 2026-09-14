@@ -32,7 +32,10 @@ export function AppLayout() {
     (item) => location.pathname === item.to || location.pathname.startsWith(`${item.to}/`),
   );
   const defaultFixedMain = isRuns || isMemories || isSettings;
-  const scrollableFixedMain = location.pathname === "/" || isMemories;
+  // Runs is here because its content has no ceiling: eighty watch chips wrap
+  // to sixteen rows on a phone, and a fixed main with no scroll simply clipped
+  // them — the page ended mid-morning with nowhere to go.
+  const scrollableFixedMain = location.pathname === "/" || isMemories || isRuns;
   const [mainLayoutOverride, setMainLayoutOverride] = useState<MainLayoutOverride | null>(null);
   const setMainFixed = useCallback(
     (fixed: boolean) => {
