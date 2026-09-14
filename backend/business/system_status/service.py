@@ -9,6 +9,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from backend.business.memories.models import MemoryActivityOperation
 from backend.business.shared.enums import RunStatus
 from backend.business.system_status.dto import (
+    ChannelTokensDTO,
     DailyStatusDTO,
     DreamStatusDTO,
     SystemStatusDTO,
@@ -41,6 +42,48 @@ def _start_of(day: date) -> datetime:
     """Midnight opening a market day, as the UTC moment stored rows compare to."""
 
     return datetime.combine(day, time.min, tzinfo=MARKET_TIMEZONE).astimezone(UTC)
+
+
+UNRECORDED_CHANNEL = "未记录"
+"""What a run saved before models were frozen into snapshots is filed under.
+
+Named rather than dropped: a bar that quietly omitted those tokens would
+understate the day, which is the one thing a spend chart must not do.
+"""
+
+
+def _channel_spend(
+    facts: list[RunFact],
+    names: dict[int, str],
+) -> tuple[ChannelTokensDTO, ...]:
+    """One entry per provider that did work, heaviest first.
+
+    A channel someone has since deleted keeps its id as its label — the run
+    still happened, and forgetting where it ran would lose more than an
+    unfamiliar number costs.
+    """
+
+    spend: defaultdict[int | None, int] = defaultdict(int)
+    for fact in facts:
+        spend[fact.channel_id] += fact.total_tokens
+    return tuple(
+        sorted(
+            (
+                ChannelTokensDTO(
+                    channel_id=channel_id,
+                    name=(
+                        UNRECORDED_CHANNEL
+                        if channel_id is None
+                        else names.get(channel_id, f"#{channel_id}")
+                    ),
+                    tokens=tokens,
+                )
+                for channel_id, tokens in spend.items()
+                if tokens > 0
+            ),
+            key=lambda entry: (-entry.tokens, entry.name),
+        )
+    )
 
 
 def _by_day[T](
@@ -128,6 +171,7 @@ class SystemStatusService:
         dreams = await self._repository.recent_dreams(RECENT_DREAMS)
         window_dreams = await self._repository.dreams_since(_start_of(token_days[-1]))
         inventory = await self._repository.memory_inventory()
+        channel_names = await self._repository.channel_names()
 
         runs_by_day = _by_day(runs, lambda fact: fact.started_at)
         watches_by_day = _by_day(watches, lambda fact: fact.started_at)
@@ -166,6 +210,9 @@ class SystemStatusService:
                 day=day,
                 tokens=sum(run.total_tokens for run in runs_by_day[day]),
                 runs=len(runs_by_day[day]),
+                channels=_channel_spend(
+                    [*runs_by_day[day], *watches_by_day[day]], channel_names
+                ),
                 dream_tokens=dream_tokens_by_day[day],
                 watch_tokens=sum(watch.total_tokens for watch in watches_by_day[day]),
                 watches=len(watches_by_day[day]),

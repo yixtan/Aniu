@@ -32,6 +32,18 @@ class RunFact:
     status: str
     summary_html: bool
     total_tokens: int
+    channel_id: int | None = None
+    """Which provider did this run's work, from the model it froze.
+
+    The stage that does the work names it — Run for an analysis, Watch for an
+    order watch. Summary is a rendering step and is not consulted, so a run
+    whose summary was rendered elsewhere still counts against the provider that
+    did the thinking. That only differs for four runs in the whole history, and
+    there is no better answer available: the per-stage token split exists in
+    only 28 of 214 traces, so tokens can be attributed per run or not at all.
+
+    ``None`` for a run saved before models were frozen into snapshots.
+    """
 
 
 @dataclass(frozen=True, slots=True)

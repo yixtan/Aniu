@@ -170,6 +170,9 @@ async def test_system_status_folds_the_days_activity(
         "day": expected_day,
         "tokens": 1234,
         "runs": 1,
+        # These runs froze no model, so the provider is unknown rather than
+        # guessed — and the tokens are still counted, under that name.
+        "channels": [{"channel_id": None, "name": "未记录", "tokens": 1444}],
         "dream_tokens": 0,
         "watch_tokens": 210,
         "watches": 1,

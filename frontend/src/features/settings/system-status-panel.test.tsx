@@ -79,6 +79,17 @@ const status = {
     day: day(offset),
     tokens: offset === 0 ? 780_000 : offset === 1 ? 1_080_000 : 0,
     runs: offset < 2 ? 16 : 0,
+    // Today's watches moved to DeepSeek while the analyses stayed on v2ex,
+    // which is the whole reason the bars are split by provider.
+    channels:
+      offset === 0
+        ? [
+            { channel_id: 5, name: "DeepSeek", tokens: 2_000_000 },
+            { channel_id: 2, name: "v2ex", tokens: 780_000 },
+          ]
+        : offset === 1
+          ? [{ channel_id: 2, name: "v2ex", tokens: 1_080_000 }]
+          : [],
     dream_tokens: offset === 1 ? 442_124 : 0,
     watch_tokens: offset === 0 ? 2_000_000 : 0,
     watches: offset === 0 ? 82 : 0,
@@ -169,19 +180,44 @@ describe("SystemStatusPanel", () => {
     // 1.86M of runs, 2.00M of watches, and the 442k a dream spent reading
     // the day back — 4.30M in all, each tier shown on its own.
     expect(within(card).getByText("4.30M")).toBeInTheDocument();
-    expect(within(card).getByText("2.00M")).toBeInTheDocument();
-    expect(within(card).getByText("442k")).toBeInTheDocument();
+    // 2.00M appears twice now: once as the watch stat, once as DeepSeek's
+    // share in the legend. They are the same tokens counted two ways.
+    expect(within(card).getAllByText("2.00M")).toHaveLength(2);
+    // Same for the dream total: the 其中梦境 stat and the legend's 梦境 band.
+    expect(within(card).getAllByText("442k")).toHaveLength(2);
     // 日均 over the two active days.
     expect(within(card).getByText("2.15M")).toBeInTheDocument();
     // 每次运行 stays an analysis figure: watches do not dilute it.
     expect(within(card).getByText("72k")).toBeInTheDocument();
     // 每次盯盘: 2.00M over 82 passes.
     expect(within(card).getByText("24k")).toBeInTheDocument();
-    expect(within(card).getAllByRole("listitem")).toHaveLength(30);
-    // With nothing under the pointer the readout names today.
+    const bars = within(card).getByRole("list", { name: /每日 Token 消耗/ });
+    expect(within(bars).getAllByRole("listitem")).toHaveLength(30);
+    // With nothing under the pointer the readout names today — the task split
+    // it used to carry alone, now followed by who was asked.
     expect(
-      within(card).getByText("09-09 周三 · 780k · 16 次运行，盯盘 2.00M · 82 次"),
+      within(card).getByText(
+        "09-09 周三 · 780k · 16 次运行，盯盘 2.00M · 82 次，DeepSeek 2.00M · v2ex 780k",
+      ),
     ).toBeInTheDocument();
+  });
+
+  it("names every provider in the window, heaviest first", async () => {
+    api.getSystemStatus.mockResolvedValue(status);
+
+    renderPanel();
+
+    const chart = await screen.findByText("Token 消耗（近 30 天）");
+    const card = chart.closest("[data-slot=card]") as HTMLElement;
+    const legend = within(card).getByRole("list", { name: "渠道" });
+
+    // Ordered by total spend, so a provider keeps its colour and its place
+    // between visits. 梦境 rides along: its provider was never recorded.
+    expect(
+      within(legend)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["DeepSeek2.00M", "v2ex1.86M", "梦境442k"]);
   });
 
   it("lists the recent dreams and what each did to memory", async () => {
