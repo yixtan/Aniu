@@ -188,12 +188,15 @@ export function StageNode({
   now,
   liveStepDeltaByStepId,
   isStopping = false,
+  reportShownBelow = false,
 }: {
   run: RunDetail;
   stage: TraceStage;
   now: Date;
   liveStepDeltaByStepId: Record<string, string>;
   isStopping?: boolean;
+  /** The final report panel already shows this stage's result. */
+  reportShownBelow?: boolean;
 }) {
   const isCurrent =
     !isStopping &&
@@ -327,7 +330,11 @@ export function StageNode({
                 liveStepDeltaByStepId={liveStepDeltaByStepId}
                 isLive={isCurrent}
               />
-              {stage.key !== "summary" ? (
+              {/* The stage whose result the final report panel already shows
+                  does not repeat it here. Decided by the timeline, which knows
+                  which stage that is; spelled out as "summary" it hid the Run
+                  stage's Markdown correctly and a watch's record wrongly. */}
+              {!reportShownBelow ? (
                 <StageReport
                   stage={stage}
                   steps={stage.steps.filter((step) => step.type === "result")}

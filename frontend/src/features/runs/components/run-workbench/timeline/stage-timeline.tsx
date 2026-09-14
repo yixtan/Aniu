@@ -130,7 +130,11 @@ export function StageTimeline({
 
   const totalDuration = formatRunDuration(run.started_at, run.completed_at, now);
   const runStage = stages.find((stage) => stage.key === "run");
-  const summaryStage = stages.find((stage) => stage.key === "summary");
+  // The stage a run ends on: Summary for an analysis, Watch for an order
+  // watch. Taken by position rather than by name — naming the stages here is
+  // what left a watch's record with nowhere to appear, since a watch has no
+  // Summary stage and its record lives in `run.summary` like any other.
+  const terminalStage = stages.at(-1);
   const runStatusLabel =
     isStopping && run.status === "RUNNING"
       ? "停止中"
@@ -141,7 +145,7 @@ export function StageTimeline({
           : run.status === "COMPLETED" || runStage?.status === "completed"
             ? "执行完成"
             : "执行中";
-  const finalReportSteps = summaryStage?.steps.filter((step) => step.type === "result") ?? [];
+  const finalReportSteps = terminalStage?.steps.filter((step) => step.type === "result") ?? [];
   // The run summary is the authoritative final report; the summary stage result
   // is only a fallback while a terminal snapshot is settling.
   const finalReportContent =
@@ -151,7 +155,7 @@ export function StageTimeline({
       .filter(Boolean)
       .join("\n\n");
   const showFinalReport =
-    (summaryStage?.status === "completed" || summaryStage?.status === "degraded") &&
+    (terminalStage?.status === "completed" || terminalStage?.status === "degraded") &&
     finalReportContent.length > 0;
   // The Summary stage rewrites the report as HTML for display, so the Markdown
   // an editor wants is the Run stage's own result, not what is on screen.
@@ -213,6 +217,7 @@ export function StageTimeline({
               now={now}
               liveStepDeltaByStepId={liveStepDeltaByStepId}
               isStopping={isStopping}
+              reportShownBelow={showFinalReport && stage.stage_id === terminalStage?.stage_id}
             />
           ))}
         </ol>
