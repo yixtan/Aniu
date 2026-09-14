@@ -248,11 +248,12 @@ export function RunsPage() {
       </Card>
 
       <Card className="border-border/75 bg-card/90 gap-0 py-0 shadow-sm">
-        {/* Capped so the detail panel below stays on screen: the watch alone is
-            eighty chips, which is taller than the viewport on a phone and most
-            of it on a laptop. The page scrolls too, so nothing is unreachable
-            either way. */}
-        <CardContent className="max-h-[46svh] space-y-5 overflow-y-auto px-4 py-4">
+        {/* Capped from `sm` up so the detail panel stays on screen without
+            scrolling: the watch alone is eighty chips, most of a laptop's
+            viewport. On a phone it is left uncapped instead — the page scrolls
+            there anyway, and a scrolling box inside a scrolling page is worse
+            than a long one. */}
+        <CardContent className="space-y-5 px-4 py-4 sm:max-h-[46svh] sm:overflow-y-auto">
           <RunTimetable
             title="操盘"
             hint={isToday ? "按当前设置排定的时点" : "当天实际发生的运行"}
@@ -277,8 +278,13 @@ export function RunsPage() {
       {/* A floor, not just a share. The panel is built from `h-full` cards, so
           inside a scrolling column `flex-1` alone would let it collapse to
           nothing once the timetable above is tall — which on a phone it always
-          is. It still grows to fill when there is room. */}
-      <div className="flex min-h-[24rem] flex-1 flex-col">
+          is. It still grows to fill when there is room.
+
+          The floor is most of the screen on a phone, where this panel is the
+          thing being read and a fixed 24rem left a report in a letterbox. On a
+          wider screen `flex-1` already hands it the rest of the page, so the
+          floor there only has to stop it collapsing. */}
+      <div className="flex min-h-[76svh] flex-1 flex-col sm:min-h-[24rem]">
         <RunWorkbenchPanel
           runId={shownRunId}
           now={now}
