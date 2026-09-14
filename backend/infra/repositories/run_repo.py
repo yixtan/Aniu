@@ -28,6 +28,18 @@ from backend.infra.repositories.task_numbering import next_task_id
 
 _MARKET_TIMEZONE = ZoneInfo("Asia/Shanghai")
 
+_IS_ANALYSIS_RUN = func.substr(cast(StrategyRunModel.id, String), 9, 1) != str(
+    ORDER_WATCH_TASK_TYPE
+)
+"""What a dream reflects on: the analyses, not the watches.
+
+A watch records which resting orders it left alone, not a report of the day,
+and it outnumbers the analyses five to one. Excluded in SQL rather than after
+the fetch, because LIMIT applies to rows: ten rows that are mostly watches came
+back as two reports, and `has_more` — which compares what was returned against
+what was asked for — then said there was nothing left with nine still unread.
+"""
+
 
 def _trace_projection_and_metrics(
     run: StrategyRun,
@@ -389,7 +401,10 @@ class RunRepository:
 
         Reads `completed_at`, and defines a day the same way
         `list_completed_reports` does, because the dream picking a date and the
-        dream reading that date's reports have to agree on what a day is.
+        dream reading that date's reports have to agree on what a day is. That
+        now includes agreeing on which runs count: a day of watches with no
+        analysis is not a day to reflect on, and picking it would spend a whole
+        agent turn concluding there was nothing to read.
         """
 
         days: list[date] = []
@@ -398,6 +413,7 @@ class RunRepository:
             statement = select(func.max(StrategyRunModel.completed_at)).where(
                 StrategyRunModel.status == RunStatus.COMPLETED.value,
                 StrategyRunModel.completed_at.is_not(None),
+                _IS_ANALYSIS_RUN,
             )
             if upper is not None:
                 statement = statement.where(StrategyRunModel.completed_at < upper)
@@ -438,6 +454,7 @@ class RunRepository:
                 StrategyRunModel.completed_at.is_not(None),
                 StrategyRunModel.completed_at >= local_start.isoformat(),
                 StrategyRunModel.completed_at < local_end.isoformat(),
+                _IS_ANALYSIS_RUN,
             )
             .order_by(StrategyRunModel.completed_at.asc(), StrategyRunModel.id.asc())
             .limit(limit)
