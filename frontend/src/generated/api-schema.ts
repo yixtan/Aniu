@@ -2156,7 +2156,7 @@ export interface components {
              * Key
              * @enum {string}
              */
-            key: "run" | "summary";
+            key: "run" | "summary" | "watch";
             /** Stage Id */
             stage_id: string;
             /** Started At */

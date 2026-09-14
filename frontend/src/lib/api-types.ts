@@ -51,10 +51,11 @@ export type ModelProfilePayload = Omit<
   "selected_models"
 >;
 
-// Hand-written, so it has to follow the backend by hand: `watch` is the
-// order watch's single stage. Leaving it out would not fail the build — it
-// would render a watch run's stage with no name.
-export type TraceStageKey = "run" | "summary" | "watch";
+// Derived from the contract, not hand-written. It used to be spelled out
+// here and had to follow the backend by hand, which is how `watch` went
+// missing twice — once here, and once in the backend literal the generator
+// reads, where it made every watch run unfetchable.
+export type TraceStageKey = Schemas["TraceStageResponse"]["key"];
 
 export type TraceToolSource = "aggregate" | "mx" | "public" | "internal";
 
