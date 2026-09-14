@@ -6,11 +6,12 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import String, case, cast, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.business.runs import (
     INITIAL_STATE,
+    ORDER_WATCH_TASK_TYPE,
     RUN_TASK_TYPE,
     RunReportRecord,
     RunTrace,
@@ -259,6 +260,58 @@ class RunRepository:
         return (
             statement.order_by(StrategyRunModel.id.desc()).limit(limit).offset(offset)
         )
+
+    async def list_run_days(self, limit: int = 90) -> list[dict[str, object]]:
+        """Count each day's runs by task, newest first.
+
+        Grouped on the task id rather than ``started_at`` because the id is
+        what says which trading day a run belongs to; the two agree today (both
+        are derived in UTC, and a session sits inside one UTC date) but only
+        the id says so by construction.
+
+        Aggregated in SQL rather than by listing runs: a single day already
+        holds about ninety rows, so any client-side grouping would need every
+        row of every day it wanted to name.
+        """
+
+        task_id = cast(StrategyRunModel.id, String)
+        day = func.substr(task_id, 1, 8).label("day")
+        is_watch = func.substr(task_id, 9, 1) == str(ORDER_WATCH_TASK_TYPE)
+        # ABORTED is counted with FAILED: both mean the slot produced no
+        # report, which is what the timetable is reporting on.
+        went_wrong = StrategyRunModel.status.in_(
+            (RunStatus.FAILED.value, RunStatus.ABORTED.value)
+        )
+
+        def _count(*conditions: Any) -> Any:
+            predicate = conditions[0]
+            for extra in conditions[1:]:
+                predicate = predicate & extra
+            return func.sum(case((predicate, 1), else_=0))
+
+        statement = (
+            select(
+                day,
+                _count(~is_watch).label("analysis_total"),
+                _count(~is_watch, went_wrong).label("analysis_failed"),
+                _count(is_watch).label("watch_total"),
+                _count(is_watch, went_wrong).label("watch_failed"),
+            )
+            .group_by(day)
+            .order_by(day.desc())
+            .limit(limit)
+        )
+        rows = (await self._session.execute(statement)).all()
+        return [
+            {
+                "day": row.day,
+                "analysis_total": int(row.analysis_total or 0),
+                "analysis_failed": int(row.analysis_failed or 0),
+                "watch_total": int(row.watch_total or 0),
+                "watch_failed": int(row.watch_failed or 0),
+            }
+            for row in rows
+        ]
 
     async def list_runs(
         self,

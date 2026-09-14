@@ -8,6 +8,7 @@ type Schemas = components["schemas"];
 
 export type ModelProtocol = Schemas["ModelProtocol"];
 export type RunSummary = Schemas["RunSummaryResponse"];
+export type RunDay = Schemas["RunDayResponse"];
 export type ModelProfile = Schemas["ModelProfileResponse"];
 export type ModelCatalogItem = Schemas["ModelCatalogItemResponse"];
 export type ModelsDevModel = Schemas["ModelsDevModelResponse"];
