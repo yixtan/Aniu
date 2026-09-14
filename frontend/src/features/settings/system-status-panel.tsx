@@ -256,9 +256,6 @@ function DreamsCard({
 }
 
 const BAR_IDLE = "bg-muted";
-/** Dreams keep a band of their own: `memory_dreams` stores no snapshot, so the
- *  provider a dream used was never recorded and cannot be coloured in. */
-const BAR_DREAM = "bg-slate-300 dark:bg-slate-600";
 
 /** One hue per provider — distinct rather than graded, because these are
  *  different things being compared, not more and less of one thing. */
@@ -376,13 +373,6 @@ function TokenChart({ tokens }: { tokens: TokenDay[] }) {
                 <span className="tabular-nums">{formatTokens(entry.tokens)}</span>
               </li>
             ))}
-            {dreamTotal > 0 ? (
-              <li className="text-muted-foreground flex items-center gap-1.5">
-                <span aria-hidden className={cn("size-2 shrink-0 rounded-[2px]", BAR_DREAM)} />
-                <span>梦境</span>
-                <span className="tabular-nums">{formatTokens(dreamTotal)}</span>
-              </li>
-            ) : null}
           </ul>
         ) : null}
         <p className="text-xs tabular-nums" aria-live="polite">
@@ -408,26 +398,19 @@ function TokenChart({ tokens }: { tokens: TokenDay[] }) {
                 }
                 onMouseEnter={() => setHovered(index)}
               >
-                {/* Providers stack heaviest at the bottom, dreams on top —
-                    the same day's spend, but with no provider recorded to
-                    place it among them. Stacking keeps the day's true height
-                    honest whichever way it is split. */}
+                {/* Providers stack heaviest at the bottom. Analyses, watches
+                    and dreams all sit inside these bands — the day's spend
+                    split by who was asked, not by what was asked. */}
                 <span
                   className="flex w-full flex-col justify-end"
                   style={{ height: `${Math.max(idle ? 2 : 4, (combined / peak) * 100)}%` }}
                 >
-                  {day.dream_tokens > 0 ? (
-                    <span
-                      className={cn("block w-full rounded-t-[3px]", BAR_DREAM)}
-                      style={{ height: `${(day.dream_tokens / combined) * 100}%` }}
-                    />
-                  ) : null}
                   {[...day.channels].reverse().map((channel, position, bands) => (
                     <span
                       key={channelKey(channel)}
                       className={cn(
                         "block w-full",
-                        position === 0 && day.dream_tokens === 0 ? "rounded-t-[3px]" : "",
+                        position === 0 ? "rounded-t-[3px]" : "",
                         // The bottom band takes the remainder so rounding
                         // cannot leave a hairline gap under the stack.
                         position === bands.length - 1 ? "flex-1" : "",
@@ -441,13 +424,7 @@ function TokenChart({ tokens }: { tokens: TokenDay[] }) {
                     />
                   ))}
                   {idle || day.channels.length === 0 ? (
-                    <span
-                      className={cn(
-                        "block w-full flex-1",
-                        day.dream_tokens > 0 ? "" : "rounded-t-[3px]",
-                        BAR_IDLE,
-                      )}
-                    />
+                    <span className={cn("block w-full flex-1 rounded-t-[3px]", BAR_IDLE)} />
                   ) : null}
                 </span>
               </li>

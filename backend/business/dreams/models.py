@@ -29,6 +29,9 @@ class MemoryDream:
     failure_reason: str | None = None
     # Billed for this dream, or zero when the endpoint reported nothing.
     total_tokens: int = 0
+    # Which channel was asked. `None` on every dream from before this was
+    # recorded — the provider is not recoverable from anything else stored.
+    channel_id: int | None = None
     created_at: datetime = field(default_factory=utc_now)
     started_at: datetime | None = None
     completed_at: datetime | None = None
@@ -47,15 +50,22 @@ class MemoryDream:
         self.result = None
         self.failure_reason = None
         self.total_tokens = 0
+        self.channel_id = None
         self.started_at = None
         self.completed_at = None
 
-    def complete(self, result: str, total_tokens: int = 0) -> None:
+    def complete(
+        self,
+        result: str,
+        total_tokens: int = 0,
+        channel_id: int | None = None,
+    ) -> None:
         if self.status is not DreamStatus.RUNNING:
             raise ValueError("only running dreams can complete")
         self.status = DreamStatus.COMPLETED
         self.result = result.strip() or None
         self.total_tokens = max(0, total_tokens)
+        self.channel_id = channel_id
         self.completed_at = utc_now()
 
     def fail(self, reason: str) -> None:

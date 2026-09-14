@@ -228,7 +228,7 @@ class DreamService:
         if completed is None:
             return None
         if completed.status is DreamStatus.RUNNING:
-            completed.complete(result.content, result.total_tokens)
+            completed.complete(result.content, result.total_tokens, result.channel_id)
             await self._save_and_commit(
                 completed,
                 execution_fence=execution_fence,

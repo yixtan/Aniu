@@ -386,6 +386,10 @@ class MemoryDreamModel(Base):
     total_tokens: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
+    # Which channel was asked. Nullable because every dream from before this
+    # column answered "unknown", and unknown is a real answer here — nothing
+    # else stored about a dream says where it ran.
+    channel_profile_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     result: Mapped[str | None] = mapped_column(Text, nullable=True)
     failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[str] = mapped_column(Text, nullable=False, default=utc_now_iso)
