@@ -73,6 +73,16 @@ function minutesOf(clock: string): number {
   return Number(hours) * 60 + Number(minutes);
 }
 
+/**
+ * The wire spells it "scheduled", lowercase — `TriggerSource` is a StrEnum
+ * whose values are lowercase and the DTO sends `.value`. It reaches the client
+ * as a bare string with no enum in the generated types, so nothing here would
+ * have caught the wrong case; folded, so neither spelling can break it.
+ */
+function isScheduled(run: RunSummary): boolean {
+  return run.trigger_source.toLowerCase() === "scheduled";
+}
+
 function statusOfRun(run: RunSummary): SlotStatus {
   if (run.status === "RUNNING") return "running";
   if (run.status === "COMPLETED") return "completed";
@@ -96,7 +106,7 @@ function planRuns(
   const unplanned: RunSummary[] = [];
 
   for (const run of [...runs].sort((left, right) => left.run_id - right.run_id)) {
-    if (run.trigger_source !== "SCHEDULED") {
+    if (!isScheduled(run)) {
       unplanned.push(run);
       continue;
     }
