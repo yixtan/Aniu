@@ -47,3 +47,40 @@ async def test_run_detail_endpoint_returns_not_found(
     detail = await run_api_client.get("/api/aniu/runs/999")
 
     assert detail.status_code == 404
+
+
+def test_the_trace_contract_names_every_stage_the_domain_can_emit() -> None:
+    """A stage key the schema omits makes that run unfetchable, not unnamed.
+
+    `response_model` validates on the way out, so a watch run — whose trace
+    carries the key `watch` — came back as a 500 while this literal still said
+    only run and summary. The frontend could not have caught it either: the
+    generated types are built from this same contract.
+    """
+
+    from typing import get_args
+
+    from backend.api.schemas.run import TraceStageKey
+    from backend.business.runs.pipeline_stages import TRACE_STAGE_META
+
+    assert set(get_args(TraceStageKey)) == set(TRACE_STAGE_META)
+
+
+def test_a_watch_stage_survives_the_response_model() -> None:
+    """The end the bug was actually felt at: serialising a watch's trace."""
+
+    from backend.api.schemas.run import TraceStageResponse
+    from backend.business.runs.pipeline_stages import WATCH
+
+    stage = TraceStageResponse.model_validate(
+        {
+            "stage_id": WATCH.stage_id,
+            "key": WATCH.trace_key,
+            "status": "completed",
+            "started_at": None,
+            "ended_at": None,
+            "steps": [],
+        }
+    )
+
+    assert stage.key == "watch"

@@ -3762,7 +3762,8 @@
           "key": {
             "enum": [
               "run",
-              "summary"
+              "summary",
+              "watch"
             ],
             "title": "Key",
             "type": "string"

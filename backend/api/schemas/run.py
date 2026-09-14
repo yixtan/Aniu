@@ -9,7 +9,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from backend.business.shared import StockApiProvider
 
-TraceStageKey = Literal["run", "summary"]
+# Every stage the domain can put in a trace. A key missing here is not a
+# cosmetic gap: `response_model` validates on the way out, so a run whose
+# trace names an unlisted stage cannot be fetched at all. A test pins this
+# against TRACE_STAGE_META so the two cannot drift again.
+TraceStageKey = Literal["run", "summary", "watch"]
 TraceStageStatus = Literal[
     "pending", "running", "completed", "degraded", "failed", "skipped"
 ]
