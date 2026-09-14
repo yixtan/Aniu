@@ -967,6 +967,18 @@ export interface components {
              */
             updated_at: string;
         };
+        /**
+         * ChannelTokensResponse
+         * @description One provider's share of a day's tokens.
+         */
+        ChannelTokensResponse: {
+            /** Channel Id */
+            channel_id: number | null;
+            /** Name */
+            name: string;
+            /** Tokens */
+            tokens: number;
+        };
         /** CreateMemoryRequest */
         CreateMemoryRequest: {
             /** Content */
@@ -2123,6 +2135,11 @@ export interface components {
         };
         /** TokenDayResponse */
         TokenDayResponse: {
+            /**
+             * Channels
+             * @default []
+             */
+            channels: components["schemas"]["ChannelTokensResponse"][];
             /**
              * Day
              * Format: date

@@ -26,10 +26,19 @@ class DailyStatusResponse(ApiModel):
     watch_tokens: int = 0
 
 
+class ChannelTokensResponse(ApiModel):
+    """One provider's share of a day's tokens."""
+
+    channel_id: int | None
+    name: str
+    tokens: int
+
+
 class TokenDayResponse(ApiModel):
     day: date
     tokens: int
     runs: int
+    channels: list[ChannelTokensResponse] = []
     dream_tokens: int = 0
     watch_tokens: int = 0
     watches: int = 0
@@ -57,6 +66,7 @@ class SystemStatusResponse(ApiModel):
 
 
 __all__ = [
+    "ChannelTokensResponse",
     "DailyStatusResponse",
     "DreamStatusResponse",
     "SystemStatusResponse",

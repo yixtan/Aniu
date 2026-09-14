@@ -26,9 +26,22 @@ from backend.infra.db.models import (
     MemoryActivityModel,
     MemoryDreamModel,
     MemoryItemModel,
+    ModelProfileModel,
     StockApiCallLogModel,
     StrategyRunModel,
     ToolInvocationModel,
+)
+
+# Read in SQLite rather than by parsing snapshots in Python: the whole table
+# answers in about thirty milliseconds this way, against roughly five megabytes
+# of JSON to load and decode for the same question.
+_WORKING_CHANNEL = func.coalesce(
+    func.json_extract(
+        StrategyRunModel.snapshot_json, "$.stage_models.Run.channel_profile_id"
+    ),
+    func.json_extract(
+        StrategyRunModel.snapshot_json, "$.stage_models.Watch.channel_profile_id"
+    ),
 )
 
 _TOOL_COMPLETED = "COMPLETED"
@@ -69,18 +82,34 @@ class SystemStatusRepository:
             StrategyRunModel.status,
             StrategyRunModel.summary_render_mode,
             StrategyRunModel.total_tokens,
+            _WORKING_CHANNEL,
         ).where(StrategyRunModel.started_at >= since.isoformat())
         rows = (await self._session.execute(statement)).all()
         return [
             RunFact(
-                task_id=int(task_id),
-                started_at=_as_utc(started_at),
-                status=status,
-                summary_html=render_mode == _SUMMARY_HTML,
-                total_tokens=int(total_tokens or 0),
+                task_id=int(row[0]),
+                started_at=_as_utc(row[1]),
+                status=row[2],
+                summary_html=row[3] == _SUMMARY_HTML,
+                total_tokens=int(row[4] or 0),
+                channel_id=None if row[5] is None else int(row[5]),
             )
-            for task_id, started_at, status, render_mode, total_tokens in rows
+            for row in rows
         ]
+
+    async def channel_names(self) -> dict[int, str]:
+        """Provider names by id, for labelling spend.
+
+        A run holds the id it froze, and a channel someone later renamed or
+        deleted must still be nameable — the id is what was true at the time.
+        """
+
+        rows = (
+            await self._session.execute(
+                select(ModelProfileModel.id, ModelProfileModel.name)
+            )
+        ).all()
+        return {int(profile_id): str(name) for profile_id, name in rows}
 
     async def tool_calls_since(self, since: datetime) -> list[ToolCallFact]:
         # A row still STARTED is either in flight or died mid-call; neither is

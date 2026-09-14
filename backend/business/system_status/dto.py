@@ -31,10 +31,28 @@ class DailyStatusDTO:
 
 
 @dataclass(frozen=True, slots=True)
+class ChannelTokensDTO:
+    """What one provider was asked to think, on one day.
+
+    Attributed per run rather than per stage: the per-stage token split exists
+    in only a small minority of stored traces, so a run is counted whole,
+    against the provider that did its work.
+    """
+
+    channel_id: int | None
+    name: str
+    tokens: int
+
+
+@dataclass(frozen=True, slots=True)
 class TokenDayDTO:
     day: date
     tokens: int
     runs: int
+    # Analyses and watches together, split by who was asked. Dreams are absent:
+    # `memory_dreams` keeps no snapshot, so the provider a dream used was never
+    # recorded and cannot be recovered — `dream_tokens` stays on its own.
+    channels: tuple[ChannelTokensDTO, ...] = ()
     # Kept apart from `tokens` because a dream is not a run: it reads the whole
     # day's reports and the entire memory library in one go, and folding it in
     # silently would make a quiet trading day look busy.
@@ -67,4 +85,10 @@ class SystemStatusDTO:
     memory_with_lineage: int
 
 
-__all__ = ["DailyStatusDTO", "DreamStatusDTO", "SystemStatusDTO", "TokenDayDTO"]
+__all__ = [
+    "ChannelTokensDTO",
+    "DailyStatusDTO",
+    "DreamStatusDTO",
+    "SystemStatusDTO",
+    "TokenDayDTO",
+]

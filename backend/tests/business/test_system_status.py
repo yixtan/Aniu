@@ -47,6 +47,7 @@ def run(
     html: bool = True,
     tokens: int = 0,
     task_id: int = RUN_TASK,
+    channel_id: int | None = None,
 ) -> RunFact:
     return RunFact(
         task_id=task_id,
@@ -54,6 +55,7 @@ def run(
         status=status,
         summary_html=html,
         total_tokens=tokens,
+        channel_id=channel_id,
     )
 
 
@@ -88,6 +90,7 @@ class FakeRepository:
         activities: list[MemoryActivityFact] | None = None,
         dreams: list[DreamFact] | None = None,
         inventory: MemoryInventory = EMPTY_INVENTORY,
+        channels: dict[int, str] | None = None,
     ) -> None:
         self.runs = runs or []
         self.tool_calls = tool_calls or []
@@ -95,10 +98,14 @@ class FakeRepository:
         self.activities = activities or []
         self.dreams = dreams or []
         self.inventory = inventory
+        self.channels = channels or {}
         self.dream_limits: list[int] = []
 
     async def runs_since(self, since: datetime) -> list[RunFact]:
         return [fact for fact in self.runs if fact.started_at >= since]
+
+    async def channel_names(self) -> dict[int, str]:
+        return dict(self.channels)
 
     async def tool_calls_since(self, since: datetime) -> list[ToolCallFact]:
         return [fact for fact in self.tool_calls if fact.created_at >= since]
@@ -355,3 +362,81 @@ async def test_a_watch_is_folded_apart_from_the_runs_on_its_day() -> None:
     spend = status.tokens[0]
     assert (spend.runs, spend.tokens) == (1, 1_234)
     assert (spend.watches, spend.watch_tokens) == (2, 210)
+
+
+async def test_a_day_is_split_by_the_provider_that_did_the_work() -> None:
+    """What the token chart colours by: who was asked, not what was asked.
+
+    An analysis and a watch on the same provider land together; the heavier
+    provider comes first so the bar reads largest-at-the-bottom.
+    """
+
+    repository = FakeRepository(
+        runs=[
+            run(at(TODAY, 10, 0), tokens=1_000, channel_id=2),
+            run(at(TODAY, 10, 3), tokens=200, task_id=WATCH_TASK, channel_id=2),
+            run(at(TODAY, 10, 6), tokens=5_000, task_id=RUN_TASK + 1, channel_id=5),
+        ],
+        channels={2: "v2ex", 5: "DeepSeek"},
+        inventory=EMPTY_INVENTORY,
+    )
+
+    status = await SystemStatusService(repository, clock=lambda: NOW).overview()
+
+    today = next(row for row in status.tokens if row.day == TODAY)
+    assert [(entry.name, entry.tokens) for entry in today.channels] == [
+        ("DeepSeek", 5_000),
+        ("v2ex", 1_200),
+    ]
+    # The existing task split is untouched; it moved to the tooltip, not away.
+    assert today.tokens == 6_000
+    assert today.watch_tokens == 200
+
+
+async def test_a_run_that_froze_no_model_is_named_rather_than_dropped() -> None:
+    """Silently omitting them would understate the day, which is the one thing
+    a spend chart must not do."""
+
+    repository = FakeRepository(
+        runs=[run(at(TODAY, 10, 0), tokens=900, channel_id=None)],
+        inventory=EMPTY_INVENTORY,
+    )
+
+    status = await SystemStatusService(repository, clock=lambda: NOW).overview()
+
+    today = next(row for row in status.tokens if row.day == TODAY)
+    assert [
+        (entry.channel_id, entry.name, entry.tokens) for entry in today.channels
+    ] == [(None, "未记录", 900)]
+
+
+async def test_a_deleted_channel_keeps_its_id_as_a_label() -> None:
+    """The run still happened; forgetting where it ran costs more than an
+    unfamiliar number does."""
+
+    repository = FakeRepository(
+        runs=[run(at(TODAY, 10, 0), tokens=700, channel_id=9)],
+        channels={2: "v2ex"},
+        inventory=EMPTY_INVENTORY,
+    )
+
+    status = await SystemStatusService(repository, clock=lambda: NOW).overview()
+
+    today = next(row for row in status.tokens if row.day == TODAY)
+    assert [entry.name for entry in today.channels] == ["#9"]
+
+
+async def test_a_provider_with_no_tokens_does_not_get_a_band() -> None:
+    repository = FakeRepository(
+        runs=[
+            run(at(TODAY, 10, 0), tokens=0, channel_id=2),
+            run(at(TODAY, 10, 3), tokens=400, channel_id=5),
+        ],
+        channels={2: "v2ex", 5: "DeepSeek"},
+        inventory=EMPTY_INVENTORY,
+    )
+
+    status = await SystemStatusService(repository, clock=lambda: NOW).overview()
+
+    today = next(row for row in status.tokens if row.day == TODAY)
+    assert [entry.name for entry in today.channels] == ["DeepSeek"]

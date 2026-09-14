@@ -510,6 +510,38 @@
         "title": "AwayModeResponse",
         "type": "object"
       },
+      "ChannelTokensResponse": {
+        "additionalProperties": false,
+        "description": "One provider's share of a day's tokens.",
+        "properties": {
+          "channel_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Id"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "tokens": {
+            "title": "Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "channel_id",
+          "name",
+          "tokens"
+        ],
+        "title": "ChannelTokensResponse",
+        "type": "object"
+      },
       "CreateMemoryRequest": {
         "additionalProperties": false,
         "properties": {
@@ -3743,6 +3775,14 @@
       "TokenDayResponse": {
         "additionalProperties": false,
         "properties": {
+          "channels": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ChannelTokensResponse"
+            },
+            "title": "Channels",
+            "type": "array"
+          },
           "day": {
             "format": "date",
             "title": "Day",

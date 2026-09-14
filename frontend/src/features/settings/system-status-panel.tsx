@@ -255,13 +255,55 @@ function DreamsCard({
   );
 }
 
-/** One bright hue, two steps: the bars are a magnitude, and today is the one to find. */
-const BAR = "bg-sky-500 hover:bg-sky-600 dark:bg-sky-400 dark:hover:bg-sky-300";
-const BAR_TODAY = "bg-sky-700 dark:bg-sky-200";
-const BAR_IDLE = "bg-sky-100 dark:bg-sky-900";
-/** Three tiers of one hue, darkest at the bottom: runs, then watches, then dreams. */
-const BAR_WATCH = "bg-sky-400 dark:bg-sky-500";
-const BAR_DREAM = "bg-sky-300 dark:bg-sky-600";
+const BAR_IDLE = "bg-muted";
+/** Dreams keep a band of their own: `memory_dreams` stores no snapshot, so the
+ *  provider a dream used was never recorded and cannot be coloured in. */
+const BAR_DREAM = "bg-slate-300 dark:bg-slate-600";
+
+/** One hue per provider — distinct rather than graded, because these are
+ *  different things being compared, not more and less of one thing. */
+const CHANNEL_COLORS = [
+  "bg-sky-500 dark:bg-sky-400",
+  "bg-violet-500 dark:bg-violet-400",
+  "bg-amber-500 dark:bg-amber-400",
+  "bg-emerald-500 dark:bg-emerald-400",
+  "bg-rose-500 dark:bg-rose-400",
+  "bg-teal-500 dark:bg-teal-400",
+] as const;
+const BAR_UNRECORDED = "bg-muted-foreground/40";
+
+function channelKey(channel: { channel_id: number | null }) {
+  return channel.channel_id === null ? "none" : String(channel.channel_id);
+}
+
+/**
+ * A colour per provider, fixed for the whole window.
+ *
+ * Assigned by total spend so the heaviest provider is the same colour every
+ * time the page is opened; a colour that moved between visits would make the
+ * chart unreadable at a glance, which is the only thing it is for.
+ */
+function assignChannelColors(series: TokenDay[]) {
+  const totals = new Map<string, { name: string; tokens: number }>();
+  for (const day of series) {
+    for (const channel of day.channels) {
+      const key = channelKey(channel);
+      const seen = totals.get(key);
+      totals.set(key, {
+        name: channel.name,
+        tokens: (seen?.tokens ?? 0) + channel.tokens,
+      });
+    }
+  }
+  const ranked = [...totals.entries()].sort((left, right) => right[1].tokens - left[1].tokens);
+  const colors = new Map<string, string>();
+  let next = 0;
+  for (const [key] of ranked) {
+    const hue = CHANNEL_COLORS[next++ % CHANNEL_COLORS.length] ?? BAR_UNRECORDED;
+    colors.set(key, key === "none" ? BAR_UNRECORDED : hue);
+  }
+  return { colors, ranked };
+}
 
 function describeDay(day: TokenDay) {
   const parts = [`${formatDay(day.day)} · ${formatTokens(day.tokens)} · ${day.runs} 次运行`];
@@ -269,6 +311,9 @@ function describeDay(day: TokenDay) {
     parts.push(`盯盘 ${formatTokens(day.watch_tokens)} · ${day.watches} 次`);
   }
   if (day.dream_tokens > 0) parts.push(`梦境 ${formatTokens(day.dream_tokens)}`);
+  if (day.channels.length > 0) {
+    parts.push(day.channels.map((c) => `${c.name} ${formatTokens(c.tokens)}`).join(" · "));
+  }
   return parts.join("，");
 }
 
@@ -284,6 +329,7 @@ function TokenChart({ tokens }: { tokens: TokenDay[] }) {
   const watches = series.reduce((sum, day) => sum + day.watches, 0);
   const activeDays = series.filter((day) => day.runs > 0 || day.watches > 0).length;
   const peak = Math.max(1, ...series.map(dayTotal));
+  const { colors, ranked } = assignChannelColors(series);
   const first = series[0];
   const last = series[series.length - 1];
   // The readout above the bars names whichever day is under the pointer, and
@@ -318,6 +364,27 @@ function TokenChart({ tokens }: { tokens: TokenDay[] }) {
             value={watches === 0 ? "--" : formatTokens(Math.round(watchTotal / watches))}
           />
         </dl>
+        {ranked.length > 0 ? (
+          <ul className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" aria-label="渠道">
+            {ranked.map(([key, entry]) => (
+              <li key={key} className="text-muted-foreground flex items-center gap-1.5">
+                <span
+                  aria-hidden
+                  className={cn("size-2 shrink-0 rounded-[2px]", colors.get(key))}
+                />
+                <span>{entry.name}</span>
+                <span className="tabular-nums">{formatTokens(entry.tokens)}</span>
+              </li>
+            ))}
+            {dreamTotal > 0 ? (
+              <li className="text-muted-foreground flex items-center gap-1.5">
+                <span aria-hidden className={cn("size-2 shrink-0 rounded-[2px]", BAR_DREAM)} />
+                <span>梦境</span>
+                <span className="tabular-nums">{formatTokens(dreamTotal)}</span>
+              </li>
+            ) : null}
+          </ul>
+        ) : null}
         <p className="text-xs tabular-nums" aria-live="polite">
           {focus ? describeDay(focus) : ""}
         </p>
@@ -327,7 +394,6 @@ function TokenChart({ tokens }: { tokens: TokenDay[] }) {
           onMouseLeave={() => setHovered(null)}
         >
           {series.map((day, index) => {
-            const isToday = index === series.length - 1;
             const combined = dayTotal(day);
             const idle = combined === 0;
             return (
@@ -342,9 +408,10 @@ function TokenChart({ tokens }: { tokens: TokenDay[] }) {
                 }
                 onMouseEnter={() => setHovered(index)}
               >
-                {/* Dream sits on top of runs rather than beside them: it is
-                    the same day's spend, but it is not a run, and stacking
-                    keeps the day's true height honest either way. */}
+                {/* Providers stack heaviest at the bottom, dreams on top —
+                    the same day's spend, but with no provider recorded to
+                    place it among them. Stacking keeps the day's true height
+                    honest whichever way it is split. */}
                 <span
                   className="flex w-full flex-col justify-end"
                   style={{ height: `${Math.max(idle ? 2 : 4, (combined / peak) * 100)}%` }}
@@ -355,23 +422,33 @@ function TokenChart({ tokens }: { tokens: TokenDay[] }) {
                       style={{ height: `${(day.dream_tokens / combined) * 100}%` }}
                     />
                   ) : null}
-                  {day.watch_tokens > 0 ? (
+                  {[...day.channels].reverse().map((channel, position, bands) => (
                     <span
+                      key={channelKey(channel)}
                       className={cn(
                         "block w-full",
-                        day.dream_tokens > 0 ? "" : "rounded-t-[3px]",
-                        BAR_WATCH,
+                        position === 0 && day.dream_tokens === 0 ? "rounded-t-[3px]" : "",
+                        // The bottom band takes the remainder so rounding
+                        // cannot leave a hairline gap under the stack.
+                        position === bands.length - 1 ? "flex-1" : "",
+                        colors.get(channelKey(channel)) ?? BAR_UNRECORDED,
                       )}
-                      style={{ height: `${(day.watch_tokens / combined) * 100}%` }}
+                      style={
+                        position === bands.length - 1
+                          ? undefined
+                          : { height: `${(channel.tokens / combined) * 100}%` }
+                      }
+                    />
+                  ))}
+                  {idle || day.channels.length === 0 ? (
+                    <span
+                      className={cn(
+                        "block w-full flex-1",
+                        day.dream_tokens > 0 ? "" : "rounded-t-[3px]",
+                        BAR_IDLE,
+                      )}
                     />
                   ) : null}
-                  <span
-                    className={cn(
-                      "block w-full flex-1 transition-colors",
-                      day.dream_tokens > 0 || day.watch_tokens > 0 ? "" : "rounded-t-[3px]",
-                      idle ? BAR_IDLE : isToday ? BAR_TODAY : BAR,
-                    )}
-                  />
                 </span>
               </li>
             );
