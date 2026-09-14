@@ -23,8 +23,11 @@ const STATUS_STYLES: Record<SlotStatus, string> = {
   // as one that has not come yet — and the watch collides with the analysis
   // twice a day by design, so this state is normal rather than alarming.
   missed: "border-input border-dashed text-muted-foreground/70 bg-transparent",
-  running: "border-sky-500/45 bg-sky-500/[0.10] text-sky-700 dark:text-sky-300",
-  completed: "border-emerald-500/45 bg-emerald-500/[0.10] text-emerald-700 dark:text-emerald-300",
+  // No `dark:` variants anywhere here: the app has a single light palette and
+  // no toggle, while Tailwind's `dark:` would follow the operating system —
+  // recolouring these chips on a dark-set machine and nothing around them.
+  running: "border-sky-500/45 bg-sky-500/[0.10] text-sky-700",
+  completed: "border-emerald-500/45 bg-emerald-500/[0.10] text-emerald-700",
   failed: "border-destructive/50 bg-destructive/[0.10] text-destructive",
 };
 
