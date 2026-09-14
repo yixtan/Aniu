@@ -294,22 +294,39 @@ function assignChannelColors(series: TokenDay[]) {
   }
   const ranked = [...totals.entries()].sort((left, right) => right[1].tokens - left[1].tokens);
   const colors = new Map<string, string>();
+  // Rank across the whole window, not within a day. Every bar stacks in this
+  // one order, so a colour keeps its height on the bar as well as its place in
+  // the legend — ordering each day by its own heaviest provider put purple
+  // under blue on one day and over it on the next.
+  const rank = new Map(ranked.map(([key], index) => [key, index]));
   let next = 0;
   for (const [key] of ranked) {
     const hue = CHANNEL_COLORS[next++ % CHANNEL_COLORS.length] ?? BAR_UNRECORDED;
     colors.set(key, key === "none" ? BAR_UNRECORDED : hue);
   }
-  return { colors, ranked };
+  return { colors, ranked, rank };
 }
 
-function describeDay(day: TokenDay) {
+/** A day's providers in the legend's order, first at the bottom of the bar. */
+function inLegendOrder(day: TokenDay, rank: Map<string, number>) {
+  return [...day.channels].sort(
+    (left, right) =>
+      (rank.get(channelKey(left)) ?? 0) - (rank.get(channelKey(right)) ?? 0),
+  );
+}
+
+function describeDay(day: TokenDay, rank: Map<string, number>) {
   const parts = [`${formatDay(day.day)} · ${formatTokens(day.tokens)} · ${day.runs} 次运行`];
   if (day.watch_tokens > 0 || day.watches > 0) {
     parts.push(`盯盘 ${formatTokens(day.watch_tokens)} · ${day.watches} 次`);
   }
   if (day.dream_tokens > 0) parts.push(`梦境 ${formatTokens(day.dream_tokens)}`);
   if (day.channels.length > 0) {
-    parts.push(day.channels.map((c) => `${c.name} ${formatTokens(c.tokens)}`).join(" · "));
+    parts.push(
+      inLegendOrder(day, rank)
+        .map((channel) => `${channel.name} ${formatTokens(channel.tokens)}`)
+        .join(" · "),
+    );
   }
   return parts.join("，");
 }
@@ -326,7 +343,7 @@ function TokenChart({ tokens }: { tokens: TokenDay[] }) {
   const watches = series.reduce((sum, day) => sum + day.watches, 0);
   const activeDays = series.filter((day) => day.runs > 0 || day.watches > 0).length;
   const peak = Math.max(1, ...series.map(dayTotal));
-  const { colors, ranked } = assignChannelColors(series);
+  const { colors, ranked, rank } = assignChannelColors(series);
   const first = series[0];
   const last = series[series.length - 1];
   // The readout above the bars names whichever day is under the pointer, and
@@ -376,7 +393,7 @@ function TokenChart({ tokens }: { tokens: TokenDay[] }) {
           </ul>
         ) : null}
         <p className="text-xs tabular-nums" aria-live="polite">
-          {focus ? describeDay(focus) : ""}
+          {focus ? describeDay(focus, rank) : ""}
         </p>
         <ol
           className="border-border/70 flex h-28 items-end gap-1 border-b"
@@ -405,9 +422,15 @@ function TokenChart({ tokens }: { tokens: TokenDay[] }) {
                   className="flex w-full flex-col justify-end"
                   style={{ height: `${Math.max(idle ? 2 : 4, (combined / peak) * 100)}%` }}
                 >
-                  {[...day.channels].reverse().map((channel, position, bands) => (
+                  {/* Reversed for rendering only: the first child of a column
+                      is the top one, and the legend's first provider belongs
+                      at the bottom. */}
+                  {inLegendOrder(day, rank)
+                    .reverse()
+                    .map((channel, position, bands) => (
                     <span
                       key={channelKey(channel)}
+                      data-channel={channel.name}
                       className={cn(
                         "block w-full",
                         position === 0 ? "rounded-t-[3px]" : "",

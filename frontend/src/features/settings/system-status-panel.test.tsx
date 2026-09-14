@@ -196,10 +196,12 @@ describe("SystemStatusPanel", () => {
     const bars = within(card).getByRole("list", { name: /每日 Token 消耗/ });
     expect(within(bars).getAllByRole("listitem")).toHaveLength(30);
     // With nothing under the pointer the readout names today — the task split
-    // it used to carry alone, now followed by who was asked.
+    // it used to carry alone, now followed by who was asked. In the legend's
+    // order, not the day's own: v2ex leads the window even though DeepSeek
+    // spent more on this particular day.
     expect(
       within(card).getByText(
-        "09-09 周三 · 780k · 16 次运行，盯盘 2.00M · 82 次，DeepSeek 2.00M · v2ex 780k",
+        "09-09 周三 · 780k · 16 次运行，盯盘 2.00M · 82 次，v2ex 780k · DeepSeek 2.00M",
       ),
     ).toBeInTheDocument();
   });
@@ -298,5 +300,27 @@ describe("SystemStatusPanel", () => {
     const todayBar = bars[bars.length - 1] as HTMLElement;
     expect(todayBar.getAttribute("aria-label")).toContain("盯盘 2,000,000 tokens");
     expect(todayBar.getAttribute("aria-label")).toContain("82 次盯盘");
+  });
+});
+
+describe("TokenChart stacking", () => {
+  it("stacks every bar in the legend's order, not the day's own", async () => {
+    api.getSystemStatus.mockResolvedValue(status);
+
+    renderPanel();
+
+    const chart = await screen.findByText("Token 消耗（近 30 天）");
+    const card = chart.closest("[data-slot=card]") as HTMLElement;
+    const bars = within(card).getByRole("list", { name: /每日 Token 消耗/ });
+    const today = within(bars).getAllByRole("listitem").at(-1) as HTMLElement;
+
+    // DeepSeek spent more than v2ex on this day, but v2ex leads the window, so
+    // v2ex stays at the bottom. A column's first child is its top one, so the
+    // legend's first provider is the last element here.
+    expect(
+      Array.from(today.querySelectorAll("[data-channel]"), (band) =>
+        band.getAttribute("data-channel"),
+      ),
+    ).toEqual(["DeepSeek", "v2ex"]);
   });
 });
