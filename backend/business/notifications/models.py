@@ -39,11 +39,17 @@ class NotificationEventKind(StrEnum):
     ``ORDER_PLACED`` and ``ORDER_CANCELLED`` are observed synchronously from the
     agent's write tools. ``ORDER_FILLED`` cannot be: an accepted limit order may
     never fill, so fills are detected by diffing the account order cache during
-    a refresh. ``RUN_FAILED`` reports a strategy run that ended in failure,
-    which a scheduled overnight run would otherwise leave unnoticed.
-    ``RUN_COMPLETED`` reports one that ended well — a quiet run trades nothing
-    and so announces nothing else, which reads the same as the scheduler having
-    stopped.
+    a refresh. ``RUN_FAILED`` reports a run that ended in failure, whichever
+    task it was, because a task that cannot finish is worth hearing about at
+    any frequency.
+
+    Finishing well is split in two, because the two tasks finish at different
+    rates. ``RUN_COMPLETED`` is 操盘, about a dozen times a day: a quiet one
+    trades nothing and so announces nothing else, which reads the same as the
+    scheduler having stopped. ``WATCH_COMPLETED`` is 盯盘, every few minutes
+    all session — the same reassurance repeated eighty times is no longer
+    reassurance, so it is off by default and the cancels it does make are
+    announced on their own.
     """
 
     ORDER_PLACED = "order_placed"
@@ -51,6 +57,7 @@ class NotificationEventKind(StrEnum):
     ORDER_FILLED = "order_filled"
     RUN_FAILED = "run_failed"
     RUN_COMPLETED = "run_completed"
+    WATCH_COMPLETED = "watch_completed"
 
     @property
     def label(self) -> str:
@@ -62,11 +69,19 @@ _EVENT_LABELS: dict[NotificationEventKind, str] = {
     NotificationEventKind.ORDER_CANCELLED: "已撤单",
     NotificationEventKind.ORDER_FILLED: "已成交",
     NotificationEventKind.RUN_FAILED: "运行失败",
-    NotificationEventKind.RUN_COMPLETED: "运行完成",
+    NotificationEventKind.RUN_COMPLETED: "操盘完成",
+    NotificationEventKind.WATCH_COMPLETED: "盯盘完成",
 }
 DEFAULT_SUBSCRIBED_EVENTS: frozenset[NotificationEventKind] = frozenset(
     NotificationEventKind
-)
+) - {NotificationEventKind.WATCH_COMPLETED}
+"""Everything a new channel hears unless it says otherwise.
+
+Subtracting rather than listing the wanted ones keeps a future event audible
+by default: a kind nobody can hear is a kind nobody notices is broken. 盯盘 is
+the one exception, and it is spelled out here so adding it back is a decision
+someone has to make on purpose.
+"""
 
 
 class TradeDirection(StrEnum):

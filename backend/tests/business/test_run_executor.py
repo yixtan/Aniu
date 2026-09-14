@@ -186,6 +186,41 @@ class StubAgentRunnerFactory:
         return Runtime()
 
 
+def _watch_run(run_id: int = 20260907301) -> StrategyRun:
+    """A run whose ninth digit says 盯盘, started in the Watch state."""
+
+    return StrategyRun(
+        run_id=run_id,
+        trigger_source=TriggerSource.SCHEDULED,
+        schedule_id=1,
+        snapshot=StrategySnapshot(
+            prompt_version="v1",
+            risk_rules_version="risk-v1",
+        ),
+        current_state=RunState.WATCH,
+    )
+
+
+def _stub_watch_orchestrator(run_id: int) -> type:
+    """A watch is one stage: Watch straight to COMPLETED, no Summary."""
+
+    class StubWatchOrchestrator:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        async def execute(self, run: StrategyRun) -> RunResult:
+            run.advance_to(RunState.COMPLETED)
+            return RunResult(
+                run_id=run_id,
+                status=RunStatus.COMPLETED,
+                final_state=RunState.COMPLETED,
+                summary="盯盘记录",
+                total_duration_ms=3,
+            )
+
+    return StubWatchOrchestrator
+
+
 def _stub_orchestrator(run_id: int) -> type:
     """Stand in for the real pipeline so a run can simply succeed."""
 
@@ -328,6 +363,61 @@ async def test_a_finished_run_announces_itself(
     event = notifier.published[0]
     assert event.run_id == run.run_id
     assert event.duration_ms == 7
+
+
+@pytest.mark.asyncio
+async def test_a_finished_watch_announces_itself_under_its_own_kind(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """盯盘 finishes every few minutes, so it must not share 操盘's event.
+
+    Sharing it would mean a channel that wants to hear a dozen analyses a day
+    is signed up for eighty watches it never asked for.
+    """
+
+    run = _watch_run()
+    repository = InMemoryRunRepository(run)
+    notifier = RecordingNotifier()
+    monkeypatch.setattr(
+        "backend.business.runs.executor.AniuOrchestrator",
+        _stub_watch_orchestrator(run.run_id),
+    )
+    executor = RunExecutor(
+        repository,  # type: ignore[arg-type]
+        agent_runner_factory=StubAgentRunnerFactory(),  # type: ignore[arg-type]
+        abort_registry=ActiveRunAbortRegistry(),
+        notifier=notifier,  # type: ignore[arg-type]
+    )
+
+    await executor.execute(run.run_id)
+
+    assert [event.kind for event in notifier.published] == [
+        NotificationEventKind.WATCH_COMPLETED
+    ]
+    assert notifier.published[0].run_id == run.run_id
+
+
+@pytest.mark.asyncio
+async def test_a_failed_watch_is_announced_like_any_other_failure() -> None:
+    """Failure is deliberately not split by task: a watch that cannot run is
+    the plan going unexecuted, which is worth hearing at any frequency."""
+
+    run = _watch_run()
+    repository = InMemoryRunRepository(run)
+    notifier = RecordingNotifier()
+    executor = RunExecutor(
+        repository,  # type: ignore[arg-type]
+        agent_runner_factory=ExplodingAgentRunnerFactory(),  # type: ignore[arg-type]
+        abort_registry=ActiveRunAbortRegistry(),
+        notifier=notifier,  # type: ignore[arg-type]
+    )
+
+    with pytest.raises(RuntimeError):
+        await executor.execute(run.run_id)
+
+    assert [event.kind for event in notifier.published] == [
+        NotificationEventKind.RUN_FAILED
+    ]
 
 
 @pytest.mark.asyncio

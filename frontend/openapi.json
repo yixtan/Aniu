@@ -658,7 +658,8 @@
                 "order_cancelled",
                 "order_filled",
                 "run_failed",
-                "run_completed"
+                "run_completed",
+                "watch_completed"
               ],
               "type": "string"
             },
@@ -1958,7 +1959,8 @@
                 "order_cancelled",
                 "order_filled",
                 "run_failed",
-                "run_completed"
+                "run_completed",
+                "watch_completed"
               ],
               "type": "string"
             },
@@ -2061,7 +2063,8 @@
               "order_cancelled",
               "order_filled",
               "run_failed",
-              "run_completed"
+              "run_completed",
+              "watch_completed"
             ],
             "title": "Event Kind",
             "type": "string"
@@ -4249,7 +4252,8 @@
                     "order_cancelled",
                     "order_filled",
                     "run_failed",
-                    "run_completed"
+                    "run_completed",
+                    "watch_completed"
                   ],
                   "type": "string"
                 },

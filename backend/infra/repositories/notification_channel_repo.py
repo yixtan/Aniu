@@ -9,6 +9,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.business.notifications import (
+    DEFAULT_SUBSCRIBED_EVENTS,
     DeliveryStatus,
     NotificationChannel,
     NotificationChannelKind,
@@ -141,7 +142,10 @@ class NotificationChannelRepository:
                 for value in (model.subscribed_events or [])
                 if value in frozenset(item.value for item in NotificationEventKind)
             )
-            or frozenset(NotificationEventKind),
+            # A row that names nothing recognisable predates the events it is
+            # missing, so it gets what a new channel would get — never the
+            # whole enum, which would opt an old channel into 盯盘 silently.
+            or DEFAULT_SUBSCRIBED_EVENTS,
             body_template=model.body_template,
             target_hint=model.target_hint or "",
             created_at=_parse_datetime(model.created_at),

@@ -18,6 +18,7 @@ from backend.business.runs.abort_registry import ActiveRunAbortRegistry
 from backend.business.runs.agent_runner import AgentRunnerFactoryPort
 from backend.business.runs.callbacks import RunExecutionCallbacks
 from backend.business.runs.dto import RunDetailDTO, to_run_detail_dto
+from backend.business.runs.numbering import is_order_watch_task
 from backend.business.runs.orchestration import AniuOrchestrator
 from backend.business.runs.ports import (
     FollowedCompaniesPort,
@@ -281,13 +282,23 @@ class RunExecutor:
     async def _announce_run_completed(self, run: StrategyRun, duration_ms: int) -> None:
         """Announce a finished run without letting the push affect the run.
 
-        A run that traded nothing sends no other notification, so without this
-        a quiet day is indistinguishable from a scheduler that stopped firing.
+        An analysis that traded nothing sends no other notification, so without
+        this a quiet day is indistinguishable from a scheduler that stopped
+        firing. A watch is the opposite case — it finishes every few minutes
+        all session — so it announces itself under its own event kind, which a
+        channel subscribes to separately and by default does not.
+
+        Which one this is comes from the task id rather than the run's state,
+        because by now the state is COMPLETED either way.
         """
 
         await self._publish_run_event(
             NotificationEvent(
-                kind=NotificationEventKind.RUN_COMPLETED,
+                kind=(
+                    NotificationEventKind.WATCH_COMPLETED
+                    if is_order_watch_task(run.run_id)
+                    else NotificationEventKind.RUN_COMPLETED
+                ),
                 run_id=run.run_id,
                 stage_name=run.trace.current_stage_id or run.current_state.value,
                 duration_ms=duration_ms,

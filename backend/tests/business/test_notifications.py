@@ -7,6 +7,7 @@ from dataclasses import replace
 import pytest
 
 from backend.business.notifications import (
+    DEFAULT_SUBSCRIBED_EVENTS,
     CreateChannelCommand,
     DeliveryStatus,
     NotificationChannel,
@@ -121,6 +122,40 @@ def _channel(
         kind=NotificationChannelKind.WEBHOOK,
         enabled=enabled,
         subscribed_events=events or frozenset(NotificationEventKind),
+    )
+
+
+def test_every_event_kind_carries_a_label() -> None:
+    """The label is the push title, so a kind without one ships a KeyError."""
+
+    for kind in NotificationEventKind:
+        assert kind.label
+
+
+def test_the_watch_is_the_only_event_a_new_channel_does_not_hear() -> None:
+    """Off by default is the whole point: 盯盘 finishes eighty times a session.
+
+    Everything else stays on, so a kind added later is audible unless someone
+    deliberately excludes it here.
+    """
+
+    assert NotificationEventKind.WATCH_COMPLETED not in DEFAULT_SUBSCRIBED_EVENTS
+    assert DEFAULT_SUBSCRIBED_EVENTS == frozenset(NotificationEventKind) - {
+        NotificationEventKind.WATCH_COMPLETED
+    }
+
+
+def test_the_two_completion_events_are_told_apart_by_name() -> None:
+    """One reads 操盘完成 and the other 盯盘完成, on a lock screen with no
+    room for anything else."""
+
+    assert NotificationEventKind.RUN_COMPLETED.label == "操盘完成"
+    assert NotificationEventKind.WATCH_COMPLETED.label == "盯盘完成"
+    assert (
+        NotificationEvent(
+            kind=NotificationEventKind.WATCH_COMPLETED, run_id=20260914301
+        ).title
+        == "Aniu 盯盘完成"
     )
 
 

@@ -18,6 +18,8 @@ async def _create(client: AsyncClient, **overrides: object) -> dict[str, object]
         "subscribed_events": ["order_placed", "order_filled"],
     }
     payload.update(overrides)
+    # ``subscribed_events=None`` asks for the schema default rather than a list.
+    payload = {key: value for key, value in payload.items() if value is not None}
     response = await client.post(BASE, json=payload)
     assert response.status_code == 201, response.text
     created: dict[str, object] = response.json()
@@ -115,6 +117,51 @@ async def test_vendor_channel_rejects_a_body_template(
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "ValidationError"
     assert "body_template" in response.json()["error"]["message"]
+
+
+def test_the_wire_contract_names_every_event_kind() -> None:
+    """A kind the Literal omits cannot be subscribed to, and a stored delivery
+    of that kind fails to serialise on its way back out."""
+
+    from typing import get_args
+
+    from backend.api.schemas.notification import TradeEvent
+    from backend.business.notifications import NotificationEventKind
+
+    assert set(get_args(TradeEvent)) == {kind.value for kind in NotificationEventKind}
+
+
+def test_the_request_default_matches_the_domain_default() -> None:
+    """Two hand-written copies of the same list is how 盯盘 gets switched on by
+    accident; this is the only thing stopping them drifting."""
+
+    from backend.api.schemas.notification import CreateNotificationChannelRequest
+    from backend.business.notifications import DEFAULT_SUBSCRIBED_EVENTS
+
+    default = CreateNotificationChannelRequest(
+        name="x", kind="webhook", secret="https://hook.test/x"
+    ).subscribed_events
+
+    assert set(default) == {kind.value for kind in DEFAULT_SUBSCRIBED_EVENTS}
+
+
+@pytest.mark.asyncio
+async def test_a_default_channel_hears_everything_except_the_watch(
+    api_client: AsyncClient,
+) -> None:
+    created = await _create(api_client, subscribed_events=None)
+
+    assert "run_completed" in created["subscribed_events"]
+    assert "watch_completed" not in created["subscribed_events"]
+
+
+@pytest.mark.asyncio
+async def test_the_watch_can_still_be_subscribed_to_on_purpose(
+    api_client: AsyncClient,
+) -> None:
+    created = await _create(api_client, subscribed_events=["watch_completed"])
+
+    assert created["subscribed_events"] == ["watch_completed"]
 
 
 @pytest.mark.asyncio

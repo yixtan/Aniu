@@ -12,6 +12,7 @@ TradeEvent = Literal[
     "order_filled",
     "run_failed",
     "run_completed",
+    "watch_completed",
 ]
 DeliveryStatusLiteral = Literal["delivered", "failed"]
 
@@ -43,6 +44,9 @@ class CreateNotificationChannelRequest(BaseModel):
     """Webhook URL for ``webhook``; the sendkey or bot key otherwise."""
     enabled: bool = True
     subscribed_events: list[TradeEvent] = Field(
+        # Mirrors DEFAULT_SUBSCRIBED_EVENTS, which omits "watch_completed"
+        # because 盯盘 finishes every few minutes. Kept literal so the schema
+        # stays readable; a test asserts the two do not drift apart.
         default=[
             "order_placed",
             "order_cancelled",
