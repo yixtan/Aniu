@@ -33,6 +33,8 @@ class RunRepositoryPort(Protocol):
         started_date: date | None = None,
     ) -> list[StrategyRun]: ...
 
+    async def list_run_days(self, limit: int = 90) -> list[dict[str, object]]: ...
+
     async def list_run_summaries(
         self,
         limit: int = 100,

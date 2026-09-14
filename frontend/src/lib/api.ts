@@ -170,6 +170,13 @@ export async function logout() {
   setAuthSession({ identityInitialized: true });
 }
 
+export async function listRunDays(limit = 90) {
+  const result = await openapiClient.GET("/api/aniu/runs/days", {
+    params: { query: { limit } },
+  });
+  return getResponseData(result);
+}
+
 export async function listRuns(limit = 50, offset = 0, startedDate?: string) {
   const result = await openapiClient.GET("/api/aniu/runs", {
     params: {

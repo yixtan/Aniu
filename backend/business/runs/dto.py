@@ -3,13 +3,32 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from backend.business.runs import StrategyRun, metrics_from_trace_payload
 from backend.business.runs.view import project_run_trace
 
 SummaryRenderMode = Literal["markdown", "html"]
+
+
+@dataclass(frozen=True, slots=True)
+class RunDayDTO:
+    """One calendar day that produced runs, counted by task.
+
+    The two tasks are counted apart for the same reason the status page keeps
+    them apart: a watch outnumbers an analysis roughly five to one, so a single
+    total would say almost nothing about whether the analyses ran.
+
+    A day is present only if something ran on it, so weekends and holidays do
+    not appear at all — which is the honest answer, not a gap to fill in.
+    """
+
+    day: date
+    analysis_total: int
+    analysis_failed: int
+    watch_total: int
+    watch_failed: int
 
 
 @dataclass(frozen=True, slots=True)

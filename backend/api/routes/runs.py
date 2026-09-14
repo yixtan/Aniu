@@ -12,12 +12,13 @@ from backend.api.deps import get_run_service, get_run_worker
 from backend.api.schemas.error import error_responses
 from backend.api.schemas.run import (
     AbortRunResponse,
+    RunDayResponse,
     RunDetailResponse,
     RunSummaryResponse,
 )
 from backend.api.security import require_authenticated
 from backend.business.runs.commands import StartRunCommand
-from backend.business.runs.dto import RunDetailDTO, RunSummaryDTO
+from backend.business.runs.dto import RunDayDTO, RunDetailDTO, RunSummaryDTO
 from backend.business.runs.queries import GetRunDetailQuery, ListRunsQuery
 from backend.business.runs.service import RunService
 from backend.business.shared import TriggerSource
@@ -93,6 +94,21 @@ async def list_runs(
     return await service.list_runs(
         ListRunsQuery(limit=limit, offset=offset, started_date=started_date)
     )
+
+
+@router.get("/days", response_model=list[RunDayResponse])
+async def list_run_days(
+    service: Annotated[RunService, Depends(get_run_service)],
+    limit: Annotated[int, Query(ge=1, le=365)] = 90,
+) -> list[RunDayDTO]:
+    """Days that produced runs, newest first.
+
+    Declared above ``/{run_id}`` on purpose: FastAPI matches in declaration
+    order, and the other way round "days" would be parsed as a run id and
+    rejected as a malformed integer.
+    """
+
+    return await service.list_run_days(limit=limit)
 
 
 @router.get("/{run_id}", response_model=RunDetailResponse)

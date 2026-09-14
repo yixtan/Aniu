@@ -2506,6 +2506,42 @@
         "title": "ReportMailResultResponse",
         "type": "object"
       },
+      "RunDayResponse": {
+        "additionalProperties": false,
+        "description": "One day that produced runs, counted by task.",
+        "properties": {
+          "analysis_failed": {
+            "title": "Analysis Failed",
+            "type": "integer"
+          },
+          "analysis_total": {
+            "title": "Analysis Total",
+            "type": "integer"
+          },
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "watch_failed": {
+            "title": "Watch Failed",
+            "type": "integer"
+          },
+          "watch_total": {
+            "title": "Watch Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "day",
+          "analysis_total",
+          "analysis_failed",
+          "watch_total",
+          "watch_failed"
+        ],
+        "title": "RunDayResponse",
+        "type": "object"
+      },
       "RunDetailResponse": {
         "additionalProperties": false,
         "properties": {
@@ -6667,6 +6703,111 @@
           }
         ],
         "summary": "List Runs",
+        "tags": [
+          "Runs"
+        ]
+      }
+    },
+    "/api/aniu/runs/days": {
+      "get": {
+        "description": "Days that produced runs, newest first.\n\nDeclared above ``/{run_id}`` on purpose: FastAPI matches in declaration\norder, and the other way round \"days\" would be parsed as a run id and\nrejected as a malformed integer.",
+        "operationId": "list_run_days_api_aniu_runs_days_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 90,
+              "maximum": 365,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RunDayResponse"
+                  },
+                  "title": "Response List Run Days Api Aniu Runs Days Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource state conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          }
+        },
+        "security": [
+          {
+            "AniuSessionCookie": []
+          }
+        ],
+        "summary": "List Run Days",
         "tags": [
           "Runs"
         ]

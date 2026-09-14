@@ -388,6 +388,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/aniu/runs/days": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Run Days
+         * @description Days that produced runs, newest first.
+         *
+         *     Declared above ``/{run_id}`` on purpose: FastAPI matches in declaration
+         *     order, and the other way round "days" would be parsed as a run id and
+         *     rejected as a malformed integer.
+         */
+        get: operations["list_run_days_api_aniu_runs_days_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/aniu/runs/start": {
         parameters: {
             query?: never;
@@ -1675,6 +1699,25 @@ export interface components {
             message: string;
             /** Run Id */
             run_id: number;
+        };
+        /**
+         * RunDayResponse
+         * @description One day that produced runs, counted by task.
+         */
+        RunDayResponse: {
+            /** Analysis Failed */
+            analysis_failed: number;
+            /** Analysis Total */
+            analysis_total: number;
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** Watch Failed */
+            watch_failed: number;
+            /** Watch Total */
+            watch_total: number;
         };
         /** RunDetailResponse */
         RunDetailResponse: {
@@ -3924,6 +3967,82 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunSummaryResponse"][];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource state conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_run_days_api_aniu_runs_days_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunDayResponse"][];
                 };
             };
             /** @description Authentication required */

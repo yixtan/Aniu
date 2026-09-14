@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from backend.business.runs import (
     ACTIVE_JOB_STATUSES,
@@ -17,6 +17,7 @@ from backend.business.runs import (
 from backend.business.runs.abort_registry import ActiveRunAbortRegistry
 from backend.business.runs.commands import StartRunCommand, StartWatchCommand
 from backend.business.runs.dto import (
+    RunDayDTO,
     RunDetailDTO,
     RunSummaryDTO,
     run_summary_dto_from_row,
@@ -142,6 +143,21 @@ class RunService:
             started_date=query.started_date,
         )
         return [run_summary_dto_from_row(row) for row in rows]
+
+    async def list_run_days(self, limit: int = 90) -> list[RunDayDTO]:
+        """Days that produced runs, newest first, for the timetable's date nav."""
+
+        rows = await self._run_repo.list_run_days(limit=limit)
+        return [
+            RunDayDTO(
+                day=date.fromisoformat(str(row["day"])),
+                analysis_total=int(str(row["analysis_total"])),
+                analysis_failed=int(str(row["analysis_failed"])),
+                watch_total=int(str(row["watch_total"])),
+                watch_failed=int(str(row["watch_failed"])),
+            )
+            for row in rows
+        ]
 
     async def get_run_detail(self, query: GetRunDetailQuery) -> RunDetailDTO:
         run = await self._run_repo.get_by_id(query.run_id)

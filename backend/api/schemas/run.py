@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from backend.api.schemas.common import ApiModel
 from backend.business.shared import StockApiProvider
 
 TraceStageKey = Literal["run", "summary"]
@@ -78,6 +79,16 @@ class RunTraceResponse(BaseModel):
     event_seq: int = Field(ge=0)
     current_stage_id: str | None
     stages: list[TraceStageResponse]
+
+
+class RunDayResponse(ApiModel):
+    """One day that produced runs, counted by task."""
+
+    day: date
+    analysis_total: int
+    analysis_failed: int
+    watch_total: int
+    watch_failed: int
 
 
 class RunSummaryResponse(BaseModel):
