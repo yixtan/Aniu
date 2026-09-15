@@ -85,6 +85,46 @@ WHERE summary IS NOT NULL GROUP BY 1;
 
 降级原因记录在该次运行 `trace_json` 的 Summary 阶段里，step_id 为 `markdown_fallback`。
 
+**模型的思考默认不回传给它自己，而这个默认值是按模型名字猜的。** 每次工具调用之后，
+回传给模型的消息里有工具调用和结果，**没有它自己的思考**——除非渠道的
+`replay_reasoning_content` 开着，或者上游返回了 `reasoning_details`。默认值在
+[`providers/context_payload.py`](backend/llm/providers/context_payload.py) 里：
+
+```python
+return "deepseek" in model.lower() if override is None else override
+```
+
+中转站会给模型改名。v2ex 把 DeepSeek 的模型叫 `coder-ds4`，这个子串匹配于是答 False；而盯盘
+和梦境用的是 `deepseek-v4-pro`，同一行代码答 True。**两条链路行为不同，纯属名字巧合。**
+
+后果是模型知道自己做了什么（工具记录在上下文里），不知道为什么（理由被丢掉了）。所以每个
+工具调用之后的回合都是从第一性原理重新开始，可以推翻上一个回合的结论。2026-09-14 和 09-15
+各发生过一次：运行撤掉一笔挂单，下一个回合从账户余额重推，得出相反结论，把同价同量的单子
+原样挂了回去——四笔委托，两个意图，零成交。
+
+识别特征，都在同一次运行的 trace 里：
+
+- 语言突然切换（中文思考变成英文）
+- 工具调用之后的回合从头重述账户状态、行情、持仓，像没看过一样
+- 结论与上一个回合矛盾，而工具结果并没有提供能解释这个转向的新信息
+
+排查先看渠道配的是什么，空值表示在走名字猜：
+
+```sql
+SELECT name, model_name,
+       json_extract(provider_config_json, '$.openai.replay_reasoning_content')
+FROM model_profiles;
+```
+
+**别用 trace 判断有没有回传**——trace 存的是思考文本，不存 `reasoning_details`，查它永远是 0。
+要确认开关真的生效，比相同轮次上的输入体积：日志里 `llm_call_completed` 带 `message_count`
+和 `input_bytes`。本仓库开启前后（消息数 12 → 11，更少的轮次）输入从 120,135 字节 / 33,587
+token 涨到 140,139 字节 / 41,118 token，多出来的就是思考。
+
+**新增或更换渠道时显式设这个值，别依赖名字。** 代价是输入 token 涨两成上下。注意有些中转站
+不接受 assistant 消息里带 `reasoning_content`（DeepSeek 官方的 reasoner 会直接报 400），所以
+开启后要实际跑一次再下结论——v2ex 在 2026-09-15 验过可用。
+
 **国内镜像源会让本地和 CI 看到不同的世界。** `registry.npmmirror.com` 不提供 audit 数据——
 裸跑 `npm audit` 会拿到一个空的 error，看起来像「没有漏洞」，而 CI 走官方源会真实报出来。
 `scripts/audit.mjs` 因此把源写死成官方地址，所以 `npm --prefix frontend run audit` 在任何
