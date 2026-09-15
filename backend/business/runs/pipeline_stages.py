@@ -58,6 +58,26 @@ TRACE_STAGE_META = {
 }
 
 
+_WRITE_STAGES: frozenset[PipelineStage] = frozenset({RUN, WATCH})
+"""The stages that can change something outside the run's own row.
+
+Summary is not one of them, and not by convention: it is absent from both
+`TradeTool.enabled_stages` and `CancelTool.enabled_stages`, and it runs a
+single prompt with no tool loop at all. A test pins that correspondence, so
+this set cannot quietly come to disagree with what the tools actually allow.
+"""
+
+ACCOUNT_BOUND_STATES: frozenset[RunState] = frozenset(
+    stage.run_state for stage in _WRITE_STAGES
+)
+"""The run states during which a run still holds the trading account.
+
+This is what "another run is active" has to mean. A run that has reached
+Summary is only re-rendering a report it already wrote, so holding the
+account against it costs an order watch its slot and buys nothing.
+"""
+
+
 def pipeline_stage_for_state_name(stage_name: str) -> PipelineStage | None:
     if not stage_name:
         return None
@@ -86,7 +106,7 @@ def is_tool_capable_stage(stage_name: str) -> bool:
 def is_write_stage(stage_name: str) -> bool:
     # A watch cancels, which is a side effect, so it is a write stage. What it
     # may write is decided by the tools it can reach, not by this flag.
-    return pipeline_stage_for_state_name(stage_name) in {RUN, WATCH}
+    return pipeline_stage_for_state_name(stage_name) in _WRITE_STAGES
 
 
 def result_title_for_stage(stage_name: str) -> str:

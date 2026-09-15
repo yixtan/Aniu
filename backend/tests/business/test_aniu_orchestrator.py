@@ -6,7 +6,7 @@ import pytest
 
 from backend.business.runs import StrategyRun, StrategySnapshot
 from backend.business.runs.execution import RunReport, SummaryDraft
-from backend.business.runs.orchestration import AniuOrchestrator
+from backend.business.runs.orchestration import AniuOrchestrator, RunResult
 from backend.business.shared import RunAbortError
 from backend.business.shared.enums import RunState, RunStatus, TriggerSource
 
@@ -145,6 +145,22 @@ def make_orchestrator(
     )
 
 
+async def execute_to_completion(
+    orchestrator: AniuOrchestrator,
+    run: StrategyRun,
+) -> RunResult:
+    """Drive both halves, the way the run worker and the render lane do.
+
+    `execute` now stops where the run stops holding the trading account, so a
+    test about the whole pipeline has to walk the second half itself.
+    """
+
+    result = await orchestrator.execute(run)
+    if result.pending_report is None:
+        return result
+    return await orchestrator.render_summary(run, result.pending_report)
+
+
 @pytest.mark.asyncio
 async def test_orchestrator_runs_one_agent_stage_then_html_summary() -> None:
     callbacks = RecordingCallbacks()
@@ -154,11 +170,14 @@ async def test_orchestrator_runs_one_agent_stage_then_html_summary() -> None:
     )
     run = make_run()
 
-    result = await make_orchestrator(
-        callbacks,
-        run_stage=run_stage,
-        summary_stage=summary_stage,
-    ).execute(run)
+    result = await execute_to_completion(
+        make_orchestrator(
+            callbacks,
+            run_stage=run_stage,
+            summary_stage=summary_stage,
+        ),
+        run,
+    )
 
     assert result.status is RunStatus.COMPLETED
     assert result.final_state is RunState.COMPLETED
@@ -177,12 +196,15 @@ async def test_closed_market_is_context_not_a_skipped_stage() -> None:
     run_stage = StaticRunStage()
     summary_stage = ScriptedSummaryStage([SummaryDraft(summary="<p>Done</p>")])
 
-    await make_orchestrator(
-        callbacks,
-        run_stage=run_stage,
-        summary_stage=summary_stage,
-        market_open=False,
-    ).execute(make_run())
+    await execute_to_completion(
+        make_orchestrator(
+            callbacks,
+            run_stage=run_stage,
+            summary_stage=summary_stage,
+            market_open=False,
+        ),
+        make_run(),
+    )
 
     assert run_stage.market_session_open is False
     assert callbacks.entered == ["1:Run", "1:Summary", "1:Completed"]
@@ -197,11 +219,14 @@ async def test_summary_retries_twice_then_completes_with_markdown_fallback() -> 
     )
     run = make_run()
 
-    result = await make_orchestrator(
-        callbacks,
-        run_stage=run_stage,
-        summary_stage=summary_stage,
-    ).execute(run)
+    result = await execute_to_completion(
+        make_orchestrator(
+            callbacks,
+            run_stage=run_stage,
+            summary_stage=summary_stage,
+        ),
+        run,
+    )
 
     assert result.status is RunStatus.COMPLETED
     assert run.summary == "# Run report\n\nNo trade."
@@ -219,11 +244,14 @@ async def test_summary_abort_propagates_without_completing_the_run() -> None:
     run = make_run()
 
     with pytest.raises(RunAbortError):
-        await make_orchestrator(
-            callbacks,
-            run_stage=StaticRunStage(),
-            summary_stage=summary_abort,
-        ).execute(run)
+        await execute_to_completion(
+            make_orchestrator(
+                callbacks,
+                run_stage=StaticRunStage(),
+                summary_stage=summary_abort,
+            ),
+            run,
+        )
 
     assert run.status is RunStatus.RUNNING
     assert run.current_state is RunState.SUMMARY
@@ -236,11 +264,14 @@ async def test_summary_abort_propagates_without_completing_the_run() -> None:
             raise RunAbortError(1)
 
     with pytest.raises(RunAbortError):
-        await make_orchestrator(
-            RecordingCallbacks(),
-            run_stage=AbortedRunStage(),
-            summary_stage=ScriptedSummaryStage([SummaryDraft("<p>unused</p>")]),
-        ).execute(make_run())
+        await execute_to_completion(
+            make_orchestrator(
+                RecordingCallbacks(),
+                run_stage=AbortedRunStage(),
+                summary_stage=ScriptedSummaryStage([SummaryDraft("<p>unused</p>")]),
+            ),
+            make_run(),
+        )
 
 
 def test_run_report_counts_only_successful_trade_orders() -> None:
@@ -314,7 +345,7 @@ async def test_an_unreadable_watchlist_costs_the_reference_not_the_run() -> None
         watchlist=ExplodingWatchlist(),
     )
 
-    result = await orchestrator.execute(make_run())
+    result = await execute_to_completion(orchestrator, make_run())
 
     assert result.status is RunStatus.COMPLETED
     assert run_stage.seen_context is not None

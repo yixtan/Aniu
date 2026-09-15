@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime
 
@@ -9,6 +10,7 @@ import pytest
 
 from backend.business.account import AccountSnapshot, PortfolioOrderSnapshot
 from backend.business.runs import (
+    ACCOUNT_BOUND_STATES,
     RunJob,
     RunJobStatus,
     StrategyRun,
@@ -97,8 +99,21 @@ class InMemoryRunRepository:
         return build_run_id(target_date, sequence=max_sequence + 1, task_type=task_type)
 
     async def get_running_run(self) -> StrategyRun | None:
+        return self._first_running(lambda _run: True)
+
+    async def get_account_bound_run(self) -> StrategyRun | None:
+        return self._first_running(
+            lambda run: run.current_state in ACCOUNT_BOUND_STATES
+        )
+
+    def _first_running(
+        self,
+        matches: Callable[[StrategyRun], bool],
+    ) -> StrategyRun | None:
         running_runs = [
-            run for run in self.runs.values() if run.status is RunStatus.RUNNING
+            run
+            for run in self.runs.values()
+            if run.status is RunStatus.RUNNING and matches(run)
         ]
         if not running_runs:
             return None
@@ -513,7 +528,12 @@ class RunHarness:
         return await self._service.create_run(command)
 
     async def execute_run(self, run_id: int):
-        return await self._executor.execute(run_id)
+        """Both halves, in the order the run worker and render lane do them."""
+
+        executed = await self._executor.execute(run_id)
+        if executed.pending_report is None:
+            return executed.detail
+        return await self._executor.render_summary(run_id, executed.pending_report)
 
     async def list_runs(self, query: ListRunsQuery):
         return await self._service.list_runs(query)

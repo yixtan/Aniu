@@ -40,7 +40,9 @@ from backend.api.routes import (
 from backend.api.sse import StreamHub, stream_hub
 from backend.bootstrap.runtime import AppRuntime
 from backend.bootstrap.runtime_config import RuntimeConfig
+from backend.business.runs import StrategyRun
 from backend.business.settings import AppSettings, default_stage_settings
+from backend.business.shared.enums import RunState
 from backend.infra.db import (
     build_database_url,
     create_engine,
@@ -86,10 +88,37 @@ def _audit_event(method: str, path: str) -> str | None:
     return None
 
 
+async def _complete_run_parked_in_summary(
+    run_repo: RunRepository,
+    run: StrategyRun,
+    reason: str,
+) -> None:
+    """Close a run whose HTML render never happened, keeping its Markdown.
+
+    This is not a zombie. The Run stage finished, its report was saved and the
+    trading account was released, all before the render lane was handed the
+    job — so the only thing a restart costs here is the presentation, and
+    failing the run instead would throw away a day's real work.
+    """
+
+    from backend.business.runs.trace_support import RunTraceSupport
+
+    async def persist(stored: StrategyRun) -> StrategyRun:
+        return await run_repo.save(stored)
+
+    run.advance_to(RunState.COMPLETED)
+    recorder = RunTraceSupport(
+        run_repo=run_repo,
+        committer=None,
+        snapshot_publisher=None,
+    ).make_recorder(run, persist_run=persist)
+    await recorder.degrade_stage(RunState.SUMMARY.value, reason)
+
+
 async def _recover_stale_run_jobs(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Fail orphan or expired RUNNING runs before starting the local worker."""
+    """Settle orphan or expired RUNNING runs before starting the local worker."""
 
     from backend.business.runs.job import ACTIVE_JOB_STATUSES, RunJobStatus
     from backend.infra.repositories.run_job_repo import RunJobRepository
@@ -139,6 +168,19 @@ async def _recover_stale_run_jobs(
                 if terminal is None:
                     await session.rollback()
                     break
+                failed_any = True
+                continue
+            if zombie.current_state is RunState.SUMMARY:
+                reason = "应用重启时 HTML 总结尚未生成，已保留 Markdown 运行报告"
+                logger.info(
+                    "completing run parked in Summary with its Markdown report",
+                    extra={
+                        "run_id": zombie.run_id,
+                        "stage_id": zombie.current_state.value,
+                        "error_code": "summary_not_rendered",
+                    },
+                )
+                await _complete_run_parked_in_summary(run_repo, zombie, reason)
                 failed_any = True
                 continue
             reason = "应用启动时发现运行没有可恢复的执行任务"
@@ -202,11 +244,20 @@ async def _initialize_runtime(application: FastAPI, config: RuntimeConfig) -> No
     )
     from backend.infra.workers.memory_dream_worker import MemoryDreamWorker
     from backend.infra.workers.run_worker import build_run_worker
+    from backend.infra.workers.summary_worker import SummaryWorker
+
+    summary_worker = SummaryWorker(
+        session_factory=session_factory,
+        executor_factory=runtime.run_executor,
+    )
+    summary_worker.start()
+    runtime.summary_worker = summary_worker
 
     run_worker = build_run_worker(
         session_factory=session_factory,
         executor_factory=runtime.run_executor,
         abort_registry=runtime.abort_registry,
+        hand_off_summary=summary_worker.submit,
     )
     runtime.run_worker = run_worker
 
@@ -284,6 +335,9 @@ async def _shutdown_runtime(application: FastAPI) -> None:
     if runtime.dream_worker is not None:
         await cleanup("dream_worker", runtime.dream_worker.stop)
         runtime.dream_worker = None
+    if runtime.summary_worker is not None:
+        await cleanup("summary_worker", runtime.summary_worker.stop)
+        runtime.summary_worker = None
     if runtime.run_worker is not None:
         await cleanup("run_worker", runtime.run_worker.stop)
         runtime.run_worker = None

@@ -77,6 +77,7 @@ if TYPE_CHECKING:
     from backend.infra.scheduler import JobRunner
     from backend.infra.workers.memory_dream_worker import MemoryDreamWorker
     from backend.infra.workers.run_worker import RunWorker
+    from backend.infra.workers.summary_worker import SummaryWorker
     from backend.llm import LLMClient, ModelConnectivityTester
 
 
@@ -100,6 +101,7 @@ class AppRuntime:
     model_connectivity_tester: ModelConnectivityTester | None = None
     run_worker: RunWorker | None = None
     dream_worker: MemoryDreamWorker | None = None
+    summary_worker: SummaryWorker | None = None
     job_runner: JobRunner | None = None
     mx_http_client: httpx.AsyncClient | None = None
     mx_clients: MxClients | None = None

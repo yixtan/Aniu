@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from backend.business.runs import StrategyRun
 from backend.business.runs.abort_registry import ActiveRunAbortRegistry
+from backend.business.runs.execution import RunReport
 from backend.business.runs.executor import RunExecutor
 from backend.business.runs.job import RunJobStatus
 from backend.business.runs.numbering import is_order_watch_task
@@ -32,6 +33,9 @@ DEFAULT_HEARTBEAT_SECONDS = 5.0
 # One watch cadence. A watch claimed later than this has been overtaken.
 WATCH_STALE_AFTER = timedelta(minutes=3)
 DEFAULT_MAX_ATTEMPTS = 3
+
+SummaryHandoff = Callable[[int, RunReport], Awaitable[None]]
+"""Where an analysis goes once it has let go of the trading account."""
 
 
 class RunWorker:
@@ -53,10 +57,12 @@ class RunWorker:
         lease_seconds: float = DEFAULT_LEASE_SECONDS,
         heartbeat_seconds: float = DEFAULT_HEARTBEAT_SECONDS,
         max_attempts: int = DEFAULT_MAX_ATTEMPTS,
+        hand_off_summary: SummaryHandoff | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._executor_factory = executor_factory
         self._abort_registry = abort_registry
+        self._hand_off_summary = hand_off_summary
         self._worker_id = worker_id or f"worker-{uuid.uuid4().hex[:12]}"
         self._poll_seconds = poll_seconds
         self._lease_seconds = lease_seconds
@@ -171,6 +177,7 @@ class RunWorker:
 
     async def _execute(self, run_id: int, claim_token: str) -> None:
         outcome: tuple[bool, RunJobStatus, str, str] | None = None
+        pending_report: RunReport | None = None
         heartbeat_failed = asyncio.Event()
         heartbeat_task = asyncio.create_task(
             self._heartbeat_loop(run_id, claim_token, heartbeat_failed),
@@ -216,7 +223,8 @@ class RunWorker:
                 executor.set_execution_guard(ensure_claim_owned)
                 if heartbeat_failed.is_set():
                     raise RunAbortError(run_id)
-                await executor.execute(run_id)
+                executed = await executor.execute(run_id)
+                pending_report = executed.pending_report
                 await ensure_claim_owned()
                 terminal = await jobs.mark_terminal(
                     run_id,
@@ -256,6 +264,12 @@ class RunWorker:
                         extra={"run_id": run_id},
                     )
 
+        if outcome is None and pending_report is not None:
+            # The job is terminal and `active_guard` is free, so a watch can
+            # already start. Only now is the render handed over — before the
+            # release it would have been the same lane under another name.
+            await self._hand_off_pending_summary(run_id, pending_report)
+
         if outcome is not None:
             aborted, job_status, error_code, error_message = outcome
             try:
@@ -272,6 +286,32 @@ class RunWorker:
                     "failed to finalize run execution",
                     extra={"run_id": run_id},
                 )
+
+    async def _hand_off_pending_summary(
+        self,
+        run_id: int,
+        report: RunReport,
+    ) -> None:
+        """Pass a parked run to the render lane; never fail the run over it.
+
+        The run already holds its Markdown report and has released the
+        account. A handoff that does not happen costs the HTML, which startup
+        recovery settles — it must not cost the run.
+        """
+
+        if self._hand_off_summary is None:
+            logger.warning(
+                "no render lane configured; run stays parked in Summary",
+                extra={"run_id": run_id},
+            )
+            return
+        try:
+            await self._hand_off_summary(run_id, report)
+        except Exception:
+            logger.exception(
+                "failed to hand a run to the render lane",
+                extra={"run_id": run_id},
+            )
 
     async def _finalize_execution(
         self,
@@ -573,10 +613,12 @@ def build_run_worker(
     executor_factory: Callable[[AsyncSession], RunExecutor],
     abort_registry: ActiveRunAbortRegistry,
     worker_id: str | None = None,
+    hand_off_summary: SummaryHandoff | None = None,
 ) -> RunWorker:
     return RunWorker(
         session_factory=session_factory,
         executor_factory=executor_factory,
         abort_registry=abort_registry,
         worker_id=worker_id,
+        hand_off_summary=hand_off_summary,
     )

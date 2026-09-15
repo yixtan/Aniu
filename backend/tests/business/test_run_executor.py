@@ -58,7 +58,7 @@ async def test_execution_guard_runs_after_abort_signal_activation() -> None:
     )
 
     async def reject_expired_claim() -> None:
-        assert registry.active_signal is not None
+        assert registry.active_run_ids == frozenset({run.run_id})
         raise RunAbortError(run.run_id)
 
     executor.set_execution_guard(reject_expired_claim)
@@ -68,7 +68,7 @@ async def test_execution_guard_runs_after_abort_signal_activation() -> None:
 
     assert agent_factory.prepared is False
     assert repository.run.status is RunStatus.ABORTED
-    assert registry.active_signal is None
+    assert registry.active_run_ids == frozenset()
 
 
 class RecordingNotifier:
@@ -463,6 +463,6 @@ async def test_a_broken_notifier_does_not_fail_the_finished_run(
         notifier=ExplodingNotifier(),  # type: ignore[arg-type]
     )
 
-    detail = await executor.execute(run.run_id)
+    executed = await executor.execute(run.run_id)
 
-    assert detail.status == RunStatus.COMPLETED.value
+    assert executed.detail.status == RunStatus.COMPLETED.value
