@@ -524,3 +524,49 @@ async def test_settings_load_tolerates_a_row_a_newer_build_wrote(
     assert loaded is not None
     assert loaded.prompt_profile.run_prompt
     assert "Run" in loaded.stage_settings
+
+
+@pytest.mark.asyncio
+async def test_a_run_rendering_its_summary_no_longer_holds_the_account(
+    session,
+) -> None:
+    """What "another run is active" has to mean for an order watch.
+
+    A run parked in Summary is still RUNNING -- startup recovery needs to see
+    it -- but it can no longer place or cancel anything, so refusing a watch
+    on its behalf costs a slot and protects nothing.
+    """
+
+    repo = RunRepository(session)
+    run = await repo.add(make_run(20260915101))
+    await session.commit()
+
+    # While the Run stage is going, both queries see it.
+    assert (await repo.get_running_run()) is not None
+    holder = await repo.get_account_bound_run()
+    assert holder is not None and holder.run_id == 20260915101
+
+    run.advance_to(RunState.SUMMARY)
+    await repo.save(run)
+    await session.commit()
+
+    assert (await repo.get_account_bound_run()) is None
+    still_running = await repo.get_running_run()
+    assert still_running is not None and still_running.run_id == 20260915101
+
+
+@pytest.mark.asyncio
+async def test_a_watch_in_flight_still_holds_the_account(session) -> None:
+    repo = RunRepository(session)
+    watch = StrategyRun(
+        run_id=20260915301,
+        trigger_source=TriggerSource.SCHEDULED,
+        schedule_id=1,
+        snapshot=make_snapshot(),
+        current_state=RunState.WATCH,
+    )
+    await repo.add(watch)
+    await session.commit()
+
+    holder = await repo.get_account_bound_run()
+    assert holder is not None and holder.run_id == 20260915301
