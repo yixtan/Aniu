@@ -100,6 +100,13 @@ class RunExecutionContext:
     llm_runtime: object | None = None
     tool_registry: object | None = None
     market_session_is_open: Callable[[], bool] | None = None
+    cancellations_accepted: Callable[[], bool] | None = None
+    """Whether a cancellation would be accepted right now.
+
+    Narrower than the session: the closing call auction still takes
+    orders but refuses withdrawals, so the tool that cancels and the
+    tool that trades do not stop at the same minute.
+    """
     followed_companies: tuple[tuple[str, str], ...] = ()
     """The operator's watchlist, resolved once before the Run stage.
 

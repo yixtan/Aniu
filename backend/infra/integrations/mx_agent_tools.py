@@ -351,6 +351,12 @@ class CancelTool:
     side_effect_level: SideEffectLevel = SideEffectLevel.WRITE
     execution_mode: str = "sequential"
     requires_market_open: bool = True
+    requires_cancellable_session: bool = True
+    """Cancelling stops three minutes before trading does.
+
+    The closing call auction still accepts orders, so this is narrower than
+    `requires_market_open` rather than a replacement for it.
+    """
 
     def is_write_call(self, arguments: object) -> bool:
         del arguments
@@ -364,6 +370,8 @@ class CancelTool:
                 "例如“撤单 262154600000047682 515880”；"
                 "需要撤销全部未成交委托时使用“一键撤单”。"
                 "系统会先复核委托编号、股票代码和可撤状态。"
+                "注意 14:57–15:00 是收盘集合竞价，交易所不接受撤单，"
+                "此时段内撤单必定失败，重试也不会成功。"
             ),
             "parameters": {
                 "type": "object",
