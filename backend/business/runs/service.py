@@ -87,7 +87,7 @@ class RunService:
         *,
         execution_guard: ExecutionGuard | None = None,
     ) -> RunDetailDTO:
-        active_run = await self._run_repo.get_running_run()
+        active_run = await self._run_repo.get_account_bound_run()
         if active_run is not None:
             raise ConcurrentRunError(active_run.run_id)
         active_job = await self._run_job_repo.get_active_job()
@@ -116,7 +116,7 @@ class RunService:
             active_job = await self._run_job_repo.get_active_job()
             if active_job is not None:
                 raise ConcurrentRunError(active_job.run_id) from exc
-            active_run = await self._run_repo.get_running_run()
+            active_run = await self._run_repo.get_account_bound_run()
             if active_run is not None:
                 raise ConcurrentRunError(active_run.run_id) from exc
             raise
@@ -177,8 +177,12 @@ class RunService:
     async def abort_run(self, run_id: int, reason: str = "user_requested") -> None:
         job = await self._run_job_repo.request_cancel(run_id, reason=reason)
         if job is None or job.status not in ACTIVE_JOB_STATUSES:
-            run = await self._run_repo.get_running_run()
-            if run is None or run.run_id != run_id:
+            # Asked of this run by id, not of "the running run": an analysis
+            # rendering its summary and an order watch can be in flight at
+            # once, and picking one of them by ordering would refuse to abort
+            # the other.
+            run = await self._run_repo.get_by_id(run_id)
+            if run is None or run.status is not RunStatus.RUNNING:
                 raise RunNotFoundError(run_id)
             if self._abort_registry.abort(run_id, reason):
                 return
@@ -207,7 +211,7 @@ class RunService:
         treats it as "not this time", and the next pass is minutes away.
         """
 
-        active_run = await self._run_repo.get_running_run()
+        active_run = await self._run_repo.get_account_bound_run()
         if active_run is not None:
             raise ConcurrentRunError(active_run.run_id)
         active_job = await self._run_job_repo.get_active_job()

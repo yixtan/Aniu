@@ -9,7 +9,7 @@ import pytest
 from backend.bootstrap.app_factory import _recover_stale_run_jobs
 from backend.business.runs import StrategyRun, StrategySnapshot
 from backend.business.runs.job import RunJobStatus
-from backend.business.shared.enums import RunStatus, TriggerSource
+from backend.business.shared.enums import RunState, RunStatus, TriggerSource
 from backend.infra.repositories import RunJobRepository, RunRepository
 
 
@@ -156,3 +156,63 @@ async def test_recover_does_not_overwrite_a_terminal_job(session_factory) -> Non
         job = await RunJobRepository(session).get_by_run_id(run_id)
         assert run is not None and run.status is RunStatus.FAILED
         assert job is not None and job.status is RunJobStatus.COMPLETED
+
+
+@pytest.mark.asyncio
+async def test_a_run_parked_in_summary_keeps_its_report_instead_of_failing(
+    session_factory,
+) -> None:
+    """A restart during the render costs the HTML, not the run.
+
+    The run stage finished, its Markdown report was saved and the account was
+    released before the render lane was ever handed the work. Failing it here
+    would throw away a morning's research and a real trade over a formatting
+    step that had not run yet.
+    """
+
+    run_id = 20260915101
+    async with session_factory() as session:
+        repo = RunRepository(session)
+        run = _make_run(run_id, status=RunStatus.RUNNING)
+        run.set_summary("# 运行报告\n\n今日无交易。", render_mode="markdown")
+        run.advance_to(RunState.SUMMARY)
+        await repo.add(run)
+        # The durable job was closed when the account was released, so on boot
+        # this looks exactly like an orphan — and must not be treated as one.
+        await session.commit()
+
+    await _recover_stale_run_jobs(session_factory)
+
+    async with session_factory() as session:
+        repo = RunRepository(session)
+        recovered = await repo.get_by_id(run_id)
+        assert recovered is not None
+        assert recovered.status is RunStatus.COMPLETED
+        assert recovered.current_state is RunState.COMPLETED
+        assert recovered.summary == "# 运行报告\n\n今日无交易。"
+        assert recovered.summary_render_mode == "markdown"
+        assert await repo.get_running_run() is None
+
+    summary_stage = next(
+        stage
+        for stage in recovered.trace.stages
+        if stage.key == "summary"
+    )
+    assert summary_stage.status == "degraded"
+
+
+@pytest.mark.asyncio
+async def test_a_run_orphaned_mid_run_stage_still_fails(session_factory) -> None:
+    """The Summary exemption must not quietly cover the stage that trades."""
+
+    run_id = 20260915102
+    async with session_factory() as session:
+        repo = RunRepository(session)
+        await repo.add(_make_run(run_id, status=RunStatus.RUNNING))
+        await session.commit()
+
+    await _recover_stale_run_jobs(session_factory)
+
+    async with session_factory() as session:
+        recovered = await RunRepository(session).get_by_id(run_id)
+        assert recovered is not None and recovered.status is RunStatus.FAILED

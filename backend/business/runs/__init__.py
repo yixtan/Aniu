@@ -8,10 +8,11 @@ from backend.business.runs.numbering import (
     build_run_id,
     run_id_prefix,
 )
-from backend.business.runs.pipeline_stages import PIPELINE as STAGE_PIPELINE
 from backend.business.runs.pipeline_stages import (
+    ACCOUNT_BOUND_STATES,
     TRACE_STAGE_META,
 )
+from backend.business.runs.pipeline_stages import PIPELINE as STAGE_PIPELINE
 from backend.business.runs.reports import RunReportRecord
 from backend.business.runs.run_entity import (
     StageModelSnapshot,
@@ -64,6 +65,7 @@ __all__ = [
     "StrategySnapshot",
     "StageModelSnapshot",
     "TERMINAL_STATES",
+    "ACCOUNT_BOUND_STATES",
     "TRACE_STAGE_META",
     "TraceEvent",
     "TraceStage",

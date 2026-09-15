@@ -65,6 +65,14 @@ class RunResult:
     final_state: RunState
     summary: str | None
     total_duration_ms: int
+    pending_report: RunReport | None = None
+    """Set when the run stopped at Summary and still owes an HTML render.
+
+    Handed to `render_summary` rather than rebuilt from the trace: the report
+    carries the raw tool evidence the summary reads, and the trace stores a
+    slimmed projection of it. Living only in memory is what makes a crash
+    here cost the HTML and nothing else — the Markdown was saved first.
+    """
 
 
 class StateCallbacks(Protocol):
@@ -162,15 +170,40 @@ class AniuOrchestrator:
             )
             return ()
 
-    async def execute(self, run: StrategyRun) -> RunResult:
-        started_at = perf_counter()
+    async def _build_context(
+        self,
+        run: StrategyRun,
+        abort_signal: RunAbortSignal,
+        *,
+        read_watchlist: bool,
+    ) -> RunExecutionContext:
         context = RunExecutionContext(run=run, snapshot=run.snapshot)
-        abort_signal = self._abort_signal or RunAbortSignal(run.run_id)
         context.abort_signal = abort_signal
         context.market_session_is_open = self._is_market_session_open
         context.tool_registry = self._tool_registry
-        context.followed_companies = await self._followed_companies(run.run_id)
+        if read_watchlist:
+            context.followed_companies = await self._followed_companies(run.run_id)
         self._attach_runtime_callbacks(context, run.run_id)
+        return context
+
+    async def execute(self, run: StrategyRun) -> RunResult:
+        """Do everything that holds the trading account, and stop there.
+
+        For a watch that is the whole run: one stage, then COMPLETED. For an
+        analysis it is the Run stage alone — the Markdown report is saved, the
+        run is parked in Summary, and turning it into HTML is left to
+        `render_summary`, which runs off the exclusive lane.
+
+        That split is the point. Summary appears in neither the trade tool's
+        nor the cancel tool's enabled stages and runs no tool loop at all, so
+        a run waiting to be rendered holds nothing an order watch needs. Before
+        the split, a healthy 75-second render blocked every watch that fell
+        inside it — about two slots a day, on top of the pathological ones.
+        """
+
+        started_at = perf_counter()
+        abort_signal = self._abort_signal or RunAbortSignal(run.run_id)
+        context = await self._build_context(run, abort_signal, read_watchlist=True)
 
         if run.current_state is RunState.WATCH:
             return await self._execute_watch(run, context, started_at, abort_signal)
@@ -181,6 +214,29 @@ class AniuOrchestrator:
 
         run.advance_to(RunState.SUMMARY)
         await self._callbacks.on_state_entered(run.run_id, RunState.SUMMARY.value)
+        return RunResult(
+            run_id=run.run_id,
+            status=run.status,
+            final_state=run.current_state,
+            summary=run.summary,
+            total_duration_ms=int((perf_counter() - started_at) * 1000),
+            pending_report=report,
+        )
+
+    async def render_summary(self, run: StrategyRun, report: RunReport) -> RunResult:
+        """Turn a parked run's report into HTML and complete it.
+
+        Failing here is not failing the run. The Markdown was set before the
+        account was released, so the outcome of a bad render is a run that
+        completes with a plainer report — recorded as a degraded stage and as
+        `summary_render_mode = markdown`, both visible — rather than a run
+        that is lost after its trades were already placed.
+        """
+
+        started_at = perf_counter()
+        abort_signal = self._abort_signal or RunAbortSignal(run.run_id)
+        context = await self._build_context(run, abort_signal, read_watchlist=False)
+        context.run_report = report
         try:
             summary = await self._generate_summary(context)
         except RunAbortError:

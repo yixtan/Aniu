@@ -10,6 +10,7 @@ from sqlalchemy import String, case, cast, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.business.runs import (
+    ACCOUNT_BOUND_STATES,
     INITIAL_STATE,
     ORDER_WATCH_TASK_TYPE,
     RUN_TASK_TYPE,
@@ -152,9 +153,40 @@ class RunRepository:
         )
 
     async def get_running_run(self) -> StrategyRun | None:
+        """Any run still marked RUNNING, whatever stage it is in.
+
+        Startup recovery wants this one: a run left in Summary by a crash is
+        as much a zombie as one left in Run. Deciding whether a *new* run may
+        start is a different question — see `get_account_bound_run`.
+        """
+
         statement = (
             select(StrategyRunModel)
             .where(StrategyRunModel.status == RunStatus.RUNNING.value)
+            .order_by(StrategyRunModel.id.asc())
+            .limit(1)
+        )
+        model = (await self._session.scalars(statement)).first()
+        if model is None:
+            return None
+        return self._to_domain(model)
+
+    async def get_account_bound_run(self) -> StrategyRun | None:
+        """The run, if any, that still holds the trading account.
+
+        A run rendering its HTML summary is excluded on purpose. It cannot
+        place, cancel or fill anything, so making an order watch stand aside
+        for it costs a watch slot and protects nothing.
+        """
+
+        statement = (
+            select(StrategyRunModel)
+            .where(
+                StrategyRunModel.status == RunStatus.RUNNING.value,
+                StrategyRunModel.current_state.in_(
+                    sorted(state.value for state in ACCOUNT_BOUND_STATES)
+                ),
+            )
             .order_by(StrategyRunModel.id.asc())
             .limit(1)
         )

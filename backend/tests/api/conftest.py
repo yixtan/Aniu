@@ -25,6 +25,7 @@ from backend.infra.repositories import (
     SettingsRepository,
 )
 from backend.infra.workers.run_worker import build_run_worker
+from backend.infra.workers.summary_worker import SummaryWorker
 from backend.llm import ModelCatalogItem, ModelProtocol
 from backend.main import app
 from backend.stock_api import MxClients
@@ -282,10 +283,20 @@ async def run_api_client(session_factory) -> AsyncIterator[AsyncClient]:
     app.state.runtime.llm_client = FakeLLMClient()  # type: ignore[assignment]
     app.state.runtime.model_connectivity_tester = object()
     app.state.runtime.job_runner = DisabledJobRunner()
+    # Both lanes, as the app factory wires them. Without the render lane an
+    # analysis parks in Summary and never reaches a terminal state, which the
+    # SSE stream waits for -- the test would hang rather than fail.
+    summary_worker = SummaryWorker(
+        session_factory=session_factory,
+        executor_factory=app.state.runtime.run_executor,
+    )
+    summary_worker.start()
+    app.state.runtime.summary_worker = summary_worker
     run_worker = build_run_worker(
         session_factory=session_factory,
         executor_factory=app.state.runtime.run_executor,
         abort_registry=app.state.runtime.abort_registry,
+        hand_off_summary=summary_worker.submit,
     )
     run_worker.start()
     app.state.runtime.run_worker = run_worker
@@ -294,6 +305,8 @@ async def run_api_client(session_factory) -> AsyncIterator[AsyncClient]:
         await authenticate_api_client(client)
         yield client
     await run_worker.stop()
+    await summary_worker.stop()
+    app.state.runtime.summary_worker = None
     app.state.runtime.mx_clients = None
     app.state.runtime.mx_http_client = None
     await mx_http_client.aclose()
