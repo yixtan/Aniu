@@ -31,7 +31,11 @@ from backend.business.stock_api_logs.models import StockApiToolCall
 from backend.business.stock_api_logs.service import StockApiLogService
 from backend.business.system_status import SystemStatusService
 from backend.business.watchlist import WatchlistService
-from backend.infra.calendar import TradingCalendar2026, is_market_session_open
+from backend.infra.calendar import (
+    TradingCalendar2026,
+    cancellations_accepted,
+    is_market_session_open,
+)
 from backend.infra.integrations.agent_runner import AgentRunnerFactoryAdapter
 from backend.infra.integrations.agent_runtime import AgentRuntimeFactory
 from backend.infra.integrations.dream_agent import DreamAgentRunner
@@ -415,6 +419,7 @@ class AppRuntime:
             trace_step_delta_publisher=stream_hub.publish_trace_step_delta,
             agent_runner_factory=agent_factory,
             market_session_is_open=is_market_session_open,
+            cancellations_accepted=cancellations_accepted,
             abort_registry=self.abort_registry,
             notifier=self.optional_notification_dispatcher(),
             watchlist=RunWatchlistQuery(self.require_session_factory()),

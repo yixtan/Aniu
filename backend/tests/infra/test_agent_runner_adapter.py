@@ -19,7 +19,7 @@ from backend.infra.integrations.agent_runner import (
     AgentRunnerFactoryAdapter,
 )
 from backend.infra.integrations.agent_runtime import AgentRuntimeFactory
-from backend.infra.integrations.mx_agent_tools import TradeTool
+from backend.infra.integrations.mx_agent_tools import CancelTool, TradeTool
 from backend.llm import ModelProtocol
 
 
@@ -131,3 +131,121 @@ async def test_closed_market_blocks_typed_trade_tool() -> None:
     assert result.content == "交易被阻止。"
     assert result.tool_activity[0]["status"] == "blocked"
     assert "非交易时段" in str(result.tool_activity[0]["error"])
+
+
+class CancelRequestClient:
+    """Asks to cancel once, then reports what it was told."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def chat(self, **kwargs: object) -> dict[str, object]:
+        del kwargs
+        self.calls += 1
+        if self.calls == 1:
+            return {
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "cancel-1",
+                        "name": "cancel",
+                        "arguments": {"instruction": "撤单 262574700000048096 688008"},
+                    }
+                ],
+            }
+        return {"content": "撤单被阻止。", "tool_calls": []}
+
+
+def _runtime() -> LlmRuntimeConfig:
+    return LlmRuntimeConfig(
+        protocol=ModelProtocol.OPENAI_CHAT_COMPLETIONS,
+        base_url="https://example.invalid",
+        api_key="test",
+        model="test-model",
+    )
+
+
+def _context(registry: ToolRegistry, **session: object) -> RunExecutionContext:
+    snapshot = StrategySnapshot(prompt_version="v1", risk_rules_version="v1")
+    return RunExecutionContext(
+        run=StrategyRun(1, TriggerSource.MANUAL, None, snapshot),
+        snapshot=snapshot,
+        tool_registry=registry,
+        **session,  # type: ignore[arg-type]
+    )
+
+
+@pytest.mark.asyncio
+async def test_the_closing_auction_blocks_a_cancel_and_says_not_to_retry() -> None:
+    """2026-09-15 14:57: the exchange refused with a bare "撤单失败".
+
+    Not knowing why, the watch tried again about twenty-five times in fifty
+    seconds, tripped the provider's rate limiter — which then failed its
+    account reads too — and died on the watch deadline. Three minutes before
+    that, the same cancel had worked. The refusal has to carry the reason and
+    say that retrying cannot help, because retrying is the failure.
+    """
+
+    registry = ToolRegistry()
+    registry.register(CancelTool(object()))  # type: ignore[arg-type]
+    context = _context(
+        registry,
+        market_session_is_open=lambda: True,
+        cancellations_accepted=lambda: False,
+    )
+    factory = AgentRunnerFactoryAdapter(
+        CancelRequestClient(),  # type: ignore[arg-type]
+        object(),  # type: ignore[arg-type]
+    )
+
+    result = await factory.create(context, label="Watch", runtime=_runtime()).prompt(
+        "按计划撤单"
+    )
+
+    assert result.tool_activity[0]["status"] == "blocked"
+    error = str(result.tool_activity[0]["error"])
+    assert "收盘集合竞价" in error
+    assert "重试不会成功" in error
+
+
+@pytest.mark.asyncio
+async def test_an_order_may_still_be_placed_during_the_closing_auction() -> None:
+    """The auction takes orders; only withdrawals stop. Blocking both would
+    cost a legitimate trade to fix a cancel that was never going to work."""
+
+    registry = ToolRegistry()
+    registry.register(TradeTool(object()))  # type: ignore[arg-type]
+    context = _context(
+        registry,
+        market_session_is_open=lambda: True,
+        cancellations_accepted=lambda: False,
+    )
+    factory = AgentRunnerFactoryAdapter(
+        TradeRequestClient(),  # type: ignore[arg-type]
+        object(),  # type: ignore[arg-type]
+    )
+
+    result = await factory.create(context, label="Run", runtime=_runtime()).prompt(
+        "执行交易"
+    )
+
+    assert result.tool_activity[0]["status"] != "blocked"
+
+
+@pytest.mark.asyncio
+async def test_a_context_without_the_narrower_answer_blocks_nothing_new() -> None:
+    """Older callers keep the behaviour they had; the exchange still refuses."""
+
+    registry = ToolRegistry()
+    registry.register(CancelTool(object()))  # type: ignore[arg-type]
+    context = _context(registry, market_session_is_open=lambda: True)
+    factory = AgentRunnerFactoryAdapter(
+        CancelRequestClient(),  # type: ignore[arg-type]
+        object(),  # type: ignore[arg-type]
+    )
+
+    result = await factory.create(context, label="Watch", runtime=_runtime()).prompt(
+        "按计划撤单"
+    )
+
+    assert result.tool_activity[0]["status"] != "blocked"

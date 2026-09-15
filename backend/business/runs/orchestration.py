@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 
 StageOutput = RunReport | SummaryDraft
 MarketSessionOpen = Callable[[datetime], bool]
+CancellationsAccepted = Callable[[datetime], bool]
 NowProvider = Callable[[], datetime]
 MAX_SUMMARY_ATTEMPTS = 2
 
@@ -131,6 +132,7 @@ class AniuOrchestrator:
         watch_stage: WatchStage | None = None,
         abort_signal: RunAbortSignal | None = None,
         market_session_is_open: MarketSessionOpen,
+        cancellations_accepted: CancellationsAccepted | None = None,
         now_provider: NowProvider | None = None,
         watchlist: FollowedCompaniesPort | None = None,
         order_plan: OrderPlanPort | None = None,
@@ -146,6 +148,7 @@ class AniuOrchestrator:
         self._watch_stage = watch_stage or WatchStage()
         self._abort_signal = abort_signal
         self._market_session_is_open = market_session_is_open
+        self._cancellations_accepted = cancellations_accepted
         self._now_provider = now_provider or (lambda: datetime.now(tz=UTC))
         self._watchlist = watchlist
         self._order_plan = order_plan
@@ -180,6 +183,7 @@ class AniuOrchestrator:
         context = RunExecutionContext(run=run, snapshot=run.snapshot)
         context.abort_signal = abort_signal
         context.market_session_is_open = self._is_market_session_open
+        context.cancellations_accepted = self._are_cancellations_accepted
         context.tool_registry = self._tool_registry
         if read_watchlist:
             context.followed_companies = await self._followed_companies(run.run_id)
@@ -460,6 +464,22 @@ class AniuOrchestrator:
 
     def _runtime_for(self, stage_name: str) -> object | None:
         return self._stage_runtimes.get(stage_name, self._llm_runtime)
+
+    def _are_cancellations_accepted(self) -> bool:
+        """Default to the session when nobody supplied the narrower answer.
+
+        Reading it wrong in the permissive direction only restores the old
+        behaviour — the exchange still refuses, and the run is no worse off
+        than before this existed. Reading it wrong the other way would stop
+        a cancel that was still allowed, which is the expensive mistake.
+        """
+
+        if self._cancellations_accepted is None:
+            return self._is_market_session_open()
+        try:
+            return self._cancellations_accepted(self._now_provider())
+        except Exception:
+            return self._is_market_session_open()
 
     def _is_market_session_open(self) -> bool:
         try:

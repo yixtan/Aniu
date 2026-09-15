@@ -21,7 +21,11 @@ from backend.business.runs.callbacks import RunExecutionCallbacks
 from backend.business.runs.dto import RunDetailDTO, to_run_detail_dto
 from backend.business.runs.execution import RunReport
 from backend.business.runs.numbering import is_order_watch_task
-from backend.business.runs.orchestration import AniuOrchestrator, RunResult
+from backend.business.runs.orchestration import (
+    AniuOrchestrator,
+    CancellationsAccepted,
+    RunResult,
+)
 from backend.business.runs.ports import (
     FollowedCompaniesPort,
     OrderPlanPort,
@@ -70,6 +74,7 @@ class RunExecutor:
         trace_step_delta_publisher: TraceStepDeltaPublisher | None = None,
         now_provider: NowProvider | None = None,
         market_session_is_open: MarketSessionOpen | None = None,
+        cancellations_accepted: CancellationsAccepted | None = None,
         notifier: NotificationPublisherPort | None = None,
         run_completion_hook: RunCompletionHookPort | None = None,
         watchlist: FollowedCompaniesPort | None = None,
@@ -83,6 +88,7 @@ class RunExecutor:
         self._abort_registry = abort_registry
         self._now_provider = now_provider or (lambda: datetime.now(tz=UTC))
         self._market_session_is_open = market_session_is_open or (lambda _moment: False)
+        self._cancellations_accepted = cancellations_accepted
         self._runtime = RunRuntimeState()
         self._notifier = notifier
         self._watchlist = watchlist
@@ -146,6 +152,7 @@ class RunExecutor:
                         stage_runtimes=agent_runtime.stage_runtimes,
                         abort_signal=abort_signal,
                         market_session_is_open=self._market_session_is_open,
+                        cancellations_accepted=self._cancellations_accepted,
                         now_provider=self._now_provider,
                         watchlist=self._watchlist,
                         order_plan=self._order_plan,

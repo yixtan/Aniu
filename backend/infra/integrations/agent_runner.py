@@ -524,6 +524,16 @@ class AgentRunnerFactoryAdapter:
                 market_open = workflow.market_session_is_open
                 if not callable(market_open) or not market_open():
                     return "非交易时段，交易和撤单写操作已被阻止；仍可继续分析。"
+            # Checked after the session, because "the market is shut" is the
+            # more general answer and the clearer one to give when both hold.
+            if writes and bool(getattr(tool, "requires_cancellable_session", False)):
+                accepted = workflow.cancellations_accepted
+                if callable(accepted) and not accepted():
+                    return (
+                        "14:57–15:00 为收盘集合竞价，交易所不接受撤单，"
+                        "本次撤单已被阻止。重试不会成功，这笔委托只能留到收盘；"
+                        "请不要再次尝试撤单，直接在记录里写明它为什么没能撤掉。"
+                    )
             if writes:
                 refusal = _unauthorized_order_refusal(
                     tool,

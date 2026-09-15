@@ -12,6 +12,13 @@ MORNING_OPEN = time(9, 30)
 MORNING_CLOSE = time(11, 30)
 AFTERNOON_OPEN = time(13, 0)
 AFTERNOON_CLOSE = time(15, 0)
+CLOSING_AUCTION_START = time(14, 57)
+"""A-shares close with a call auction from 14:57 to 15:00.
+
+Orders may still be entered during it; cancellations are rejected by the
+exchange. That asymmetry is why this cannot be folded into the session
+window — a trade and a cancel do not have the same last moment.
+"""
 
 TRADING_DAYS_BY_YEAR: dict[int, frozenset[str]] = load_trading_days_by_year()
 SUPPORTED_CALENDAR_YEARS = frozenset(TRADING_DAYS_BY_YEAR)
@@ -65,6 +72,26 @@ def is_market_session_open(moment: datetime) -> bool:
         MORNING_OPEN <= current <= MORNING_CLOSE
         or AFTERNOON_OPEN <= current <= AFTERNOON_CLOSE
     )
+
+
+def cancellations_accepted(moment: datetime) -> bool:
+    """Whether the exchange will still accept a cancellation.
+
+    On 2026-09-15 a watch tried to cancel at 14:57:16 and got back a bare
+    "撤单失败" with no reason. Not knowing why, it tried again about
+    twenty-five times in fifty seconds, tripped the provider's rate limiter
+    — which then failed its account reads too — and was killed by the watch
+    deadline. Three minutes earlier the same cancel had succeeded.
+
+    Answering this here means the refusal carries a reason, and a refusal
+    with a reason is one the model stops at: at 15:00 the same run met the
+    existing closed-market block and gave up after two attempts.
+    """
+
+    market_time = moment.astimezone(MARKET_TIMEZONE)
+    if not is_market_session_open(moment):
+        return False
+    return not (CLOSING_AUCTION_START <= market_time.time() <= AFTERNOON_CLOSE)
 
 
 class TradingCalendar2026:
