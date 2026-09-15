@@ -178,6 +178,16 @@ async def execute_tool_call(
                 status="blocked",
                 error=reason,
             )
+    # Checked after policy, because "you may not" is a better answer than
+    # "you already tried" when both are true.
+    repeat_refusal = context.repeated_failures.refusal_for(tool_name, arguments)
+    if repeat_refusal:
+        return result(
+            tool_name=tool_name,
+            arguments=safe_args,
+            status="blocked",
+            error=repeat_refusal,
+        )
 
     def stock_api_details() -> dict[str, object]:
         reader = getattr(registry, "stock_api_call_details", None)
@@ -212,6 +222,7 @@ async def execute_tool_call(
             else:
                 call_result = await registry.call(tool_name, **arguments)
     except Exception as exc:
+        context.repeated_failures.record_failure(tool_name, arguments, str(exc))
         return result(
             tool_name=tool_name,
             arguments=safe_args,
@@ -223,13 +234,15 @@ async def execute_tool_call(
         isinstance(call_result, dict)
         and str(call_result.get("status") or "") == "error"
     ):
+        reported = str(call_result.get("error") or "tool returned error")
+        context.repeated_failures.record_failure(tool_name, arguments, reported)
         return result(
             tool_name=tool_name,
             arguments=safe_args,
             status="error",
             content=call_result,
             details=stock_api_details(),
-            error=str(call_result.get("error") or "tool returned error"),
+            error=reported,
         )
     return result(
         tool_name=tool_name,

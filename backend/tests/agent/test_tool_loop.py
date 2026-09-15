@@ -633,3 +633,132 @@ async def test_a_provider_that_reports_nothing_leaves_usage_at_zero(
     result = await AgentLoop().run(context(registry=Registry()), "analyze")
 
     assert result.usage.total_tokens == 0
+
+
+class FailingRegistry(Registry):
+    """Refuses every call the way the exchange refused a cancel at 14:57."""
+
+    def __init__(self, error: str = "撤单失败: 撤单失败") -> None:
+        super().__init__([Tool("cancel", execution_mode="sequential")])
+        self.error = error
+        self.attempts = 0
+
+    async def call(self, name: str, **kwargs):
+        del kwargs
+        self.attempts += 1
+        self.calls.append(name)
+        raise RuntimeError(self.error)
+
+
+def failing_call(sequence: int, **arguments: object):
+    call = {"id": str(sequence), "name": "cancel", "arguments": dict(arguments)}
+    return call, call, sequence
+
+
+async def _attempt(ctx, registry, sequence: int, **arguments: object):
+    results = await execute_tool_call_batch(
+        ctx,
+        registry,
+        [failing_call(sequence, **arguments)],  # type: ignore[list-item]
+        iteration=sequence,
+        max_concurrency=1,
+    )
+    return results[0]
+
+
+@pytest.mark.asyncio
+async def test_a_third_identical_failing_call_is_refused() -> None:
+    """2026-09-15: one rejected cancel became about twenty-five in fifty
+    seconds, which tripped the provider's rate limiter and took the run's
+    account reads down with it."""
+
+    registry = FailingRegistry()
+    ctx = context(registry=registry)
+
+    first = await _attempt(ctx, registry, 1, order="A")
+    second = await _attempt(ctx, registry, 2, order="A")
+    third = await _attempt(ctx, registry, 3, order="A")
+
+    assert first.status == "error"
+    assert second.status == "error"
+    # The retry is allowed; the repeat is not.
+    assert third.status == "blocked"
+    assert registry.attempts == 2, "被阻止的那次不该真的打到下游"
+    # 上一次的错误要带回去，否则它不知道该换成什么做法。
+    assert "撤单失败" in str(third.error)
+    assert "失败 2 次" in str(third.error)
+
+
+@pytest.mark.asyncio
+async def test_different_arguments_are_a_different_call() -> None:
+    """Cancelling a second order is a new question, not a repeat of the first."""
+
+    registry = FailingRegistry()
+    ctx = context(registry=registry)
+
+    await _attempt(ctx, registry, 1, order="A")
+    await _attempt(ctx, registry, 2, order="A")
+    other = await _attempt(ctx, registry, 3, order="B")
+
+    assert other.status == "error"
+    assert registry.attempts == 3
+
+
+@pytest.mark.asyncio
+async def test_argument_order_does_not_disguise_a_repeat() -> None:
+    registry = FailingRegistry()
+    ctx = context(registry=registry)
+
+    await _attempt(ctx, registry, 1, symbol="688008", order="A")
+    await _attempt(ctx, registry, 2, order="A", symbol="688008")
+    third = await _attempt(ctx, registry, 3, symbol="688008", order="A")
+
+    assert third.status == "blocked"
+
+
+@pytest.mark.asyncio
+async def test_a_tally_does_not_outlive_the_turn_that_made_it() -> None:
+    """A later stage has every right to try what this one could not."""
+
+    registry = FailingRegistry()
+
+    first_turn = context(registry=registry)
+    await _attempt(first_turn, registry, 1, order="A")
+    await _attempt(first_turn, registry, 2, order="A")
+    assert (await _attempt(first_turn, registry, 3, order="A")).status == "blocked"
+
+    second_turn = context(registry=registry)
+    assert (await _attempt(second_turn, registry, 4, order="A")).status == "error"
+
+
+@pytest.mark.asyncio
+async def test_a_succeeding_call_is_never_counted_against() -> None:
+    registry = Registry([Tool("search")])
+    ctx = context(registry=registry)
+
+    for sequence in range(1, 6):
+        results = await execute_tool_call_batch(
+            ctx,
+            registry,
+            [tool_call("search", sequence)],  # type: ignore[list-item]
+            iteration=sequence,
+            max_concurrency=1,
+        )
+        assert results[0].status == "ok"
+    assert len(registry.calls) == 5
+
+
+@pytest.mark.asyncio
+async def test_policy_answers_before_the_tally_does() -> None:
+    """"You may not" is the better answer when both are true."""
+
+    registry = FailingRegistry()
+    ctx = context(registry=registry)
+    await _attempt(ctx, registry, 1, order="A")
+    await _attempt(ctx, registry, 2, order="A")
+    ctx.tool_authorizer = lambda tool, arguments: "非交易时段，撤单已被阻止。"
+
+    blocked = await _attempt(ctx, registry, 3, order="A")
+
+    assert blocked.status == "blocked"
+    assert "非交易时段" in str(blocked.error)
