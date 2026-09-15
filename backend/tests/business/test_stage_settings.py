@@ -156,3 +156,32 @@ def test_the_default_run_prompt_still_has_its_four_steps() -> None:
         assert step in DEFAULT_RUN_PROMPT
     assert DEFAULT_RUN_PROMPT.startswith("你负责操作股票模拟账户进行交易")
     assert DEFAULT_RUN_PROMPT.endswith("实现账户收益最大化的最终目标。")
+
+
+def test_every_configured_stage_receives_the_global_prompt() -> None:
+    """Pins the count CLAUDE.md quotes, which went stale once already.
+
+    The rule for what belongs in the global prompt is "only what holds for
+    every stage", so the number of stages is load-bearing. `settings_for_stage`
+    composes for whatever it is asked about, so a new stage joins silently —
+    Watch did, and the doc kept saying three for a day.
+    """
+
+    from backend.business.runs import StrategySnapshot
+    from backend.business.settings import AniuAgentPrompt, default_stage_settings
+
+    profile = AniuAgentPrompt(global_prompt="全局：这句必须出现在每个阶段前面。")
+    snapshot = StrategySnapshot(
+        prompt_version="v1",
+        risk_rules_version="risk-v1",
+        prompt_profile=profile,
+        stage_settings=default_stage_settings(profile),
+    )
+
+    stages = sorted(snapshot.stage_settings)
+    assert stages == ["Dream", "Run", "Summary", "Watch"], (
+        "阶段集合变了，CLAUDE.md 里「四个阶段」那段要跟着改"
+    )
+    for stage_id in stages:
+        composed = snapshot.settings_for_stage(stage_id).prompt
+        assert composed.startswith(profile.global_prompt), stage_id

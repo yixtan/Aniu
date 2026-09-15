@@ -183,12 +183,16 @@ Summary  把报告渲染成 HTML
 
 README 里「研究、决策、交易、总结等阶段」是旧描述，这四件事现在都在 Run 内部完成。`Dream`（夜间记忆整理）是独立任务，不在这条 FSM 里。
 
-**全局提示词拼在三个阶段前面，不只是 Run。** Run 和 Summary 走
-[`run_entity.py`](backend/business/runs/run_entity.py) 的 `_compose_stage_prompt`，Dream 走
-[`dream_agent.py`](backend/infra/integrations/dream_agent.py)，都是 `全局 + "\n\n" + 阶段`。所以判据是
-**只有对三个阶段都成立的东西才该放全局**——交易目标、仓位口径这类只属于 Run，写进全局
-就会连 Summary（只渲染 HTML）和 Dream（只整理记忆）一起吃到。给 Dream 灌「唯一目标是
-收益最大化」尤其别扭：它在判断该删哪条经验时会偏向进攻性的那些。
+**全局提示词拼在四个阶段前面，不只是 Run。** Run、Summary 和 Watch 走
+[`run_entity.py`](backend/business/runs/run_entity.py) 的 `settings_for_stage`，Dream 走
+[`dream_agent.py`](backend/infra/integrations/dream_agent.py)，都是 `全局 + "\n\n" + 阶段`。
+`settings_for_stage` 对任何阶段都拼，所以**新增一个阶段会自动吃到全局**，不必也不会有人来登记——
+盯盘就是这么进来的。所以判据是**只有对四个阶段都成立的东西才该放全局**——交易目标、仓位口径
+这类只属于 Run，写进全局就会连 Summary（只渲染 HTML）、Watch（只核对挂单条件）和 Dream
+（只整理记忆）一起吃到。给 Dream 灌「唯一目标是收益最大化」尤其别扭：它在判断该删哪条经验时
+会偏向进攻性的那些。
+
+反过来也成立：A 股交易制度这类常量对四个阶段都无害，放全局才能让真正执行撤单的 Watch 也看到。
 
 **改提示词前先看看记忆库里有没有同一件事。** 记忆是 agent 自己写的，写什么由提示词决定，
 两边容易各说各的：本仓库出现过 `T+1 当日买入不可卖` 被当成「经验」验证后写进记忆，而那
