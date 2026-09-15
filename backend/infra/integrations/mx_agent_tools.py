@@ -6,6 +6,7 @@ import asyncio
 from dataclasses import asdict, dataclass, field
 
 from backend.agent.tools.registry import ToolRegistry
+from backend.business.account import PortfolioOrderSnapshot
 from backend.infra.integrations.tool_policy import SideEffectLevel
 from backend.llm import ToolDefinition
 from backend.stock_api import (
@@ -224,10 +225,84 @@ class QueryPortfolioTool:
         return payload
 
 
+@dataclass(frozen=True, slots=True)
+class UndoneOrder:
+    """One order this run has cancelled, as it stood before the cancel."""
+
+    symbol: str
+    direction: str
+    price: float
+    quantity: int
+
+
+class CancelledOrderLedger:
+    """What this run has already undone, so it cannot quietly redo it.
+
+    Scoped to a single run because that is the scope of a decision. Re-placing
+    an order a *previous* run cancelled is a fresh judgement and may well be
+    right; re-placing one this run cancelled, unchanged, is the run
+    contradicting itself inside one sitting.
+
+    That happened twice — 2026-09-14 14:00 on 002463 and 2026-09-15 10:50 on
+    688008 — and both traces have the same shape: a thinking step that decides
+    to cancel and re-price higher, the cancel, then a thinking step that starts
+    over from the account balance, reaches the opposite conclusion, and
+    restores the order at the identical price. The cause is that the model's
+    reasoning is not replayed to it between tool calls, so each turn after a
+    tool call begins from first principles.
+
+    The refusal is deliberately a tool error rather than a silent drop: tool
+    results *are* replayed, so the correction reaches the next turn even when
+    the reasoning behind it does not. That is what makes this work regardless
+    of how the channel is configured.
+    """
+
+    __slots__ = ("_undone",)
+
+    def __init__(self) -> None:
+        self._undone: set[tuple[str, str, float, int]] = set()
+
+    @staticmethod
+    def _key(symbol: str, direction: str, price: float, quantity: int) -> tuple[
+        str, str, float, int
+    ]:
+        # A-share limit prices carry two decimals; rounding wider than that
+        # keeps a float that arrived as 185.00000001 from reading as a new
+        # price, without merging two genuinely different ones.
+        return (symbol, direction.strip().lower(), round(price, 3), quantity)
+
+    def record(self, orders: tuple[UndoneOrder, ...]) -> None:
+        for order in orders:
+            self._undone.add(
+                self._key(order.symbol, order.direction, order.price, order.quantity)
+            )
+
+    def undone_match(
+        self,
+        *,
+        symbol: str,
+        direction: str,
+        price: float,
+        quantity: int,
+    ) -> bool:
+        """Whether this exact order was cancelled earlier in the same run.
+
+        Exact on all four fields on purpose. Every legitimate follow-up to a
+        cancel differs in price or size — that is what makes it a decision
+        rather than an undo — so an exact match cannot block one.
+        """
+
+        return self._key(symbol, direction, price, quantity) in self._undone
+
+
 @dataclass(slots=True)
 class TradeTool:
     client: MxPaperTradingClient
     portfolio: MxMoniClient | None = None
+    ledger: CancelledOrderLedger | None = None
+    """Shared with the cancel tool. Without it the coherence guard is inert,
+    which is why `register_mx_tools` always supplies one and a test pins that
+    both tools receive the same instance."""
     name: str = "trade"
     enabled_stages: tuple[str, ...] = field(default=TRADE_STAGES)
     side_effect_level: SideEffectLevel = SideEffectLevel.WRITE
@@ -260,6 +335,7 @@ class TradeTool:
         intent = parse_trade_instruction(instruction)
         if intent.name != "trade":
             raise ValueError("trade only accepts a limit buy or sell instruction")
+        _refuse_to_recreate_a_cancelled_order(self.ledger, intent)
         await _preflight_trade(self.portfolio, intent)
         return await self.client.trade(instruction)
 
@@ -268,6 +344,8 @@ class TradeTool:
 class CancelTool:
     client: MxPaperTradingClient
     portfolio: MxMoniClient | None = None
+    ledger: CancelledOrderLedger | None = None
+    """Shared with the trade tool; see `TradeTool.ledger`."""
     name: str = "cancel"
     enabled_stages: tuple[str, ...] = field(default=WATCH_TRADE_STAGES)
     side_effect_level: SideEffectLevel = SideEffectLevel.WRITE
@@ -299,8 +377,13 @@ class CancelTool:
         intent = parse_trade_instruction(instruction)
         if intent.name not in {"cancel", "cancel_all"}:
             raise ValueError("cancel only accepts a cancel instruction")
-        await _preflight_cancel(self.portfolio, intent)
-        return await self.client.cancel(instruction)
+        about_to_undo = await _preflight_cancel(self.portfolio, intent)
+        result = await self.client.cancel(instruction)
+        # Recorded only after the provider accepted it: a cancel that failed
+        # undid nothing, and must not stop the order being placed again.
+        if self.ledger is not None:
+            self.ledger.record(about_to_undo)
+        return result
 
 
 def register_mx_tools(
@@ -316,8 +399,11 @@ def register_mx_tools(
     registry.register(SearchNewsTool(research))
     registry.register(SelectStocksTool(research))
     registry.register(QueryPortfolioTool(portfolio))
-    registry.register(TradeTool(trading, portfolio))
-    registry.register(CancelTool(trading, portfolio))
+    # One ledger, both tools, one run: the guard only means anything if the
+    # tool that cancels and the tool that places are looking at the same book.
+    ledger = CancelledOrderLedger()
+    registry.register(TradeTool(trading, portfolio, ledger))
+    registry.register(CancelTool(trading, portfolio, ledger))
 
 
 async def _preflight_trade(
@@ -378,12 +464,50 @@ async def _preflight_trade(
         raise ValueError(f"卖出数量 {quantity} 超过 {stock_code} 可卖数量 {available}")
 
 
+_CANCELLABLE_STATUSES = frozenset({"PENDING", "PARTIAL"})
+
+
+def _undone_order(order: PortfolioOrderSnapshot) -> UndoneOrder | None:
+    """Describe a cancelled order well enough to recognise its twin.
+
+    An order whose price the provider did not report is not recorded: a guard
+    that cannot compare prices would either miss the repeat or refuse a
+    different one, and both are worse than staying quiet.
+    """
+
+    if order.order_price is None:
+        return None
+    return UndoneOrder(
+        symbol=order.symbol,
+        direction=order.direction,
+        price=float(order.order_price),
+        quantity=order.quantity,
+    )
+
+
 async def _preflight_cancel(
     portfolio: MxMoniClient | None,
     intent: ParsedTradeIntent,
-) -> None:
-    if portfolio is None or intent.name == "cancel_all":
-        return
+) -> tuple[UndoneOrder, ...]:
+    """Check the cancel is possible, and say what it is about to undo."""
+
+    if portfolio is None:
+        return ()
+    if intent.name == "cancel_all":
+        # Nothing to validate — the provider decides what "all" covers — but
+        # the orders are still read, because a sweep undoes decisions just as
+        # a named cancel does. A failure to read them costs the guard, not
+        # the cancel.
+        try:
+            orders = await portfolio.get_orders()
+        except Exception:
+            return ()
+        return tuple(
+            undone
+            for order in orders
+            if order.status in _CANCELLABLE_STATUSES
+            and (undone := _undone_order(order)) is not None
+        )
     order_id = str(intent.payload["orderId"])
     stock_code = str(intent.payload["stockCode"])
     orders = await portfolio.get_orders()
@@ -394,8 +518,47 @@ async def _preflight_cancel(
         raise ValueError(
             f"委托编号 {order_id} 对应股票 {order.symbol}，与 {stock_code} 不一致"
         )
-    if order.status not in {"PENDING", "PARTIAL"}:
+    if order.status not in _CANCELLABLE_STATUSES:
         raise ValueError(f"委托编号 {order_id} 当前状态为 {order.status}，不可撤销")
+    undone = _undone_order(order)
+    return () if undone is None else (undone,)
+
+
+def _refuse_to_recreate_a_cancelled_order(
+    ledger: CancelledOrderLedger | None,
+    intent: ParsedTradeIntent,
+) -> None:
+    """Stop a run from restoring an order it cancelled moments ago.
+
+    Raised as a tool error so the reason lands in the model's context, where
+    the reasoning that led to the cancel does not.
+    """
+
+    if ledger is None:
+        return
+    payload = intent.payload
+    price_value = payload["price"]
+    quantity_value = payload["quantity"]
+    if not isinstance(price_value, (int, float)) or not isinstance(
+        quantity_value, int
+    ):
+        return
+    symbol = str(payload["stockCode"])
+    direction = str(payload["type"])
+    if not ledger.undone_match(
+        symbol=symbol,
+        direction=direction,
+        price=float(price_value),
+        quantity=quantity_value,
+    ):
+        return
+    side = "买入" if direction.strip().lower() == "buy" else "卖出"
+    raise ValueError(
+        f"本次运行刚撤销了同一笔委托（{symbol} {side} {quantity_value} 股 "
+        f"@ {float(price_value):g}）。原价原量重挂等于这次撤单没有发生，"
+        "只会把排队位置丢掉。若仍要成交请改价或改量；若不再需要就不要重挂，"
+        "并在报告里写明撤单的理由。"
+    )
 
 
 def _parse_portfolio_intents(instruction: str) -> tuple[str, ...]:
