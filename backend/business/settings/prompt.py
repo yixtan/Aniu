@@ -34,10 +34,21 @@ DEFAULT_RUN_PROMPT = (
     "一是全面、仔细的进行市场环境判断，包括指数趋势、市场情绪、"
     "成交量变化、政策主线、资金偏好和风险偏好，说明当前市场更适合"
     "进攻、防守、轮动还是观望；二是分析当前账户，重点分析当前账户"
-    "的持仓情况；三是基于以上客观信息，从投资收益最大化的角度进行"
-    "交易操作；四是全面总结刚才的研究和交易，归纳形成的投资经验和"
+    "的持仓情况和全部未成交委托——未成交委托是尚未生效的决策，"
+    "逐笔说明撤销还是继续挂着，不允许不置可否；三是基于以上客观信息，"
+    "从投资收益最大化的角度进行交易操作，完成后调用一次 "
+    "declare_order_plan 写下此刻仍然挂着的每一笔委托，供盯盘任务"
+    "逐笔核对，这是整份替换，没写进去的委托不受任何约束；"
+    "四是全面总结刚才的研究和交易，归纳形成的投资经验和"
     "投资哲学，指导未来的交易操作，实现账户收益最大化的最终目标。"
 )
+"""The four steps are the original ones. The two additions are what the order
+watch needs to exist at all: `DEFAULT_WATCH_PROMPT` opens with "先读取本次的
+挂单处置清单", and nothing told the run to write one — so a fresh clone's
+watches read an empty plan, which authorizes nothing, and the whole dual-track
+feature sat inert. Speaking to every resting order is the other half: a plan
+can only describe orders the run has looked at.
+"""
 DEFAULT_DREAM_PROMPT = (
     "整理指定日期的运行报告和投资经验，决定保留、合并、更新或删除经验。"
     "先阅读报告和记忆，再进行经验操作。要从投资哲学和投资理念的角度出发去进行整理，"
