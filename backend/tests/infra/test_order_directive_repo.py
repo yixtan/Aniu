@@ -162,3 +162,66 @@ async def test_an_empty_plan_leaves_nothing_standing(session) -> None:
 
     assert await service.current() == []
     assert await service.uncovered(["A"]) == ["A"]
+
+
+@pytest.mark.asyncio
+async def test_a_replaced_plan_is_archived_rather_than_discarded(session) -> None:
+    """The failure of 2026-09-15, in the layer that made it possible.
+
+    A run wrote "above 190 and the pullback thesis is dead", a watch cancelled
+    on it, and the next analysis re-placed the same order larger — because by
+    then the condition existed nowhere it could read.
+    """
+
+    repository = OrderDirectiveRepository(session)
+    await repository.replace_all(
+        run_id=RUN_ID,
+        directives=[
+            parse_directive(
+                _entry(
+                    order_id="262574600000039111",
+                    symbol="688008",
+                    stock_name="澜起科技",
+                    note="185 回踩承接；涨破 190 则回踩逻辑失效",
+                    cancel_if_price_above=190,
+                ),
+                run_id=RUN_ID,
+            )
+        ],
+    )
+    await repository.replace_all(run_id=LATER_RUN_ID, directives=[])
+
+    assert await repository.list_current() == []
+    superseded = await repository.list_previous()
+    assert [item.order_id for item in superseded] == ["262574600000039111"]
+    assert superseded[0].cancel_if_price_above == 190
+    assert superseded[0].issued_by_run_id == RUN_ID
+    assert "涨破 190" in superseded[0].note
+
+
+@pytest.mark.asyncio
+async def test_only_the_generation_just_replaced_comes_back(session) -> None:
+    """One step of memory, not an archive to read past."""
+
+    repository = OrderDirectiveRepository(session)
+    for index, run_id in enumerate((RUN_ID, LATER_RUN_ID, LATER_RUN_ID + 1)):
+        await repository.replace_all(
+            run_id=run_id,
+            directives=[
+                parse_directive(
+                    _entry(order_id=f"order-{index}"), run_id=run_id
+                )
+            ],
+        )
+
+    assert [item.order_id for item in await repository.list_current()] == ["order-2"]
+    assert [item.order_id for item in await repository.list_previous()] == ["order-1"]
+
+
+@pytest.mark.asyncio
+async def test_nothing_archived_yet_reads_as_nothing(session) -> None:
+    repository = OrderDirectiveRepository(session)
+    assert await repository.list_previous() == []
+
+    service = OrderDirectiveService(repository)
+    assert await service.previous() == []

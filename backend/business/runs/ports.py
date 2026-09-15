@@ -81,7 +81,7 @@ class FollowedCompaniesPort(Protocol):
 
 
 class OrderPlanPort(Protocol):
-    """The current order directives, as a watch needs to see them.
+    """The order directives, as a watch acts on them and a run reviews them.
 
     Same shape as the watchlist port and for the same reason: data rather than
     configuration, read live at the start of the stage so a plan written
@@ -89,3 +89,11 @@ class OrderPlanPort(Protocol):
     """
 
     async def current(self) -> tuple[OrderDirective, ...]: ...
+
+    async def previous(self) -> tuple[OrderDirective, ...]:
+        """What stood before the current plan replaced it.
+
+        Only an analysis reads this. A watch must act on one list and one list
+        only — being shown a superseded one could only tempt it to weigh two.
+        """
+        ...

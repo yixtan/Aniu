@@ -21,6 +21,10 @@ class OrderDirectiveRepositoryPort(Protocol):
 
     async def list_current(self) -> list[OrderDirective]: ...
 
+    async def list_previous(self) -> list[OrderDirective]:
+        """The generation that `replace_all` most recently superseded."""
+        ...
+
     async def record_reprice(self, *, order_id: str) -> None:
         """Count one reprice against the plan's ``max_times`` budget."""
         ...

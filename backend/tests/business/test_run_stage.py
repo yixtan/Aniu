@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from backend.business.order_directives import DirectiveAction, OrderDirective
 from backend.business.runs import StrategyRun, StrategySnapshot
 from backend.business.runs.agent_runner import AgentStageResult
 from backend.business.runs.execution import RunExecutionContext
@@ -154,3 +155,75 @@ async def test_a_watchlist_without_an_instruction_still_reaches_the_model() -> N
     await RunStage().execute(context, runner)
 
     assert "600519.SH" in runner.prompts[0]
+
+
+def _directive(
+    *,
+    order_id: str = "262574600000039111",
+    note: str = "185 回踩承接；涨破 190 则回踩逻辑失效",
+    cancel_if_price_above: float | None = 190.0,
+    issued_by_run_id: int = 20260915107,
+) -> OrderDirective:
+    return OrderDirective(
+        order_id=order_id,
+        symbol="688008",
+        stock_name="澜起科技",
+        action=DirectiveAction.HOLD,
+        note=note,
+        issued_by_run_id=issued_by_run_id,
+        cancel_if_price_above=cancel_if_price_above,
+    )
+
+
+@pytest.mark.asyncio
+async def test_an_analysis_is_shown_the_plan_it_is_about_to_replace() -> None:
+    """The gap that let 2026-09-15 happen.
+
+    The analysis at 13:20 saw an account with no pending orders and reasoned
+    from scratch, so it never learned that a watch had cancelled its
+    predecessor's order twenty minutes earlier under a condition that
+    predecessor had itself written.
+    """
+
+    context = _context(market_open=True)
+    context.standing_order_plan = (_directive(),)
+    runner = RecordingRunner(AgentStageResult(content="报告"))
+
+    await RunStage().execute(context, runner)
+
+    prompt = runner.prompts[0]
+    assert "standing_order_plan" in prompt
+    assert "262574600000039111" in prompt
+    assert "涨破 190" in prompt
+    # Whose decision it was, because this run is deciding whether to repeat it.
+    assert "20260915107" in prompt
+
+
+@pytest.mark.asyncio
+async def test_the_generation_before_it_comes_along_when_there_is_one() -> None:
+    context = _context(market_open=True)
+    context.standing_order_plan = (_directive(),)
+    context.previous_order_plan = (
+        _directive(order_id="262574700000036664", note="更早的一次承接单"),
+    )
+    runner = RecordingRunner(AgentStageResult(content="报告"))
+
+    await RunStage().execute(context, runner)
+
+    prompt = runner.prompts[0]
+    assert "previous_order_plan" in prompt
+    assert "262574700000036664" in prompt
+
+
+@pytest.mark.asyncio
+async def test_no_plan_sends_no_plan_section() -> None:
+    """Same reason as the empty watchlist: nothing to review, nothing to say."""
+
+    context = _context(market_open=True)
+    runner = RecordingRunner(AgentStageResult(content="报告"))
+
+    await RunStage().execute(context, runner)
+
+    prompt = runner.prompts[0]
+    assert "standing_order_plan" not in prompt
+    assert "previous_order_plan" not in prompt
