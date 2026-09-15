@@ -6,6 +6,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import ClassVar
 
+from backend.business.order_directives import OrderDirective
 from backend.business.runs import StrategyRun, StrategySnapshot
 from backend.business.shared.trading import is_successful_trade_call
 from backend.llm import AbortSignal
@@ -105,6 +106,25 @@ class RunExecutionContext:
     Data rather than configuration, so it is read live instead of being frozen
     into the run snapshot: a company followed this morning should be seen by
     this afternoon's run.
+    """
+    standing_order_plan: tuple[OrderDirective, ...] = ()
+    """What the last analysis decided about each resting order, for this one.
+
+    An analysis used to see none of this. It read the account, found no
+    pending orders and reasoned from scratch — so on 2026-09-15 one of them
+    re-placed, larger, an order a watch had cancelled twenty minutes earlier
+    under a condition the previous analysis had itself written ("above 190 and
+    the pullback thesis is dead"). Nothing was wrong with either decision on
+    its own; the second one simply could not see the first.
+
+    Read live rather than frozen into the snapshot, and for the same reason as
+    the watchlist: it is data about the account right now, not configuration.
+    """
+    previous_order_plan: tuple[OrderDirective, ...] = ()
+    """The generation before `standing_order_plan`.
+
+    One generation back, not the whole archive: a run needs to see the arc of
+    a decision it is about to revisit, not every statement ever made.
     """
     authorized_order_ids: frozenset[str] | None = None
     """Orders the current plan speaks about, or None outside an order watch.

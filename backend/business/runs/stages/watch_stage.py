@@ -16,6 +16,7 @@ from backend.business.order_directives import OrderDirective
 from backend.business.runs.agent_runner import AgentRunnerPort
 from backend.business.runs.execution import RunExecutionContext, RunReport
 from backend.business.runs.stages.stage_helpers import (
+    directive_payload,
     emit_stage_prompt_prepared,
     require_llm_runtime,
 )
@@ -42,38 +43,6 @@ _NOTHING_TO_DO = "\n".join(
 )
 
 
-def _directive_payload(directive: OrderDirective) -> dict[str, object]:
-    entry: dict[str, object] = {
-        "order_id": directive.order_id,
-        "symbol": directive.symbol,
-        "stock_name": directive.stock_name,
-        "action": directive.action.value,
-        "note": directive.note,
-    }
-    if directive.cancel_if_price_above is not None:
-        entry["cancel_if_price_above"] = directive.cancel_if_price_above
-    if directive.cancel_if_price_below is not None:
-        entry["cancel_if_price_below"] = directive.cancel_if_price_below
-    if directive.cancel_if_unfilled_after is not None:
-        entry["cancel_if_unfilled_after"] = directive.cancel_if_unfilled_after.strftime(
-            "%H:%M"
-        )
-    plan = directive.reprice
-    if plan is not None:
-        entry["reprice"] = {
-            "new_price": plan.new_price,
-            "when_price_above": plan.when_price_above,
-            "when_price_below": plan.when_price_below,
-            "remaining_times": directive.reprices_left,
-        }
-    if directive.rejected_reason:
-        # Surfaced rather than hidden: the run tried to say something about this
-        # order and got the shape wrong, which is worth knowing apart from the
-        # run never having mentioned it at all.
-        entry["rejected_reason"] = directive.rejected_reason
-    return entry
-
-
 class WatchStage:
     async def execute(
         self,
@@ -93,7 +62,7 @@ class WatchStage:
         protocol = _WATCH_PROTOCOL if directives else _NOTHING_TO_DO
         if directives:
             runtime_payload["order_plan"] = [
-                _directive_payload(item) for item in directives
+                directive_payload(item) for item in directives
             ]
         agent_prompt = "\n\n".join((stage_settings.prompt, protocol))
         user_prompt = "\n\n".join(

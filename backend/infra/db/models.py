@@ -702,13 +702,67 @@ class AwayModeModel(Base):
     )
 
 
+class OrderDirectiveHistoryModel(Base):
+    """A directive that used to be in force, kept for the run that comes next.
+
+    Deliberately not unique on `order_id`: the same order is spoken about by
+    every run that sees it resting, and the sequence of those statements is the
+    whole point. Rows are appended when a run replaces the standing plan and
+    are never updated afterwards.
+    """
+
+    __tablename__ = "order_directive_history"
+    __table_args__ = (
+        Index("idx_order_directive_history_run", "issued_by_run_id"),
+        Index("idx_order_directive_history_superseded", "superseded_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    order_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    symbol: Mapped[str] = mapped_column(String(6), nullable=False, default="")
+    stock_name: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    action: Mapped[str] = mapped_column(String(16), nullable=False)
+    note: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    issued_by_run_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    cancel_if_price_above: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cancel_if_price_below: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cancel_if_unfilled_after: Mapped[str | None] = mapped_column(
+        String(5), nullable=True
+    )
+    reprice_new_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    reprice_max_times: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    reprice_when_price_above: Mapped[float | None] = mapped_column(Float, nullable=True)
+    reprice_when_price_below: Mapped[float | None] = mapped_column(Float, nullable=True)
+    repriced_times: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    rejected_reason: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    issued_at: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    superseded_at: Mapped[str] = mapped_column(
+        Text, nullable=False, default=utc_now_iso
+    )
+    superseded_by_run_id: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
 class OrderDirectiveModel(Base):
     """What the most recent run decided about one resting order.
 
     Replaced wholesale by each run rather than appended to: the table holds the
-    directives in force right now, not a history of them. The history already
-    exists in each run's trace, and keeping two copies invites them to disagree
-    about which one is current.
+    directives in force right now, and nothing else. Superseded rows move to
+    `order_directive_history`, which is never read as authority — the two
+    cannot disagree about which is current because only one of them ever
+    answers that question.
+
+    They used to be discarded on the grounds that each run's trace already
+    holds the history. The trace does, but nothing that needs the history can
+    read a trace: on 2026-09-15 a run cancelled an order because the standing
+    plan said 190 invalidated the thesis, and twenty minutes later the next
+    analysis re-placed the same order larger, having no way to learn that the
+    condition had fired.
     """
 
     __tablename__ = "order_directives"

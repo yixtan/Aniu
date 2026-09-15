@@ -22,5 +22,10 @@ class RunOrderPlanQuery:
             items = await OrderDirectiveRepository(session).list_current()
         return tuple(items)
 
+    async def previous(self) -> tuple[OrderDirective, ...]:
+        async with self.session_factory() as session:
+            items = await OrderDirectiveRepository(session).list_previous()
+        return tuple(items)
+
 
 __all__ = ["RunOrderPlanQuery"]

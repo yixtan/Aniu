@@ -208,6 +208,7 @@ class AniuOrchestrator:
         if run.current_state is RunState.WATCH:
             return await self._execute_watch(run, context, started_at, abort_signal)
 
+        await self._attach_order_plan_for_review(context)
         report = await self._execute_run_stage(context)
         context.run_report = report
         run.set_summary(report.content, render_mode="markdown")
@@ -370,6 +371,30 @@ class AniuOrchestrator:
                 exc_info=True,
             )
             return ()
+
+    async def _attach_order_plan_for_review(
+        self, context: RunExecutionContext
+    ) -> None:
+        """Show an analysis the plan it is about to replace.
+
+        Failing to read it costs context and nothing else. That is the opposite
+        of the watch, where an unreadable plan has to mean "touch nothing" —
+        here the plan authorizes no action, it only says what the last analysis
+        concluded, so an empty one leaves this run exactly as blind as every
+        run was before this existed.
+        """
+
+        if self._order_plan is None:
+            return
+        try:
+            context.standing_order_plan = await self._order_plan.current()
+            context.previous_order_plan = await self._order_plan.previous()
+        except Exception:
+            logger.warning(
+                "failed to read the order plan for an analysis",
+                extra={"run_id": context.run.run_id},
+                exc_info=True,
+            )
 
     async def _execute_run_stage(self, context: RunExecutionContext) -> RunReport:
         runtime = self._runtime_for(RunState.RUN.value)

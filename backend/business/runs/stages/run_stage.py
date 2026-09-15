@@ -5,6 +5,7 @@ from __future__ import annotations
 from backend.business.runs.agent_runner import AgentRunnerPort
 from backend.business.runs.execution import RunExecutionContext, RunReport
 from backend.business.runs.stages.stage_helpers import (
+    directive_payload,
     emit_stage_prompt_prepared,
     require_llm_runtime,
 )
@@ -54,6 +55,20 @@ class RunStage:
             ]
             if stage_settings.watchlist_prompt:
                 prompt_parts.append(stage_settings.watchlist_prompt)
+        # What the last analysis decided about each resting order, so this one
+        # revisits those decisions instead of rediscovering the account. Left
+        # out entirely when there is no plan, like the watchlist: an empty list
+        # only invites a sentence saying it was empty.
+        if context.standing_order_plan:
+            runtime_payload["standing_order_plan"] = [
+                directive_payload(item, include_issuer=True)
+                for item in context.standing_order_plan
+            ]
+            if context.previous_order_plan:
+                runtime_payload["previous_order_plan"] = [
+                    directive_payload(item, include_issuer=True)
+                    for item in context.previous_order_plan
+                ]
         agent_prompt = "\n\n".join(prompt_parts)
         user_prompt = "\n\n".join(
             (
@@ -69,6 +84,7 @@ class RunStage:
             summary=(
                 "已发送任务规则、记忆工具协议与当前交易时段状态"
                 + ("，含关注清单" if context.followed_companies else "")
+                + ("，含挂单计划" if context.standing_order_plan else "")
             ),
             display_prompt=agent_prompt,
             payload=runtime_payload,

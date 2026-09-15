@@ -44,6 +44,9 @@ class OrderDirectiveService:
     async def current(self) -> list[OrderDirective]:
         return await self._repository.list_current()
 
+    async def previous(self) -> list[OrderDirective]:
+        return await self._repository.list_previous()
+
     async def uncovered(self, resting_order_ids: list[str]) -> list[str]:
         """Resting orders the current list says nothing about.
 
