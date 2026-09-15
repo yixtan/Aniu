@@ -124,3 +124,35 @@ def test_mapping_ignores_non_domain_storage_fields() -> None:
     )
 
     assert "max_output_tokens" not in settings.as_dict()
+
+
+def test_the_default_prompts_close_the_dual_track_loop() -> None:
+    """A fresh clone's watch must have something to read.
+
+    `DEFAULT_WATCH_PROMPT` opens by telling the watch to read this run's order
+    plan, and the watch may touch only the orders that plan names. So if the
+    run prompt never asks for a plan, every watch in a new install reads an
+    empty one, is authorized to do nothing, and the whole feature is inert
+    without a single error anywhere.
+    """
+
+    from backend.business.settings.prompt import (
+        DEFAULT_RUN_PROMPT,
+        DEFAULT_WATCH_PROMPT,
+    )
+
+    assert "挂单处置清单" in DEFAULT_WATCH_PROMPT
+    assert "declare_order_plan" in DEFAULT_RUN_PROMPT
+    # A plan can only speak about orders the run actually looked at.
+    assert "未成交委托" in DEFAULT_RUN_PROMPT
+
+
+def test_the_default_run_prompt_still_has_its_four_steps() -> None:
+    """The additions are for compatibility; the instructions are not ours."""
+
+    from backend.business.settings.prompt import DEFAULT_RUN_PROMPT
+
+    for step in ("一是", "二是", "三是", "四是"):
+        assert step in DEFAULT_RUN_PROMPT
+    assert DEFAULT_RUN_PROMPT.startswith("你负责操作股票模拟账户进行交易")
+    assert DEFAULT_RUN_PROMPT.endswith("实现账户收益最大化的最终目标。")
