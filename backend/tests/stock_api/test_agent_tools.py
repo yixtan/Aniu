@@ -14,6 +14,7 @@ from backend.business.account import (
     PositionSnapshot,
 )
 from backend.infra.integrations.mx_agent_tools import (
+    CancelledOrderLedger,
     CancelTool,
     QueryPortfolioTool,
     TradeTool,
@@ -320,3 +321,139 @@ def test_the_order_watch_cannot_reach_a_tool_it_could_research_with() -> None:
     assert reachable == {"query_portfolio", "cancel"}
     # Placing an order is making a decision, which is the analysis run's job.
     assert "Watch" not in registry.get("trade").enabled_stages
+
+
+def _resting_order(
+    *,
+    order_id: str = "order-9",
+    symbol: str = "688008",
+    direction: str = "BUY",
+    price: float | None = 185.0,
+    quantity: int = 200,
+    status: str = "PENDING",
+) -> PortfolioOrderSnapshot:
+    return PortfolioOrderSnapshot(
+        order_id=order_id,
+        symbol=symbol,
+        stock_name="澜起科技",
+        direction=direction,
+        quantity=quantity,
+        status=status,
+        filled_quantity=0,
+        filled_price=None,
+        order_price=price,
+    )
+
+
+def _cancel_then_trade_tools(
+    order: PortfolioOrderSnapshot,
+) -> tuple[CancelTool, TradeTool, RecordingTradingClient]:
+    portfolio = RecordingPortfolioClient(available_cash=10_000_000, orders=[order])
+    trading = RecordingTradingClient([], [])
+    ledger = CancelledOrderLedger()
+    return (
+        CancelTool(trading, portfolio, ledger),  # type: ignore[arg-type]
+        TradeTool(trading, portfolio, ledger),  # type: ignore[arg-type]
+        trading,
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_run_may_not_restore_an_order_it_just_cancelled() -> None:
+    """The 2026-09-14 and 2026-09-15 failure, in one test.
+
+    Both times the run cancelled a resting order, re-derived its view without
+    the reasoning that led to the cancel, and put the identical order back.
+    """
+
+    cancel, trade, trading = _cancel_then_trade_tools(_resting_order())
+
+    await cancel.run("撤单 order-9 688008")
+    with pytest.raises(ValueError, match="本次运行刚撤销了同一笔委托"):
+        await trade.run("买入 688008 185 200")
+
+    assert trading.cancellations == ["撤单 order-9 688008"]
+    assert trading.trades == []
+
+
+@pytest.mark.asyncio
+async def test_a_different_price_or_size_is_a_decision_not_an_undo() -> None:
+    """Whatever else the guard does, it must not block a real re-price."""
+
+    cancel, trade, trading = _cancel_then_trade_tools(_resting_order())
+
+    await cancel.run("撤单 order-9 688008")
+    await trade.run("买入 688008 188.5 200")
+    await trade.run("买入 688008 185 300")
+
+    assert trading.trades == ["买入 688008 188.5 200", "买入 688008 185 300"]
+
+
+@pytest.mark.asyncio
+async def test_a_cancel_that_failed_undid_nothing() -> None:
+    """A refused cancel leaves the order resting, so placing it is no repeat."""
+
+    class RefusingTradingClient(RecordingTradingClient):
+        async def cancel(self, instruction: str) -> dict[str, str]:
+            raise RuntimeError("券商拒绝了撤单")
+
+    portfolio = RecordingPortfolioClient(
+        available_cash=10_000_000, orders=[_resting_order()]
+    )
+    trading = RefusingTradingClient([], [])
+    ledger = CancelledOrderLedger()
+
+    with pytest.raises(RuntimeError, match="券商拒绝了撤单"):
+        await CancelTool(trading, portfolio, ledger).run(  # type: ignore[arg-type]
+            "撤单 order-9 688008"
+        )
+    await TradeTool(trading, portfolio, ledger).run(  # type: ignore[arg-type]
+        "买入 688008 185 200"
+    )
+
+    assert trading.trades == ["买入 688008 185 200"]
+
+
+@pytest.mark.asyncio
+async def test_a_sweep_records_every_order_it_swept() -> None:
+    swept = _resting_order(order_id="order-1")
+    settled = _resting_order(order_id="order-2", price=190.0, status="FILLED")
+    portfolio = RecordingPortfolioClient(
+        available_cash=10_000_000, orders=[swept, settled]
+    )
+    trading = RecordingTradingClient([], [])
+    ledger = CancelledOrderLedger()
+
+    await CancelTool(trading, portfolio, ledger).run("一键撤单")  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="本次运行刚撤销了同一笔委托"):
+        await TradeTool(trading, portfolio, ledger).run(  # type: ignore[arg-type]
+            "买入 688008 185 200"
+        )
+    # The filled one was never cancellable, so it was never undone.
+    await TradeTool(trading, portfolio, ledger).run(  # type: ignore[arg-type]
+        "买入 688008 190 200"
+    )
+
+
+@pytest.mark.asyncio
+async def test_an_order_without_a_price_is_left_out_rather_than_guessed() -> None:
+    cancel, trade, trading = _cancel_then_trade_tools(_resting_order(price=None))
+
+    await cancel.run("撤单 order-9 688008")
+    await trade.run("买入 688008 185 200")
+
+    assert trading.trades == ["买入 688008 185 200"]
+
+
+def test_the_two_trading_tools_share_one_ledger() -> None:
+    """A ledger per tool would leave the guard permanently empty."""
+
+    registry, _research, _portfolio, _trading = make_registry()
+
+    trade = registry.get("trade")
+    cancel = registry.get("cancel")
+    assert isinstance(trade, TradeTool)
+    assert isinstance(cancel, CancelTool)
+    assert trade.ledger is not None
+    assert trade.ledger is cancel.ledger
