@@ -125,6 +125,12 @@ function todayCards(today: DailyStatus): StatCard[] {
           className: cn(today.trades_failed > 0 && alarm),
         },
         { label: "Token", value: formatTokens(today.tokens) },
+        // Inside the line above, not added to it. A provider bills a cache
+        // hit at a fraction of fresh input, so a day that looks expensive is
+        // often the same prompt resent — worth seeing next to the headline.
+        ...(today.cached_tokens > 0
+          ? [{ label: "其中缓存命中", value: formatTokens(today.cached_tokens) }]
+          : []),
       ],
     },
   ];
@@ -242,7 +248,16 @@ function DreamsCard({
                       <Count value={dream.deleted} />
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {dream.total_tokens > 0 ? formatTokens(dream.total_tokens) : "--"}
+                      <div className="flex flex-col items-end">
+                        <span>
+                          {dream.total_tokens > 0 ? formatTokens(dream.total_tokens) : "--"}
+                        </span>
+                        {dream.cached_tokens > 0 ? (
+                          <span className="text-muted-foreground text-xs">
+                            缓存 {formatTokens(dream.cached_tokens)}
+                          </span>
+                        ) : null}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -327,6 +342,7 @@ function describeDay(day: TokenDay, rank: Map<string, number>) {
     parts.push(`盯盘 ${formatTokens(day.watch_tokens)} · ${day.watches} 次`);
   }
   if (day.dream_tokens > 0) parts.push(`梦境 ${formatTokens(day.dream_tokens)}`);
+  if (day.cached_tokens > 0) parts.push(`其中缓存 ${formatTokens(day.cached_tokens)}`);
   if (day.channels.length > 0) {
     parts.push(
       inLegendOrder(day, rank)
@@ -345,6 +361,10 @@ function TokenChart({ tokens }: { tokens: TokenDay[] }) {
   const watchTotal = series.reduce((sum, day) => sum + day.watch_tokens, 0);
   const dreamTotal = series.reduce((sum, day) => sum + day.dream_tokens, 0);
   const total = runTotal + watchTotal + dreamTotal;
+  // Already counted in the three above, never added to them: the provider
+  // reports a cache hit inside its own total. Shown so the headline is not
+  // read as fresh spend — on 2026-09-16, 86% of the dream was a cache hit.
+  const cachedTotal = series.reduce((sum, day) => sum + day.cached_tokens, 0);
   const runs = series.reduce((sum, day) => sum + day.runs, 0);
   const watches = series.reduce((sum, day) => sum + day.watches, 0);
   const activeDays = series.filter((day) => day.runs > 0 || day.watches > 0).length;
@@ -368,6 +388,7 @@ function TokenChart({ tokens }: { tokens: TokenDay[] }) {
           <Stat label="合计" value={formatTokens(total)} />
           <Stat label="其中盯盘" value={formatTokens(watchTotal)} />
           <Stat label="其中梦境" value={formatTokens(dreamTotal)} />
+          <Stat label="其中缓存命中" value={formatTokens(cachedTotal)} />
           <Stat label="有运行的天数" value={String(activeDays)} />
           <Stat
             label="日均"
@@ -417,6 +438,7 @@ function TokenChart({ tokens }: { tokens: TokenDay[] }) {
                   `${day.day} 运行 ${formatNumber(day.tokens)} tokens、` +
                   `盯盘 ${formatNumber(day.watch_tokens)} tokens、` +
                   `梦境 ${formatNumber(day.dream_tokens)} tokens，` +
+                  `其中缓存命中 ${formatNumber(day.cached_tokens)} tokens，` +
                   `${day.runs} 次运行，${day.watches} 次盯盘`
                 }
                 onMouseEnter={() => setHovered(index)}
