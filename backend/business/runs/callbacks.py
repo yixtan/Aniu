@@ -115,7 +115,12 @@ class RunExecutionCallbacks:
         recorder = self._require_trace_recorder(run_id)
         payload = dict(state_output)
         payload["duration_ms"] = duration_ms
-        if state_name == RunState.RUN.value:
+        # Every stage that ran a tool loop finishes the same way, Watch
+        # included. Naming Run alone here is what left a finished watch with
+        # its stage and its streamed result step still marked `running`: the
+        # method simply fell through, nothing closed them, and the page went
+        # on counting the elapsed time of a run that had ended minutes ago.
+        if is_tool_capable_stage(state_name):
             tool_count = int(payload.get("tool_calls_count") or 0)
             failure_count = int(payload.get("tool_failure_count") or 0)
             trade_count = int(payload.get("trade_count") or 0)
@@ -126,7 +131,13 @@ class RunExecutionCallbacks:
             await recorder.close_running_segmented_thinking(state_name)
             await recorder.set_result_step(
                 state_name,
-                title="生成 Markdown 运行报告",
+                # Run renames its streamed step to say which format it
+                # produced; a watch keeps the title it streamed under.
+                title=(
+                    "生成 Markdown 运行报告"
+                    if state_name == RunState.RUN.value
+                    else result_title_for_stage(state_name)
+                ),
                 summary=summary,
                 content=(
                     None
