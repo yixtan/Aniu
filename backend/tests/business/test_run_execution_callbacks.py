@@ -8,12 +8,18 @@ from backend.business.notifications import (
     NotificationEvent,
     NotificationEventKind,
 )
-from backend.business.runs import RunEventType
+from backend.business.runs import (
+    RunEventType,
+    StrategyRun,
+    StrategySnapshot,
+)
 from backend.business.runs.callbacks import (
     RunExecutionCallbacks,
     _slim_result_data,
 )
 from backend.business.runs.runtime import RunRuntimeState
+from backend.business.runs.traces import RunTraceRecorder
+from backend.business.shared.enums import RunState, TriggerSource
 
 
 def test_slim_result_data_drops_activity_and_content_duplicates() -> None:
@@ -144,3 +150,87 @@ async def test_a_failing_notifier_never_breaks_the_run() -> None:
 
     # The tool call still counted toward the stage; only the push was lost.
     assert runtime.stage_tool_calls == 1
+
+
+def _live_callbacks(state: RunState) -> tuple[RunExecutionCallbacks, StrategyRun]:
+    """Callbacks wired to a real recorder, so the trace can be read back."""
+
+    run = StrategyRun(
+        run_id=20260916301,
+        trigger_source=TriggerSource.SCHEDULED,
+        schedule_id=1,
+        snapshot=StrategySnapshot(prompt_version="v1", risk_rules_version="risk-v1"),
+        current_state=state,
+    )
+
+    async def persist(stored: StrategyRun) -> StrategyRun:
+        return stored
+
+    async def publish(_run_id: int, _snapshot: object) -> None:
+        return None
+
+    runtime = RunRuntimeState(active_run=run)
+    runtime.trace_recorder = RunTraceRecorder(
+        run=run, persist_run=persist, publish_snapshot=publish
+    )
+    return RunExecutionCallbacks(runtime=runtime), run
+
+
+def _stage(run: StrategyRun, key: str) -> object:
+    return next(stage for stage in run.trace.stages if stage.key == key)
+
+
+@pytest.mark.asyncio
+async def test_a_finished_watch_closes_its_stage_and_its_result_step() -> None:
+    """盯盘 ends on its own stage — nothing later comes along to close it.
+
+    An analysis has a Summary stage after Run, so a Run stage left open would
+    be obvious. A watch's only stage is the last thing that happens, and when
+    `on_state_completed` named Run alone it fell through for a watch: stage
+    and streamed result step both stayed `running` with no `ended_at`, and the
+    detail page kept counting their elapsed time against the wall clock. On
+    2026-09-16, 126 of 130 finished watches were recorded that way.
+    """
+
+    callbacks, run = _live_callbacks(RunState.WATCH)
+
+    await callbacks.on_state_entered(run.run_id, RunState.WATCH.value)
+    await callbacks.on_llm_stream_delta(run.run_id, RunState.WATCH.value, "已核对挂单")
+    await callbacks.on_state_completed(
+        run.run_id,
+        RunState.WATCH.value,
+        {"run_content": "# 盯盘记录", "tool_calls_count": 2, "trade_count": 0},
+        7_000,
+    )
+
+    stage = _stage(run, "watch")
+    assert stage.status == "completed"
+    assert stage.ended_at is not None
+    result = next(step for step in stage.steps if step.step_id == "result")
+    assert result.status == "completed"
+    assert result.ended_at is not None
+    # The title it streamed under, not the analysis's.
+    assert result.title == "生成盯盘记录"
+
+
+@pytest.mark.asyncio
+async def test_a_finished_run_stage_still_reads_the_way_it_did() -> None:
+    """The generalization above must not rename or restyle 操盘's own step."""
+
+    callbacks, run = _live_callbacks(RunState.RUN)
+
+    await callbacks.on_state_entered(run.run_id, RunState.RUN.value)
+    await callbacks.on_llm_stream_delta(run.run_id, RunState.RUN.value, "报告正文")
+    await callbacks.on_state_completed(
+        run.run_id,
+        RunState.RUN.value,
+        {"run_content": "# 报告", "tool_calls_count": 9, "trade_count": 1},
+        5_000,
+    )
+
+    stage = _stage(run, "run")
+    assert stage.status == "completed"
+    assert stage.summary == "调用工具 9 次，失败 0 次，成功交易 1 次"
+    result = next(step for step in stage.steps if step.step_id == "result")
+    assert result.title == "生成 Markdown 运行报告"
+    assert result.status == "completed"
