@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
 
 from backend.business.notifications import (
@@ -10,6 +12,7 @@ from backend.business.notifications import (
 )
 from backend.business.runs import StrategyRun, StrategySnapshot
 from backend.business.runs.abort_registry import ActiveRunAbortRegistry
+from backend.business.runs.execution import RunReport
 from backend.business.runs.executor import RunExecutor
 from backend.business.runs.orchestration import RunResult
 from backend.business.shared import RunAbortError
@@ -209,12 +212,13 @@ def _stub_watch_orchestrator(run_id: int) -> type:
             pass
 
         async def execute(self, run: StrategyRun) -> RunResult:
-            run.advance_to(RunState.COMPLETED)
+            run.advance_to(RunState.COMPLETED, at=run.started_at + timedelta(seconds=9))
             return RunResult(
                 run_id=run_id,
                 status=RunStatus.COMPLETED,
                 final_state=RunState.COMPLETED,
                 summary="盯盘记录",
+                # Deliberately not 9 seconds: nothing may announce this number.
                 total_duration_ms=3,
             )
 
@@ -230,16 +234,67 @@ def _stub_orchestrator(run_id: int) -> type:
 
         async def execute(self, run: StrategyRun) -> RunResult:
             run.advance_to(RunState.SUMMARY)
-            run.advance_to(RunState.COMPLETED)
+            run.advance_to(
+                RunState.COMPLETED, at=run.started_at + timedelta(seconds=42)
+            )
             return RunResult(
                 run_id=run_id,
                 status=RunStatus.COMPLETED,
                 final_state=RunState.COMPLETED,
                 summary="<section>done</section>",
+                # Deliberately not 42 seconds: nothing may announce this number.
                 total_duration_ms=7,
             )
 
     return StubOrchestrator
+
+
+def _stub_two_half_orchestrator(
+    run_id: int,
+    *,
+    run_seconds: int,
+    render_seconds: int,
+) -> type:
+    """An analysis the way the render lane really runs one: two halves.
+
+    The account half parks the run in Summary with its Markdown saved; the
+    HTML is rendered later on the other lane, in a second call whose own
+    elapsed time is the render and nothing else.
+    """
+
+    class StubTwoHalfOrchestrator:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        async def execute(self, run: StrategyRun) -> RunResult:
+            run.set_summary("# 报告", render_mode="markdown")
+            run.advance_to(RunState.SUMMARY)
+            return RunResult(
+                run_id=run_id,
+                status=run.status,
+                final_state=RunState.SUMMARY,
+                summary=run.summary,
+                total_duration_ms=run_seconds * 1_000,
+                pending_report=RunReport(content="# 报告"),
+            )
+
+        async def render_summary(
+            self, run: StrategyRun, _report: RunReport
+        ) -> RunResult:
+            run.set_summary("<section>报告</section>", render_mode="html")
+            run.advance_to(
+                RunState.COMPLETED,
+                at=run.started_at + timedelta(seconds=run_seconds + render_seconds),
+            )
+            return RunResult(
+                run_id=run_id,
+                status=run.status,
+                final_state=RunState.COMPLETED,
+                summary=run.summary,
+                total_duration_ms=render_seconds * 1_000,
+            )
+
+    return StubTwoHalfOrchestrator
 
 
 @pytest.mark.asyncio
@@ -362,7 +417,7 @@ async def test_a_finished_run_announces_itself(
     ]
     event = notifier.published[0]
     assert event.run_id == run.run_id
-    assert event.duration_ms == 7
+    assert event.duration_ms == 42_000
 
 
 @pytest.mark.asyncio
@@ -395,6 +450,47 @@ async def test_a_finished_watch_announces_itself_under_its_own_kind(
         NotificationEventKind.WATCH_COMPLETED
     ]
     assert notifier.published[0].run_id == run.run_id
+    assert notifier.published[0].duration_ms == 9_000
+
+
+@pytest.mark.asyncio
+async def test_a_two_half_analysis_announces_the_whole_run_not_the_render(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The push has to say what the run detail page says.
+
+    The page reads the run's own timestamps, so it covers both halves. The
+    orchestrator's `total_duration_ms` covers one call, and on the render lane
+    that call is the HTML render alone: on 2026-09-16 run 20260916112 read
+    5 分 32 秒 on its page and pushed 27 秒, which was the render.
+    """
+
+    run = _run()
+    repository = InMemoryRunRepository(run)
+    notifier = RecordingNotifier()
+    monkeypatch.setattr(
+        "backend.business.runs.executor.AniuOrchestrator",
+        _stub_two_half_orchestrator(run.run_id, run_seconds=305, render_seconds=27),
+    )
+    executor = RunExecutor(
+        repository,  # type: ignore[arg-type]
+        agent_runner_factory=StubAgentRunnerFactory(),  # type: ignore[arg-type]
+        abort_registry=ActiveRunAbortRegistry(),
+        notifier=notifier,  # type: ignore[arg-type]
+    )
+
+    executed = await executor.execute(run.run_id)
+
+    # Parked, so there is nothing to announce yet.
+    assert executed.pending_report is not None
+    assert notifier.published == []
+
+    await executor.render_summary(run.run_id, executed.pending_report)
+
+    assert [event.kind for event in notifier.published] == [
+        NotificationEventKind.RUN_COMPLETED
+    ]
+    assert notifier.published[0].duration_ms == 332_000
 
 
 @pytest.mark.asyncio
