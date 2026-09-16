@@ -10,7 +10,7 @@ from backend.business.notifications import (
     NotificationEvent,
     NotificationEventKind,
 )
-from backend.business.runs import StrategyRun, StrategySnapshot
+from backend.business.runs import StrategyRun, StrategySnapshot, TraceStep
 from backend.business.runs.abort_registry import ActiveRunAbortRegistry
 from backend.business.runs.execution import RunReport
 from backend.business.runs.executor import RunExecutor
@@ -562,3 +562,116 @@ async def test_a_broken_notifier_does_not_fail_the_finished_run(
     executed = await executor.execute(run.run_id)
 
     assert executed.detail.status == RunStatus.COMPLETED.value
+
+
+def _final_status_step(run: StrategyRun) -> tuple[str, TraceStep] | None:
+    """The 「最终状态」 step and the key of the stage it was filed under."""
+
+    for stage in run.trace.stages:
+        for step in stage.steps:
+            if step.title == "最终状态":
+                return stage.key, step
+    return None
+
+
+@pytest.mark.asyncio
+async def test_a_finished_analysis_files_its_final_status_under_summary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every finished run ends with a step saying so, and how long it took.
+
+    This used to be written only when the runtime still held a recorder, and
+    since the account and render halves were split nothing reaches here with
+    one — the teardown runs first. The step simply stopped being recorded:
+    75 of 75 runs had it on 2026-09-14, 39 of 78 on 09-15 as the split went
+    live, 0 of 70 on 09-16.
+    """
+
+    run = _run()
+    repository = InMemoryRunRepository(run)
+    monkeypatch.setattr(
+        "backend.business.runs.executor.AniuOrchestrator",
+        _stub_orchestrator(run.run_id),
+    )
+    executor = RunExecutor(
+        repository,  # type: ignore[arg-type]
+        agent_runner_factory=StubAgentRunnerFactory(),  # type: ignore[arg-type]
+        abort_registry=ActiveRunAbortRegistry(),
+    )
+
+    await executor.execute(run.run_id)
+
+    filed = _final_status_step(repository.run)
+    assert filed is not None
+    stage_key, step = filed
+    assert stage_key == "summary"
+    assert step.status == "completed"
+    # The whole run, the same number the push and the page carry.
+    assert step.data == {"total_duration_ms": 42_000}
+
+
+@pytest.mark.asyncio
+async def test_a_finished_watch_files_its_final_status_on_its_own_stage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A watch has no Summary stage, and must not be given a hollow one.
+
+    Filing this step under "Summary" regardless appended a second stage the
+    run never entered. Being last, it became what the detail page treated as
+    the terminal stage, so a watch's report hung off a stage that had never
+    run. The watch closes its own stage now, so there is nothing to stand in
+    for.
+    """
+
+    run = _watch_run()
+    repository = InMemoryRunRepository(run)
+    monkeypatch.setattr(
+        "backend.business.runs.executor.AniuOrchestrator",
+        _stub_watch_orchestrator(run.run_id),
+    )
+    executor = RunExecutor(
+        repository,  # type: ignore[arg-type]
+        agent_runner_factory=StubAgentRunnerFactory(),  # type: ignore[arg-type]
+        abort_registry=ActiveRunAbortRegistry(),
+    )
+
+    await executor.execute(run.run_id)
+
+    filed = _final_status_step(repository.run)
+    assert filed is not None
+    stage_key, step = filed
+    assert stage_key == "watch"
+    assert step.data == {"total_duration_ms": 9_000}
+    assert [stage.key for stage in repository.run.trace.stages] == ["watch"]
+
+
+@pytest.mark.asyncio
+async def test_a_rendered_analysis_files_its_final_status_after_the_handoff(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The render lane finishes the run, so the step has to survive the split."""
+
+    run = _run()
+    repository = InMemoryRunRepository(run)
+    monkeypatch.setattr(
+        "backend.business.runs.executor.AniuOrchestrator",
+        _stub_two_half_orchestrator(run.run_id, run_seconds=305, render_seconds=27),
+    )
+    executor = RunExecutor(
+        repository,  # type: ignore[arg-type]
+        agent_runner_factory=StubAgentRunnerFactory(),  # type: ignore[arg-type]
+        abort_registry=ActiveRunAbortRegistry(),
+    )
+
+    executed = await executor.execute(run.run_id)
+    # Parked: the run is not finished, so there is nothing final to say yet.
+    assert _final_status_step(repository.run) is None
+
+    assert executed.pending_report is not None
+    await executor.render_summary(run.run_id, executed.pending_report)
+
+    filed = _final_status_step(repository.run)
+    assert filed is not None
+    stage_key, step = filed
+    assert stage_key == "summary"
+    assert step.data == {"total_duration_ms": 332_000}

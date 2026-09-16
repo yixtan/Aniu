@@ -301,23 +301,39 @@ class RunExecutor:
         return max(0, int((ended_at - run.started_at).total_seconds() * 1000))
 
     async def _record_final_status_step(self, run: StrategyRun) -> None:
-        recorder = self._runtime.trace_recorder
-        if recorder is not None:
-            # The recorder persists the already-terminal run and final trace
-            # together, so callers never observe COMPLETED without this step.
-            # Always "Summary", including for a watch, which has no such
-            # stage of its own: the recorder then appends a one-step stage,
-            # and that trailing stage is what the run detail page treats as
-            # the final report. Changing it here would move a watch's report.
-            await recorder.set_status_step(
-                "Summary",
-                title="最终状态",
-                summary="运行已完成。",
-                data={"total_duration_ms": self._wall_clock_duration_ms(run)},
-            )
-        else:
-            await self._persist_run(run)
-            await self._commit()
+        """Close the run out with a step that says it finished, and how long.
+
+        The recorder persists the already-terminal run and the final trace
+        together, so callers never observe COMPLETED without this step.
+
+        It builds its own recorder rather than only reading the runtime's,
+        because every caller reaches here *after* `_with_run_runtime` has torn
+        the runtime down — its recorder is gone by then, and reading it was
+        the whole condition this used to hang on. That is what quietly dropped
+        the step when the run and render halves were split: 75 of 75 runs on
+        2026-09-14 recorded one, 39 of 78 on 09-15 as the split went live, and
+        0 of 70 on 09-16.
+
+        The step goes on the stage the run actually ends on — Summary for an
+        analysis, Watch for a watch, told apart by task id because the state
+        is COMPLETED either way. It used to say "Summary" for both, which
+        appended a second, never-entered stage to every watch; that stage was
+        then the last one, so the detail page hung the watch's report on it.
+        A watch now closes its own stage, so its report needs no stand-in.
+        """
+
+        recorder = self._runtime.trace_recorder or self._trace.make_recorder(
+            run,
+            persist_run=self._persist_run,
+        )
+        await recorder.set_status_step(
+            RunState.WATCH.value
+            if is_order_watch_task(run.run_id)
+            else RunState.SUMMARY.value,
+            title="最终状态",
+            summary="运行已完成。",
+            data={"total_duration_ms": self._wall_clock_duration_ms(run)},
+        )
 
     async def _reload(self, run_id: int) -> StrategyRun:
         stored = await self._run_repo.get_by_id(run_id)
