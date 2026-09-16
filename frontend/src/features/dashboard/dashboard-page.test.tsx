@@ -256,6 +256,37 @@ describe("DashboardPage", () => {
     await waitFor(() => expect(api.refreshAccountCache).toHaveBeenCalledTimes(2));
   });
 
+  it("shows a resting order's own price, not the fill it has not had", async () => {
+    // 2026-09-16: every row on screen read 0 shares and no price, because the
+    // table only ever showed the filled figures.
+    api.getAccountDashboard.mockResolvedValue({
+      ...dashboard,
+      orders: [
+        {
+          ...dashboard.orders[0]!,
+          order_id: "order-resting",
+          symbol: "688008",
+          stock_name: "澜起科技",
+          quantity: 300,
+          order_price: 185,
+          filled_quantity: 0,
+          filled_price: null,
+          status: "PENDING",
+        },
+      ],
+    });
+
+    renderPage();
+
+    expect(await screen.findByText("投资总览")).toBeInTheDocument();
+    const ordersTable = within(screen.getAllByRole("table")[1]!);
+    expect(ordersTable.getByText("数量")).toBeInTheDocument();
+    expect(ordersTable.getByText("价格")).toBeInTheDocument();
+    expect(ordersTable.getByText("300")).toBeInTheDocument();
+    expect(ordersTable.getByText("¥185.00")).toBeInTheDocument();
+    expect(ordersTable.queryByText("--")).not.toBeInTheDocument();
+  });
+
   it("also lays the holdings out as cards, for screens too narrow for a table", async () => {
     api.getAccountDashboard.mockResolvedValue(dashboard);
 
