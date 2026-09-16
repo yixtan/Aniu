@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AwayModeToggle } from "@/features/dashboard/away-mode-toggle";
+import { orderFigures } from "@/features/dashboard/order-figures";
 import { accountKeys } from "@/features/dashboard/query-keys";
 import { useRefreshAnimation } from "@/hooks/use-refresh-animation";
 import {
@@ -693,8 +694,14 @@ function OrderCards({ orders }: { orders: DashboardData["orders"] }) {
             </span>
           }
         >
-          <Figure label="成交数量" value={formatNumber(order.filled_quantity)} />
-          <Figure label="成交价" value={formatCurrency(order.filled_price)} />
+          <Figure
+            label={orderFigures(order).filled ? "成交数量" : "委托数量"}
+            value={formatNumber(orderFigures(order).quantity)}
+          />
+          <Figure
+            label={orderFigures(order).filled ? "成交价" : "委托价"}
+            value={formatCurrency(orderFigures(order).price)}
+          />
           <Figure
             label="委托时间"
             value={formatMonthDayTime(order.submitted_at ?? order.updated_at)}
@@ -816,13 +823,15 @@ function OrderTable({ orders }: { orders: DashboardData["orders"] }) {
                   <TableHead className="w-[20%] text-center whitespace-nowrap">委托时间</TableHead>
                   <TableHead className="w-[22%] text-center whitespace-nowrap">股票名称</TableHead>
                   <TableHead className="w-[12%] text-center whitespace-nowrap">方向</TableHead>
-                  <TableHead className="w-[16%] text-center whitespace-nowrap">成交数量</TableHead>
-                  <TableHead className="w-[14%] text-center whitespace-nowrap">成交价</TableHead>
+                  <TableHead className="w-[16%] text-center whitespace-nowrap">数量</TableHead>
+                  <TableHead className="w-[14%] text-center whitespace-nowrap">价格</TableHead>
                   <TableHead className="w-[16%] text-center whitespace-nowrap">状态</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {orders.map((order) => (
+                {orders.map((order) => {
+                  const figures = orderFigures(order);
+                  return (
                   <TableRow key={order.order_id} className="h-[53.333px]">
                     <TableCell className="py-1 text-center tabular-nums">
                       {formatMonthDayTime(order.submitted_at ?? order.updated_at)}
@@ -843,16 +852,17 @@ function OrderTable({ orders }: { orders: DashboardData["orders"] }) {
                       {translateOrderDirection(order.direction)}
                     </TableCell>
                     <TableCell className="py-1 text-center tabular-nums">
-                      {formatNumber(order.filled_quantity)}
+                      {formatNumber(figures.quantity)}
                     </TableCell>
                     <TableCell className="py-1 text-center tabular-nums">
-                      {formatCurrency(order.filled_price)}
+                      {formatCurrency(figures.price)}
                     </TableCell>
                     <TableCell className="py-1 text-center">
                       {translateOrderStatus(order.status)}
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
