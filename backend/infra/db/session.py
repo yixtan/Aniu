@@ -308,6 +308,13 @@ def _upgrade_sqlite_schema(connection: Connection) -> None:
                 "INTEGER NOT NULL DEFAULT 0"
             )
         )
+    if "cached_tokens" not in dream_columns:
+        connection.execute(
+            text(
+                "ALTER TABLE memory_dreams ADD COLUMN cached_tokens "
+                "INTEGER NOT NULL DEFAULT 0"
+            )
+        )
     if "channel_profile_id" not in dream_columns:
         connection.execute(
             text("ALTER TABLE memory_dreams ADD COLUMN channel_profile_id INTEGER")
@@ -344,6 +351,13 @@ def _upgrade_sqlite_schema(connection: Connection) -> None:
     strategy_run_columns = {
         column["name"] for column in inspect(connection).get_columns("strategy_runs")
     }
+    if "cached_tokens" not in strategy_run_columns:
+        connection.execute(
+            text(
+                "ALTER TABLE strategy_runs ADD COLUMN cached_tokens "
+                "INTEGER NOT NULL DEFAULT 0"
+            )
+        )
     if "failure_reason" not in strategy_run_columns:
         connection.execute(
             text("ALTER TABLE strategy_runs ADD COLUMN failure_reason TEXT")

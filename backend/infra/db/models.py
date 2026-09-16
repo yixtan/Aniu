@@ -299,6 +299,12 @@ class StrategyRunModel(Base):
     total_tokens: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
+    # How much of `total_tokens` the provider served from its prompt cache,
+    # which it bills at a fraction of fresh input. Zero on runs recorded
+    # before this column, where the split was never kept.
+    cached_tokens: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     trade_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
@@ -384,6 +390,12 @@ class MemoryDreamModel(Base):
     # day and the whole memory library, so it is one of the larger single
     # spends of the day, and it was invisible until this column existed.
     total_tokens: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    # The cached part of that total. A dream re-sends the whole library every
+    # turn, so most of its spend is the same prefix over and over: on
+    # 2026-09-16 the provider served 1.81M of its 2.10M from cache.
+    cached_tokens: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
     # Which channel was asked. Nullable because every dream from before this

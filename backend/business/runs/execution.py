@@ -57,12 +57,15 @@ class RunReport:
     transcript: tuple[dict[str, object], ...] = ()
     # Billed by the provider for this stage, or zero when it reported none.
     total_tokens: int = 0
+    # The part of that total the provider served from its prompt cache.
+    cached_tokens: int = 0
 
     def as_payload(self) -> dict[str, object]:
         return {
             self.summary_key: _summarize_text(self.content),
             self.content_key: self.content,
             "total_tokens": self.total_tokens,
+            "cached_tokens": self.cached_tokens,
             **_summarize_tool_activity(self.tool_activity),
             "trade_count": sum(
                 is_successful_trade_call(
@@ -85,9 +88,14 @@ class SummaryDraft:
     # report it reads is the largest single input of the day, so leaving it out
     # understated a run by about a quarter.
     total_tokens: int = 0
+    cached_tokens: int = 0
 
     def as_payload(self) -> dict[str, object]:
-        return {"summary": self.summary, "total_tokens": self.total_tokens}
+        return {
+            "summary": self.summary,
+            "total_tokens": self.total_tokens,
+            "cached_tokens": self.cached_tokens,
+        }
 
 
 @dataclass(slots=True)

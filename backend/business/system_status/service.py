@@ -121,6 +121,10 @@ def _fold_day(
         ),
         watches_failed=sum(watch.status == RunStatus.FAILED.value for watch in watches),
         watch_tokens=sum(watch.total_tokens for watch in watches),
+        cached_tokens=(
+            sum(run.cached_tokens for run in runs)
+            + sum(watch.cached_tokens for watch in watches)
+        ),
         trades_completed=sum(call.succeeded for call in trades),
         trades_failed=sum(not call.succeeded for call in trades),
         memory_writes=sum(call.succeeded for call in writes),
@@ -227,6 +231,11 @@ class SystemStatusService:
                 dream_tokens=dream_tokens_by_day[day],
                 watch_tokens=sum(watch.total_tokens for watch in watches_by_day[day]),
                 watches=len(watches_by_day[day]),
+                cached_tokens=(
+                    sum(run.cached_tokens for run in runs_by_day[day])
+                    + sum(watch.cached_tokens for watch in watches_by_day[day])
+                    + sum(dream.cached_tokens for dream in dreams_by_target[day])
+                ),
             )
             for day in token_days
         ]
@@ -261,6 +270,7 @@ class SystemStatusService:
                 updated=counts[(dream.task_id, MemoryActivityOperation.UPDATE.value)],
                 deleted=counts[(dream.task_id, MemoryActivityOperation.DELETE.value)],
                 total_tokens=dream.total_tokens,
+                cached_tokens=dream.cached_tokens,
             )
             for dream in dreams
         ]

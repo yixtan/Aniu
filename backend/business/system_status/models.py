@@ -32,6 +32,8 @@ class RunFact:
     status: str
     summary_html: bool
     total_tokens: int
+    # The part of `total_tokens` the provider served from its prompt cache.
+    cached_tokens: int = 0
     channel_id: int | None = None
     """Which provider did this run's work, from the model it froze.
 
@@ -79,6 +81,7 @@ class DreamFact:
     completed_at: datetime | None
     failure_reason: str | None
     total_tokens: int = 0
+    cached_tokens: int = 0
     channel_id: int | None = None
 
 

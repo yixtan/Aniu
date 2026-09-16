@@ -44,7 +44,7 @@ what was asked for — then said there was nothing left with nine still unread.
 
 def _trace_projection_and_metrics(
     run: StrategyRun,
-) -> tuple[dict[str, object], tuple[int, int, int, int]]:
+) -> tuple[dict[str, object], tuple[int, int, int, int, int]]:
     """Serialize trace once for persistence and lightweight list projections."""
 
     payload = run.trace.as_dict()
@@ -100,7 +100,7 @@ def _serialize_snapshot(snapshot: StrategySnapshot) -> dict[str, object]:
 
 def _run_values(run: StrategyRun) -> dict[str, object]:
     trace_json, metrics = _trace_projection_and_metrics(run)
-    tool_calls, thinking, tokens, trade_count = metrics
+    tool_calls, thinking, tokens, trade_count, cached = metrics
     return {
         "trigger_source": run.trigger_source.value,
         "schedule_id": run.schedule_id,
@@ -114,6 +114,7 @@ def _run_values(run: StrategyRun) -> dict[str, object]:
         "tool_calls_count": tool_calls,
         "thinking_count": thinking,
         "total_tokens": tokens,
+        "cached_tokens": cached,
         "trade_count": trade_count,
         "started_at": run.started_at.isoformat(),
         "completed_at": _serialize_datetime(run.completed_at),
@@ -197,7 +198,7 @@ class RunRepository:
 
     async def add(self, run: StrategyRun) -> StrategyRun:
         trace_json, metrics = _trace_projection_and_metrics(run)
-        tool_calls, thinking, tokens, trade_count = metrics
+        tool_calls, thinking, tokens, trade_count, cached = metrics
         model = StrategyRunModel(
             id=run.run_id,
             trigger_source=run.trigger_source.value,
@@ -212,6 +213,7 @@ class RunRepository:
             tool_calls_count=tool_calls,
             thinking_count=thinking,
             total_tokens=tokens,
+            cached_tokens=cached,
             trade_count=trade_count,
             started_at=run.started_at.isoformat(),
             completed_at=_serialize_datetime(run.completed_at),
@@ -400,6 +402,7 @@ class RunRepository:
                 StrategyRunModel.tool_calls_count,
                 StrategyRunModel.thinking_count,
                 StrategyRunModel.total_tokens,
+                StrategyRunModel.cached_tokens,
                 StrategyRunModel.trade_count,
             ),
         )
@@ -418,6 +421,7 @@ class RunRepository:
                 "tool_calls_count": int(row.tool_calls_count or 0),
                 "thinking_count": int(row.thinking_count or 0),
                 "total_tokens": int(row.total_tokens or 0),
+                "cached_tokens": int(row.cached_tokens or 0),
                 "trade_count": int(row.trade_count or 0),
             }
             for row in rows

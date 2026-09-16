@@ -17,6 +17,7 @@ function run(overrides: Partial<RunSummary> & { run_id: number }): RunSummary {
     tool_calls_count: 0,
     thinking_count: 0,
     total_tokens: 0,
+    cached_tokens: 0,
     trade_count: 0,
     ...overrides,
   };

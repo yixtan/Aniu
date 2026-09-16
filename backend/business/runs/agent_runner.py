@@ -17,6 +17,10 @@ class AgentStageResult:
     # tool loop. Zero means the endpoint reported nothing, not that the stage
     # was free — the trace falls back to an estimate in that case.
     total_tokens: int = 0
+    # How much of that total was a prompt-cache hit rather than fresh input.
+    # Counted inside `total_tokens` because that is how the provider reports
+    # it; kept apart here because the two are not priced alike.
+    cached_tokens: int = 0
 
 
 class AgentRunnerPort(Protocol):

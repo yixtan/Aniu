@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import pathlib
 import sqlite3
 
 import pytest
@@ -110,7 +111,9 @@ async def test_init_db_removes_unconsumed_tool_results_from_existing_traces(
                 "{}",
                 json.dumps(trace, ensure_ascii=False),
                 "markdown",
-                *expected_metrics,
+                # A v1 table has no cached_tokens column; the fifth metric
+                # has nowhere to go until init_db adds it.
+                *expected_metrics[:4],
                 "2026-08-22T00:00:00+00:00",
             ),
         )
@@ -149,7 +152,8 @@ async def test_init_db_removes_unconsumed_tool_results_from_existing_traces(
     )
     assert tool_data["arguments"]["result"] == "keep argument"
     assert result_data["result"] == "keep non-tool payload"
-    assert stored_metrics == metrics_from_trace_payload(stored) == expected_metrics
+    assert stored_metrics == expected_metrics[:4]
+    assert metrics_from_trace_payload(stored)[:4] == expected_metrics[:4]
     assert version == 3
 
 
@@ -228,7 +232,7 @@ async def test_init_db_backfills_metrics_for_existing_v2_traces(tmp_path) -> Non
         connection.close()
 
     assert row is not None
-    assert tuple(int(value) for value in row) == expected_metrics
+    assert tuple(int(value) for value in row) == expected_metrics[:4]
     assert version == 3
 
 
@@ -567,3 +571,43 @@ async def test_init_db_removes_retired_settings_and_quota_storage(tmp_path) -> N
     assert "mx_daily_limits_json" not in app_settings_columns
     assert "max_tool_loop_iterations" not in app_settings_columns
     assert "stock_api_call_usage_scopes" not in tables
+
+
+@pytest.mark.asyncio
+async def test_init_db_adds_the_cached_token_columns(tmp_path: pathlib.Path) -> None:
+    """A column that is never added is a field that silently reads zero.
+
+    Both tables carry a provider total that includes prompt-cache hits, and
+    the cached share is stored beside it so the two can be told apart. On a
+    database created before that, `init_db` has to add the column — and the
+    value it defaults to, 0, is also what "not recorded" looks like, so a
+    migration that quietly did not run would be invisible in the numbers.
+    """
+
+    sqlite_path = tmp_path / "aniu.sqlite3"
+    engine = create_engine(build_database_url(sqlite_path))
+    await init_db(engine)
+    await engine.dispose()
+
+    connection = sqlite3.connect(sqlite_path)
+    try:
+        for table in ("strategy_runs", "memory_dreams"):
+            connection.execute(f"ALTER TABLE {table} DROP COLUMN cached_tokens")
+        connection.commit()
+    finally:
+        connection.close()
+
+    migrated_engine = create_engine(build_database_url(sqlite_path))
+    await init_db(migrated_engine)
+    await migrated_engine.dispose()
+
+    connection = sqlite3.connect(sqlite_path)
+    try:
+        for table in ("strategy_runs", "memory_dreams"):
+            columns = {
+                str(row[1])
+                for row in connection.execute(f"PRAGMA table_info({table})")
+            }
+            assert "cached_tokens" in columns, table
+    finally:
+        connection.close()

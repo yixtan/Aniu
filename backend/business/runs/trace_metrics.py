@@ -85,44 +85,62 @@ def run_stage_status_from_trace_payload(trace: dict[str, Any] | None) -> str | N
     return None
 
 
-def _reported_tokens(stage: dict[str, Any]) -> int:
-    """What the provider billed for this stage, if it said.
+def _reported_tokens(stage: dict[str, Any]) -> tuple[int, int]:
+    """What the provider billed for this stage, and how much of it was cached.
 
     Recorded on the stage's own `result` step, the same place `trade_count`
     lives. Zero means no endpoint reported anything and the caller should keep
     estimating, which is why this cannot simply return `int | None` — a stage
     that genuinely cost nothing never happens.
+
+    Both numbers come off the same step, never two: the cached share is part
+    of the total the provider reported, so pairing one stage's total with
+    another's cache would let the second exceed the first.
     """
 
     steps = stage.get("steps")
     if not isinstance(steps, list):
-        return 0
+        return 0, 0
     for step in reversed(steps):
         if not isinstance(step, dict) or step.get("type") != "result":
             continue
-        data = step.get("data")
-        reported = data.get("total_tokens") if isinstance(data, dict) else None
+        raw = step.get("data")
+        data: dict[str, Any] = raw if isinstance(raw, dict) else {}
+        reported = data.get("total_tokens")
         if type(reported) is int and reported > 0:
-            return reported
-    return 0
+            cached = data.get("cached_tokens")
+            # Runs recorded before the split was kept report no cached share.
+            # Zero there means "not recorded", which reads the same as "no
+            # cache hit" and is the only honest answer available.
+            return reported, cached if type(cached) is int and cached > 0 else 0
+    return 0, 0
 
 
 def metrics_from_trace_payload(
     trace: dict[str, Any] | None,
-) -> tuple[int, int, int, int]:
+) -> tuple[int, int, int, int, int]:
+    """Tool calls, thinking turns, tokens, trades, and the cached share.
+
+    The cached count trails the others because callers that predate it index
+    this tuple positionally.
+    """
+
     tool_calls_count = 0
     thinking_count = 0
     token_characters = 0
     reported_tokens = 0
+    cached_tokens = 0
     trade_count = 0
     stages = (trace or {}).get("stages")
     if not isinstance(stages, list):
-        return 0, 0, 0, 0
+        return 0, 0, 0, 0, 0
     for stage in stages:
         if not isinstance(stage, dict):
             continue
         trade_count += _completed_trade_count(stage)
-        reported_tokens += _reported_tokens(stage)
+        stage_tokens, stage_cached = _reported_tokens(stage)
+        reported_tokens += stage_tokens
+        cached_tokens += stage_cached
         steps = stage.get("steps")
         if not isinstance(steps, list):
             continue
@@ -142,11 +160,18 @@ def metrics_from_trace_payload(
     # text once, while a tool loop re-sends the whole conversation every turn
     # and is billed for it again.
     if reported_tokens > 0:
-        return tool_calls_count, thinking_count, reported_tokens, trade_count
+        return (
+            tool_calls_count,
+            thinking_count,
+            reported_tokens,
+            trade_count,
+            cached_tokens,
+        )
     estimated_tokens = (
         max(1, (token_characters + 3) // 4) if token_characters > 0 else 0
     )
-    return tool_calls_count, thinking_count, estimated_tokens, trade_count
+    # An estimate cannot say what was cached, so it says nothing.
+    return tool_calls_count, thinking_count, estimated_tokens, trade_count, 0
 
 
 __all__ = ["metrics_from_trace_payload", "run_stage_status_from_trace_payload"]

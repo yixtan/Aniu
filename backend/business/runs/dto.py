@@ -46,6 +46,9 @@ class RunSummaryDTO:
     tool_calls_count: int
     thinking_count: int
     total_tokens: int
+    # The part of `total_tokens` the provider served from its prompt cache.
+    # Inside the total, not beside it: fresh tokens are the difference.
+    cached_tokens: int
     trade_count: int
 
 
@@ -55,12 +58,18 @@ class RunDetailDTO(RunSummaryDTO):
     failure_reason: str | None = None
 
 
-def _trace_metrics(run: StrategyRun) -> tuple[int, int, int, int]:
+def _trace_metrics(run: StrategyRun) -> tuple[int, int, int, int, int]:
     return metrics_from_trace_payload(run.trace.as_dict())
 
 
 def to_run_summary_dto(run: StrategyRun) -> RunSummaryDTO:
-    tool_calls_count, thinking_count, total_tokens, trade_count = _trace_metrics(run)
+    (
+        tool_calls_count,
+        thinking_count,
+        total_tokens,
+        trade_count,
+        cached_tokens,
+    ) = _trace_metrics(run)
     return RunSummaryDTO(
         run_id=run.run_id,
         task_id=run.run_id,
@@ -75,6 +84,7 @@ def to_run_summary_dto(run: StrategyRun) -> RunSummaryDTO:
         tool_calls_count=tool_calls_count,
         thinking_count=thinking_count,
         total_tokens=total_tokens,
+        cached_tokens=cached_tokens,
         trade_count=trade_count,
     )
 
@@ -97,6 +107,7 @@ def run_summary_dto_from_row(row: dict[str, object]) -> RunSummaryDTO:
         tool_calls_count=int(str(row["tool_calls_count"])),
         thinking_count=int(str(row["thinking_count"])),
         total_tokens=int(str(row["total_tokens"])),
+        cached_tokens=int(str(row.get("cached_tokens") or 0)),
         trade_count=int(str(row["trade_count"])),
     )
 

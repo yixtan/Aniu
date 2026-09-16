@@ -97,6 +97,7 @@ class WatchStage:
             tool_activity=result.tool_activity,
             transcript=result.transcript,
             total_tokens=result.total_tokens,
+            cached_tokens=result.cached_tokens,
         )
 
 

@@ -1066,6 +1066,11 @@ export interface components {
         };
         /** DailyStatusResponse */
         DailyStatusResponse: {
+            /**
+             * Cached Tokens
+             * @default 0
+             */
+            cached_tokens: number;
             /** Data Call Failures */
             data_call_failures: number;
             /** Data Calls */
@@ -1118,6 +1123,11 @@ export interface components {
         };
         /** DreamStatusResponse */
         DreamStatusResponse: {
+            /**
+             * Cached Tokens
+             * @default 0
+             */
+            cached_tokens: number;
             /** Completed At */
             completed_at: string | null;
             /** Created */
@@ -1733,6 +1743,11 @@ export interface components {
         };
         /** RunDetailResponse */
         RunDetailResponse: {
+            /**
+             * Cached Tokens
+             * @default 0
+             */
+            cached_tokens: number;
             /** Completed At */
             completed_at?: string | null;
             /** Current State */
@@ -1786,6 +1801,11 @@ export interface components {
         };
         /** RunSummaryResponse */
         RunSummaryResponse: {
+            /**
+             * Cached Tokens
+             * @default 0
+             */
+            cached_tokens: number;
             /** Completed At */
             completed_at?: string | null;
             /** Current State */
@@ -2135,6 +2155,11 @@ export interface components {
         };
         /** TokenDayResponse */
         TokenDayResponse: {
+            /**
+             * Cached Tokens
+             * @default 0
+             */
+            cached_tokens: number;
             /**
              * Channels
              * @default []

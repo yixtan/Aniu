@@ -87,6 +87,7 @@ class SummaryStage:
         return SummaryDraft(
             summary=_coerce_html_summary(result.content),
             total_tokens=result.total_tokens,
+            cached_tokens=result.cached_tokens,
         )
 
 
