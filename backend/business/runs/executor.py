@@ -235,12 +235,12 @@ class RunExecutor:
                 pending_report=result.pending_report,
             )
 
-        await self._record_final_status_step(run, result)
+        await self._record_final_status_step(run)
         stored = await self._reload(run.run_id)
         # Both live outside the try: a side effect of finishing must not be
         # caught by the handler that decides a run failed.
         await self._notify_run_completed(run.run_id)
-        await self._announce_run_completed(run, result.total_duration_ms)
+        await self._announce_run_completed(run)
         return ExecutedRun(detail=to_run_detail_dto(stored))
 
     async def render_summary(self, run_id: int, report: RunReport) -> RunDetailDTO:
@@ -260,33 +260,47 @@ class RunExecutor:
         ):
             return to_run_detail_dto(run)
 
-        result = await self._with_run_runtime(
+        await self._with_run_runtime(
             run,
             phase="summary",
             work=lambda orchestrator: orchestrator.render_summary(run, report),
         )
-        await self._record_final_status_step(run, result)
+        await self._record_final_status_step(run)
         logger.info(
             "run_execution_completed",
             extra={
                 "run_id": run.run_id,
                 "job_id": run.run_id,
                 "stage_id": run.trace.current_stage_id or "Summary",
-                "duration_ms": result.total_duration_ms,
+                "duration_ms": self._wall_clock_duration_ms(run),
                 "current_state": run.current_state.value,
                 "status": "completed",
             },
         )
         stored = await self._reload(run.run_id)
         await self._notify_run_completed(run.run_id)
-        await self._announce_run_completed(run, result.total_duration_ms)
+        await self._announce_run_completed(run)
         return to_run_detail_dto(stored)
 
-    async def _record_final_status_step(
-        self,
-        run: StrategyRun,
-        result: RunResult,
-    ) -> None:
+    def _wall_clock_duration_ms(self, run: StrategyRun) -> int:
+        """How long the run took start to finish, not how long its last half took.
+
+        An analysis executes in two halves on two lanes, so the orchestrator's
+        `total_duration_ms` only ever covers the half that just returned — on
+        the render lane that is the HTML render alone. Run 20260916112 showed
+        5 分 32 秒 on its page and announced itself as 27 秒, because 27 秒 was
+        all the rendering took. Reading the run's own timestamps is the same
+        arithmetic the page does (`formatRunDuration(started_at, completed_at)`),
+        so the two agree by construction and keep agreeing if the pipeline is
+        ever split again. `completed_at` is set by the transition into
+        COMPLETED, which has already happened by the time anything here reads
+        it; the fallback is for the paths that report a run still running.
+        """
+
+        ended_at = run.completed_at or self._now_provider()
+        return max(0, int((ended_at - run.started_at).total_seconds() * 1000))
+
+    async def _record_final_status_step(self, run: StrategyRun) -> None:
         recorder = self._runtime.trace_recorder
         if recorder is not None:
             # The recorder persists the already-terminal run and final trace
@@ -299,7 +313,7 @@ class RunExecutor:
                 "Summary",
                 title="最终状态",
                 summary="运行已完成。",
-                data={"total_duration_ms": result.total_duration_ms},
+                data={"total_duration_ms": self._wall_clock_duration_ms(run)},
             )
         else:
             await self._persist_run(run)
@@ -389,7 +403,7 @@ class RunExecutor:
                 exc_info=True,
             )
 
-    async def _announce_run_completed(self, run: StrategyRun, duration_ms: int) -> None:
+    async def _announce_run_completed(self, run: StrategyRun) -> None:
         """Announce a finished run without letting the push affect the run.
 
         An analysis that traded nothing sends no other notification, so without
@@ -411,7 +425,7 @@ class RunExecutor:
                 ),
                 run_id=run.run_id,
                 stage_name=run.trace.current_stage_id or run.current_state.value,
-                duration_ms=duration_ms,
+                duration_ms=self._wall_clock_duration_ms(run),
             )
         )
 
