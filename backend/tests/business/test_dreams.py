@@ -8,6 +8,7 @@ from datetime import UTC, date, datetime
 import pytest
 
 from backend.business.dreams import DreamStatus, MemoryDream
+from backend.business.dreams.ports import DreamRunResult
 from backend.business.dreams.service import DreamService
 
 
@@ -154,3 +155,62 @@ class FakeAgent:
         if self.error is not None:
             raise self.error
         return f"已整理 {dream.target_date.isoformat()}"
+
+
+class BillingAgent:
+    """Reports what a real provider reports: a total, and its cached part."""
+
+    def __init__(self, total_tokens: int, cached_tokens: int) -> None:
+        self._result = DreamRunResult(
+            content="已整理",
+            total_tokens=total_tokens,
+            cached_tokens=cached_tokens,
+        )
+
+    async def run(self, dream: MemoryDream) -> DreamRunResult:
+        del dream
+        return self._result
+
+
+@pytest.mark.asyncio
+async def test_a_finished_dream_keeps_the_cached_share_of_what_it_was_billed() -> None:
+    """A dream resends the whole memory library every turn.
+
+    Most of what it is billed for is therefore the same prefix again, which
+    the provider serves from its own cache at a fraction of fresh input. The
+    2026-09-16 dream reported 2,100,361 tokens of which 1,811,840 were cache
+    hits; reading the total alone turned a 288k dream into an 11x jump.
+    """
+
+    repository = InMemoryDreamRepository()
+    service = DreamService(
+        repository,
+        BillingAgent(2_100_361, 1_811_840),
+        committer=Committer(),
+    )
+    dream = await service.create_or_get(date(2026, 9, 16))
+
+    finished = await service.execute(dream.task_id)
+
+    assert finished is not None
+    assert finished.total_tokens == 2_100_361
+    assert finished.cached_tokens == 1_811_840
+    # The cached part is inside the total, so fresh input is the difference.
+    assert finished.total_tokens - finished.cached_tokens == 288_521
+
+
+@pytest.mark.asyncio
+async def test_a_cached_share_can_never_exceed_the_total_it_sits_in() -> None:
+    """Believing a provider that reports more cache than tokens would make
+    fresh input negative, and every chart drawn from it nonsense."""
+
+    repository = InMemoryDreamRepository()
+    service = DreamService(
+        repository, BillingAgent(100, 9_999), committer=Committer()
+    )
+    dream = await service.create_or_get(date(2026, 9, 16))
+
+    finished = await service.execute(dream.task_id)
+
+    assert finished is not None
+    assert finished.cached_tokens == 100

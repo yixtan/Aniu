@@ -29,6 +29,10 @@ class MemoryDream:
     failure_reason: str | None = None
     # Billed for this dream, or zero when the endpoint reported nothing.
     total_tokens: int = 0
+    # The cached part of that total, inside it rather than beside it. A dream
+    # re-sends the whole memory library every turn, so most of what it is
+    # billed for is the same prefix again — priced far below fresh input.
+    cached_tokens: int = 0
     # Which channel was asked. `None` on every dream from before this was
     # recorded — the provider is not recoverable from anything else stored.
     channel_id: int | None = None
@@ -50,6 +54,7 @@ class MemoryDream:
         self.result = None
         self.failure_reason = None
         self.total_tokens = 0
+        self.cached_tokens = 0
         self.channel_id = None
         self.started_at = None
         self.completed_at = None
@@ -59,12 +64,15 @@ class MemoryDream:
         result: str,
         total_tokens: int = 0,
         channel_id: int | None = None,
+        cached_tokens: int = 0,
     ) -> None:
         if self.status is not DreamStatus.RUNNING:
             raise ValueError("only running dreams can complete")
         self.status = DreamStatus.COMPLETED
         self.result = result.strip() or None
         self.total_tokens = max(0, total_tokens)
+        # Never more than the total it is part of, whatever the provider says.
+        self.cached_tokens = min(max(0, cached_tokens), self.total_tokens)
         self.channel_id = channel_id
         self.completed_at = utc_now()
 

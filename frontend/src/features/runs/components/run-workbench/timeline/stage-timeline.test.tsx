@@ -82,6 +82,7 @@ function makeRun(overrides: Partial<RunDetail> = {}): RunDetail {
     tool_calls_count: 3,
     thinking_count: 2,
     total_tokens: 1200,
+    cached_tokens: 900,
     trade_count: 1,
     failure_reason: null,
     trace: {

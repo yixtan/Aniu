@@ -65,6 +65,9 @@ async def test_system_status_folds_the_days_activity(
             trace_json={},
             summary_render_mode="html",
             total_tokens=1234,
+            # Most of a long tool loop is the same prefix resent, which the
+            # provider serves from cache and bills far below fresh input.
+            cached_tokens=900,
             started_at=at,
             completed_at=at,
         )
@@ -82,6 +85,7 @@ async def test_system_status_folds_the_days_activity(
             trace_json={},
             summary_render_mode="markdown",
             total_tokens=210,
+            cached_tokens=150,
             started_at=at,
             completed_at=at,
         )
@@ -164,6 +168,8 @@ async def test_system_status_folds_the_days_activity(
         "watches_completed": 1,
         "watches_failed": 0,
         "watch_tokens": 210,
+        # Inside `tokens` + `watch_tokens`, never added to them: 900 + 150.
+        "cached_tokens": 1050,
     }
     token_row = next(row for row in body["tokens"] if row["day"] == expected_day)
     assert token_row == {
@@ -176,6 +182,7 @@ async def test_system_status_folds_the_days_activity(
         "dream_tokens": 0,
         "watch_tokens": 210,
         "watches": 1,
+        "cached_tokens": 1050,
     }
 
     assert len(body["dreams"]) == 1

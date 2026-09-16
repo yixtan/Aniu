@@ -68,6 +68,7 @@ def _dream_fact(row: MemoryDreamModel) -> DreamFact:
         completed_at=_optional_utc(row.completed_at),
         failure_reason=row.failure_reason,
         total_tokens=int(row.total_tokens or 0),
+        cached_tokens=int(row.cached_tokens or 0),
         channel_id=(
             None if row.channel_profile_id is None else int(row.channel_profile_id)
         ),
@@ -85,6 +86,7 @@ class SystemStatusRepository:
             StrategyRunModel.status,
             StrategyRunModel.summary_render_mode,
             StrategyRunModel.total_tokens,
+            StrategyRunModel.cached_tokens,
             _WORKING_CHANNEL,
         ).where(StrategyRunModel.started_at >= since.isoformat())
         rows = (await self._session.execute(statement)).all()
@@ -95,7 +97,8 @@ class SystemStatusRepository:
                 status=row[2],
                 summary_html=row[3] == _SUMMARY_HTML,
                 total_tokens=int(row[4] or 0),
-                channel_id=None if row[5] is None else int(row[5]),
+                cached_tokens=int(row[5] or 0),
+                channel_id=None if row[6] is None else int(row[6]),
             )
             for row in rows
         ]

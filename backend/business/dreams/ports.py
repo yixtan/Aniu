@@ -50,6 +50,8 @@ class DreamRunResult:
 
     content: str
     total_tokens: int = 0
+    # The part of the total the provider served from its prompt cache.
+    cached_tokens: int = 0
     channel_id: int | None = None
 
 

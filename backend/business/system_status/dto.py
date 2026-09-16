@@ -28,6 +28,13 @@ class DailyStatusDTO:
     watches_completed: int = 0
     watches_failed: int = 0
     watch_tokens: int = 0
+    # How much of `tokens` + `watch_tokens` the provider served from its own
+    # prompt cache. Inside those numbers, not beside them: a tool loop resends
+    # the same prefix every turn, and the provider bills a cache hit at a
+    # fraction of fresh input. Without this the headline reads as spend when
+    # most of it is a discount. Zero before 2026-09-16, when nothing kept the
+    # split — which reads the same as "no cache hit" and is all we can say.
+    cached_tokens: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +67,9 @@ class TokenDayDTO:
     # And a watch is not an analysis run either; see DailyStatusDTO.
     watch_tokens: int = 0
     watches: int = 0
+    # The cached part of this whole day — analyses, watches and dreams
+    # together, because the question it answers is about the bar as drawn.
+    cached_tokens: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,6 +82,7 @@ class DreamStatusDTO:
     updated: int
     deleted: int
     total_tokens: int = 0
+    cached_tokens: int = 0
 
 
 @dataclass(frozen=True, slots=True)

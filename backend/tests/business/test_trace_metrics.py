@@ -22,7 +22,7 @@ def test_metrics_use_only_completed_run_stage_trade_count() -> None:
         ]
     }
 
-    assert metrics_from_trace_payload(trace) == (0, 0, 0, 2)
+    assert metrics_from_trace_payload(trace) == (0, 0, 0, 2, 0)
     assert run_stage_status_from_trace_payload(trace) == "completed"
 
 
@@ -46,7 +46,7 @@ def test_tool_metrics_use_model_content_characters_after_redaction() -> None:
         ]
     }
 
-    assert metrics_from_trace_payload(trace) == (1, 0, 13, 0)
+    assert metrics_from_trace_payload(trace) == (1, 0, 13, 0, 0)
 
 
 def test_non_completed_run_does_not_report_trade_count() -> None:
@@ -85,10 +85,12 @@ def test_a_reported_token_count_beats_the_character_estimate() -> None:
         ]
     }
 
-    _, _, tokens, trades = metrics_from_trace_payload(trace)
+    _, _, tokens, trades, cached = metrics_from_trace_payload(trace)
 
     assert tokens == 185_984
     assert trades == 1
+    # The stage reported no cached share, so none is claimed.
+    assert cached == 0
 
 
 def test_reported_counts_are_summed_across_stages() -> None:
@@ -129,3 +131,65 @@ def test_the_estimate_still_applies_where_no_provider_reported_usage() -> None:
     }
 
     assert metrics_from_trace_payload(trace)[2] == 100
+
+
+def test_the_cached_share_is_summed_beside_the_total_it_sits_in() -> None:
+    """Prompt-cache hits are inside the provider's total, not beside it.
+
+    A tool loop resends the same prefix every turn, so most of what a long
+    stage is billed for is a cache hit priced far below fresh input. Reading
+    the total alone made 2026-09-16's dream look like 2.10M tokens of spend
+    when 1.81M of it was the same prompt again.
+    """
+
+    trace = {
+        "stages": [
+            {
+                "key": "run",
+                "status": "completed",
+                "steps": [
+                    {
+                        "type": "result",
+                        "data": {"total_tokens": 800, "cached_tokens": 600},
+                    }
+                ],
+            },
+            {
+                "key": "summary",
+                "status": "completed",
+                "steps": [
+                    {
+                        "type": "result",
+                        "data": {"total_tokens": 200, "cached_tokens": 150},
+                    }
+                ],
+            },
+        ]
+    }
+
+    _, _, tokens, _, cached = metrics_from_trace_payload(trace)
+
+    assert (tokens, cached) == (1_000, 750)
+
+
+def test_a_stage_that_reported_no_cache_contributes_none() -> None:
+    """Runs recorded before the split was kept say nothing about caching.
+
+    Zero there means "not recorded", which reads the same as "no cache hit".
+    It must never be guessed from the total, or every old run would suddenly
+    look discounted.
+    """
+
+    trace = {
+        "stages": [
+            {
+                "key": "run",
+                "status": "completed",
+                "steps": [{"type": "result", "data": {"total_tokens": 500}}],
+            }
+        ]
+    }
+
+    _, _, tokens, _, cached = metrics_from_trace_payload(trace)
+
+    assert (tokens, cached) == (500, 0)

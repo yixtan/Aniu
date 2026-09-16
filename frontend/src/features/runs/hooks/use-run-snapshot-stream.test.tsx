@@ -36,6 +36,7 @@ const runningDetail: RunDetail = {
   current_state: "Run",
   trigger_source: "manual",
   total_tokens: 0,
+  cached_tokens: 0,
   tool_calls_count: 0,
   thinking_count: 0,
   trade_count: 0,

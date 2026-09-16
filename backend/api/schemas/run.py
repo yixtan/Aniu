@@ -111,6 +111,7 @@ class RunSummaryResponse(BaseModel):
     tool_calls_count: int = 0
     thinking_count: int = 0
     total_tokens: int = 0
+    cached_tokens: int = 0
     trade_count: int = 0
 
 

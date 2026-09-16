@@ -755,6 +755,11 @@
       "DailyStatusResponse": {
         "additionalProperties": false,
         "properties": {
+          "cached_tokens": {
+            "default": 0,
+            "title": "Cached Tokens",
+            "type": "integer"
+          },
           "data_call_failures": {
             "title": "Data Call Failures",
             "type": "integer"
@@ -860,6 +865,11 @@
       "DreamStatusResponse": {
         "additionalProperties": false,
         "properties": {
+          "cached_tokens": {
+            "default": 0,
+            "title": "Cached Tokens",
+            "type": "integer"
+          },
           "completed_at": {
             "anyOf": [
               {
@@ -2577,6 +2587,11 @@
       "RunDetailResponse": {
         "additionalProperties": false,
         "properties": {
+          "cached_tokens": {
+            "default": 0,
+            "title": "Cached Tokens",
+            "type": "integer"
+          },
           "completed_at": {
             "anyOf": [
               {
@@ -2695,6 +2710,11 @@
       "RunSummaryResponse": {
         "additionalProperties": false,
         "properties": {
+          "cached_tokens": {
+            "default": 0,
+            "title": "Cached Tokens",
+            "type": "integer"
+          },
           "completed_at": {
             "anyOf": [
               {
@@ -3775,6 +3795,11 @@
       "TokenDayResponse": {
         "additionalProperties": false,
         "properties": {
+          "cached_tokens": {
+            "default": 0,
+            "title": "Cached Tokens",
+            "type": "integer"
+          },
           "channels": {
             "default": [],
             "items": {

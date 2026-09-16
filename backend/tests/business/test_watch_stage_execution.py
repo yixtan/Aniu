@@ -32,6 +32,7 @@ class RecordingRunner:
             tool_activity: tuple[dict[str, object], ...] = ()
             transcript: tuple[dict[str, object], ...] = ()
             total_tokens: int = 0
+            cached_tokens: int = 0
 
         return _Result(content=self.content)
 

@@ -24,6 +24,7 @@ class DailyStatusResponse(ApiModel):
     watches_completed: int = 0
     watches_failed: int = 0
     watch_tokens: int = 0
+    cached_tokens: int = 0
 
 
 class ChannelTokensResponse(ApiModel):
@@ -42,6 +43,7 @@ class TokenDayResponse(ApiModel):
     dream_tokens: int = 0
     watch_tokens: int = 0
     watches: int = 0
+    cached_tokens: int = 0
 
 
 class DreamStatusResponse(ApiModel):
@@ -53,6 +55,7 @@ class DreamStatusResponse(ApiModel):
     updated: int
     deleted: int
     total_tokens: int = 0
+    cached_tokens: int = 0
 
 
 class SystemStatusResponse(ApiModel):
