@@ -64,6 +64,24 @@ describe("EvaluationCard", () => {
     expect(screen.getByRole("button", { name: "重新评估" })).toBeEnabled();
   });
 
+  it("renders the answer as Markdown, not as literal hashes", async () => {
+    // Both halves answer in Markdown. Rendered as plain text the card filled
+    // up with literal ## and **, which is how it shipped.
+    api.getRunEvaluation.mockResolvedValue(
+      evaluation({
+        questions: "## 一、成交率断崖\n\n**连续三天零成交**，请给出证伪条件。",
+        answers: "这个数我手上没有。",
+      }),
+    );
+
+    renderCard();
+
+    const heading = await screen.findByRole("heading", { name: "一、成交率断崖" });
+    expect(heading).toBeInTheDocument();
+    expect(screen.getByText("连续三天零成交").tagName).toBe("STRONG");
+    expect(screen.queryByText(/## 一、成交率断崖/)).not.toBeInTheDocument();
+  });
+
   it("locks the button while one is being written", async () => {
     // A review takes a minute or two; a second press would spend it twice.
     api.getRunEvaluation.mockResolvedValue(evaluation({ status: "RUNNING" }));

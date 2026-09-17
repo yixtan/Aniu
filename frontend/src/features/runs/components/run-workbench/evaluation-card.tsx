@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import { findingKeys } from "@/features/findings/query-keys";
+import { StreamingContent } from "@/features/runs/components/run-workbench/streaming";
 import { getRunEvaluation, raiseOpenFinding, requestRunEvaluation } from "@/lib/api";
 import { getErrorMessage } from "@/lib/format";
 
@@ -81,20 +82,28 @@ export function EvaluationCard({ runId }: { runId: number }) {
             正在生成提问与回答，通常一到两分钟。
           </p>
         ) : null}
+        {/* Both halves answer in Markdown — headings, bold, tables. Rendered as
+            plain text the page filled up with literal ## and **. */}
         {evaluation?.questions ? (
           <section className="space-y-1">
             <h3 className="text-xs font-semibold">提问</h3>
-            <div className="text-foreground/90 text-xs leading-relaxed whitespace-pre-wrap">
-              {evaluation.questions}
-            </div>
+            <StreamingContent
+              content={evaluation.questions}
+              streaming={false}
+              scrollable={false}
+              variant="process"
+            />
           </section>
         ) : null}
         {evaluation?.answers ? (
           <section className="space-y-1">
             <h3 className="text-xs font-semibold">回答</h3>
-            <div className="text-foreground/90 text-xs leading-relaxed whitespace-pre-wrap">
-              {evaluation.answers}
-            </div>
+            <StreamingContent
+              content={evaluation.answers}
+              streaming={false}
+              scrollable={false}
+              variant="process"
+            />
           </section>
         ) : null}
         {evaluation?.status === "COMPLETED" ? (
