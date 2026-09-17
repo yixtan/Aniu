@@ -271,6 +271,14 @@ function DreamsCard({
 }
 
 const BAR_IDLE = "bg-muted";
+/** Laid over the cached foot of a bar rather than replacing its colour.
+ *
+ *  The stack is already spoken for: each band is a provider, and that is the
+ *  comparison the chart exists to make. Cache is a second, unrelated split of
+ *  the same height, so it washes the bands out instead of recolouring them —
+ *  the provider stays readable through it, and the flat top edge of the wash
+ *  reads as a water line: everything under it was billed at cache rates. */
+const BAR_CACHED_SCRIM = "bg-background/55";
 
 /** One hue per provider — distinct rather than graded, because these are
  *  different things being compared, not more and less of one thing.
@@ -419,6 +427,20 @@ function TokenChart({ tokens }: { tokens: TokenDay[] }) {
             ))}
           </ul>
         ) : null}
+        {/* Outside the provider legend on purpose: the wash is not a provider,
+            and that list is read as the roster of who was asked. */}
+        {cachedTotal > 0 ? (
+          <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
+            <span
+              aria-hidden
+              className={cn(
+                "border-border/70 size-2 shrink-0 rounded-[2px] border",
+                BAR_CACHED_SCRIM,
+              )}
+            />
+            <span>浅色部分为缓存命中</span>
+          </p>
+        ) : null}
         <p className="text-xs tabular-nums" aria-live="polite">
           {focus ? describeDay(focus, rank) : ""}
         </p>
@@ -447,7 +469,7 @@ function TokenChart({ tokens }: { tokens: TokenDay[] }) {
                     and dreams all sit inside these bands — the day's spend
                     split by who was asked, not by what was asked. */}
                 <span
-                  className="flex w-full flex-col justify-end"
+                  className="relative flex w-full flex-col justify-end"
                   style={{ height: `${Math.max(idle ? 2 : 4, (combined / peak) * 100)}%` }}
                 >
                   {/* Reversed for rendering only: the first child of a column
@@ -476,6 +498,19 @@ function TokenChart({ tokens }: { tokens: TokenDay[] }) {
                   ))}
                   {idle || day.channels.length === 0 ? (
                     <span className={cn("block w-full flex-1 rounded-t-[3px]", BAR_IDLE)} />
+                  ) : null}
+                  {!idle && day.cached_tokens > 0 ? (
+                    <span
+                      aria-hidden
+                      data-cached-share=""
+                      className={cn(
+                        "pointer-events-none absolute inset-x-0 bottom-0",
+                        BAR_CACHED_SCRIM,
+                      )}
+                      style={{
+                        height: `${Math.min(100, (day.cached_tokens / combined) * 100)}%`,
+                      }}
+                    />
                   ) : null}
                 </span>
               </li>
