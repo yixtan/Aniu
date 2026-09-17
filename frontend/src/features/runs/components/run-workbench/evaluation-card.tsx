@@ -1,9 +1,14 @@
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ScaleIcon } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getRunEvaluation, requestRunEvaluation } from "@/lib/api";
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
+import { Textarea } from "@/components/ui/textarea";
+import { findingKeys } from "@/features/findings/query-keys";
+import { getRunEvaluation, raiseOpenFinding, requestRunEvaluation } from "@/lib/api";
 import { getErrorMessage } from "@/lib/format";
 
 /** Poll only while something is actually being written. */
@@ -23,6 +28,24 @@ export function EvaluationCard({ runId }: { runId: number }) {
     onSuccess: (created) => {
       queryClient.setQueryData(queryKey, created);
     },
+  });
+
+  const [finding, setFinding] = useState("");
+  const [resolutionTest, setResolutionTest] = useState("");
+  const raise = useMutation({
+    mutationFn: () =>
+      raiseOpenFinding({
+        finding,
+        resolution_test: resolutionTest,
+        evaluation_id: evaluationQuery.data?.evaluation_id ?? null,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: findingKeys.all });
+      setFinding("");
+      setResolutionTest("");
+      toast.success("已立为未结议题，下一次操盘起必须逐条表态");
+    },
+    onError: (error: unknown) => toast.error(getErrorMessage(error)),
   });
 
   const evaluation = evaluationQuery.data ?? null;
@@ -72,6 +95,44 @@ export function EvaluationCard({ runId }: { runId: number }) {
             <div className="text-foreground/90 text-xs leading-relaxed whitespace-pre-wrap">
               {evaluation.answers}
             </div>
+          </section>
+        ) : null}
+        {evaluation?.status === "COMPLETED" ? (
+          <section className="border-border/60 space-y-2 border-t pt-3">
+            <h3 className="text-xs font-semibold">立为未结议题</h3>
+            <Field>
+              <FieldLabel htmlFor="finding">发现</FieldLabel>
+              <Textarea
+                id="finding"
+                rows={2}
+                value={finding}
+                placeholder="从上面的问答里挑一条值得追究的，写成一句话"
+                onChange={(event) => setFinding(event.target.value)}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="resolution-test">了结条件</FieldLabel>
+              <Textarea
+                id="resolution-test"
+                rows={2}
+                value={resolutionTest}
+                placeholder="什么证据或改动会让这条议题了结"
+                onChange={(event) => setResolutionTest(event.target.value)}
+              />
+              <FieldDescription>
+                必填。说不出怎样才算了结的议题，会在此后每一次运行里被回答而永远留在列表上。
+              </FieldDescription>
+            </Field>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={
+                raise.isPending || finding.trim() === "" || resolutionTest.trim() === ""
+              }
+              onClick={() => raise.mutate()}
+            >
+              立项
+            </Button>
           </section>
         ) : null}
         {evaluation?.status === "COMPLETED" && evaluation.total_tokens > 0 ? (
