@@ -333,6 +333,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/aniu/open-findings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Findings */
+        get: operations["list_findings_api_aniu_open_findings_get"];
+        put?: never;
+        /** Raise Finding */
+        post: operations["raise_finding_api_aniu_open_findings_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/aniu/open-findings/{finding_id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close Finding
+         * @description Only reachable by a person. A run may say where it stands, not that
+         *     the matter is settled.
+         */
+        post: operations["close_finding_api_aniu_open_findings__finding_id__close_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/aniu/report-email": {
         parameters: {
             query?: never;
@@ -1142,6 +1181,20 @@ export interface components {
             /** Expected Version */
             expected_version: number;
         };
+        /** DispositionResponse */
+        DispositionResponse: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Note */
+            note: string;
+            /** Run Id */
+            run_id: number;
+            /** Verdict */
+            verdict: string;
+        };
         /** DreamStatusResponse */
         DreamStatusResponse: {
             /**
@@ -1688,6 +1741,36 @@ export interface components {
          * @enum {string}
          */
         OpenAIMaxTokensField: "auto" | "max_tokens" | "max_completion_tokens";
+        /** OpenFindingResponse */
+        OpenFindingResponse: {
+            /** Closed At */
+            closed_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Dispositions
+             * @default []
+             */
+            dispositions: components["schemas"]["DispositionResponse"][];
+            /** Evaluation Id */
+            evaluation_id?: number | null;
+            /** Finding */
+            finding: string;
+            /** Finding Id */
+            finding_id: number;
+            /** Resolution Test */
+            resolution_test: string;
+            /** Status */
+            status: string;
+            /**
+             * Times Disputed
+             * @default 0
+             */
+            times_disputed: number;
+        };
         /** PortfolioOrderResponse */
         PortfolioOrderResponse: {
             /** Direction */
@@ -1753,6 +1836,15 @@ export interface components {
             summary: string;
             /** Tool Name */
             tool_name: string;
+        };
+        /** RaiseFindingRequest */
+        RaiseFindingRequest: {
+            /** Evaluation Id */
+            evaluation_id?: number | null;
+            /** Finding */
+            finding: string;
+            /** Resolution Test */
+            resolution_test: string;
         };
         /** ReportEmailSettingsResponse */
         ReportEmailSettingsResponse: {
@@ -3893,6 +3985,171 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_findings_api_aniu_open_findings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenFindingResponse"][];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    raise_finding_api_aniu_open_findings_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RaiseFindingRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenFindingResponse"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    close_finding_api_aniu_open_findings__finding_id__close_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                finding_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenFindingResponse"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

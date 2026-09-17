@@ -491,6 +491,30 @@ class RunJobModel(Base):
     )
 
 
+class OpenFindingModel(Base):
+    """An objection a run must answer until a person closes it."""
+
+    __tablename__ = "open_findings"
+    __table_args__ = (Index("idx_open_findings_status", "status", "id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    evaluation_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("run_evaluations.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    finding: Mapped[str] = mapped_column(Text, nullable=False)
+    # What would settle it. Required, because an objection nobody can settle
+    # is paid for in every future run and never leaves the list.
+    resolution_test: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="OPEN")
+    dispositions_json: Mapped[list[dict[str, object]]] = mapped_column(
+        JSON, nullable=False, default=list, server_default="[]"
+    )
+    created_at: Mapped[str] = mapped_column(Text, nullable=False, default=utc_now_iso)
+    closed_at: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class RunEvaluationModel(Base):
     """One independent review of a finished run.
 

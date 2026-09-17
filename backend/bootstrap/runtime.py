@@ -21,6 +21,7 @@ from backend.business.fill_record import FillRecordService
 from backend.business.market import MarketOverviewQueryPort
 from backend.business.memories.service import MemoryService
 from backend.business.notifications.service import NotificationService
+from backend.business.open_findings import OpenFindingService
 from backend.business.reports.service import ReportMailService
 from backend.business.runs.abort_registry import ActiveRunAbortRegistry
 from backend.business.runs.executor import RunExecutor
@@ -51,6 +52,7 @@ from backend.infra.integrations.notifications import (
     RoutingNotificationSender,
     TradeNotificationDispatcher,
 )
+from backend.infra.integrations.run_open_findings import RunOpenFindingsQuery
 from backend.infra.integrations.run_order_plan import RunOrderPlanQuery
 from backend.infra.integrations.run_watchlist import RunWatchlistQuery
 from backend.infra.integrations.watchlist_stock_names import QuoteStockNameLookup
@@ -78,6 +80,7 @@ from backend.infra.repositories.auth_repo import (
 from backend.infra.repositories.away_mode_repo import AwayModeRepository
 from backend.infra.repositories.email_settings_repo import EmailSettingsRepository
 from backend.infra.repositories.fill_record_repo import FillRecordRepository
+from backend.infra.repositories.open_finding_repo import OpenFindingRepository
 from backend.infra.repositories.run_evaluation_repo import RunEvaluationRepository
 from backend.infra.security.password_hasher import hash_password, verify_password
 from backend.stock_api import MxClients
@@ -403,6 +406,12 @@ class AppRuntime:
             run_days=RunRepository(session),
         )
 
+    def open_finding_service(self, session: AsyncSession) -> OpenFindingService:
+        return OpenFindingService(
+            OpenFindingRepository(session),
+            committer=session,
+        )
+
     def evaluation_query_service(self, session: AsyncSession) -> EvaluationService:
         """What the HTTP layer needs: request one, read the last one.
 
@@ -475,5 +484,6 @@ class AppRuntime:
             notifier=self.optional_notification_dispatcher(),
             watchlist=RunWatchlistQuery(self.require_session_factory()),
             order_plan=RunOrderPlanQuery(self.require_session_factory()),
+            open_findings=RunOpenFindingsQuery(self.require_session_factory()),
             run_completion_hook=self.optional_away_mode_service(session),
         )

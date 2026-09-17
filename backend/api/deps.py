@@ -16,6 +16,7 @@ from backend.business.evaluations import EvaluationService
 from backend.business.market import MarketOverviewQueryPort
 from backend.business.memories.service import MemoryService
 from backend.business.notifications.service import NotificationService
+from backend.business.open_findings import OpenFindingService
 from backend.business.reports.service import ReportMailService
 from backend.business.runs.service import RunService
 from backend.business.schedules.service import ScheduleAppService
@@ -61,6 +62,10 @@ class ApiRuntimePort(Protocol):
     def evaluation_query_service(
         self, session: AsyncSession
     ) -> EvaluationService: ...
+
+    def open_finding_service(
+        self, session: AsyncSession
+    ) -> OpenFindingService: ...
 
     def dream_query_service(self, session: AsyncSession) -> DreamService: ...
 
@@ -188,6 +193,13 @@ def get_watchlist_service(
     runtime: Annotated[ApiRuntimePort, Depends(get_runtime)],
 ) -> WatchlistService:
     return runtime.watchlist_service(session)
+
+
+def get_open_finding_service(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    runtime: Annotated[ApiRuntimePort, Depends(get_runtime)],
+) -> OpenFindingService:
+    return runtime.open_finding_service(session)
 
 
 def get_evaluation_service(
