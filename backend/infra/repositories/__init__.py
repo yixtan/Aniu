@@ -2,6 +2,9 @@
 
 from backend.infra.repositories.account_cache_repo import AccountCacheRepository
 from backend.infra.repositories.audit_log_repo import AuditLogRepository, AuditRecord
+from backend.infra.repositories.fill_record_repo import (
+    FillRecordRepository,
+)
 from backend.infra.repositories.memory_dream_repo import MemoryDreamRepository
 from backend.infra.repositories.memory_repo import MemoryRepository
 from backend.infra.repositories.model_profile_repo import ModelProfileRepository
@@ -30,6 +33,7 @@ __all__ = [
     "AccountCacheRepository",
     "AuditLogRepository",
     "AuditRecord",
+    "FillRecordRepository",
     "MemoryDreamRepository",
     "MemoryRepository",
     "ModelProfileRepository",
