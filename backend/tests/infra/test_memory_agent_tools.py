@@ -137,6 +137,9 @@ async def test_memory_write_schema_matches_operation_requirements(
         "operation=update 时必填 memory_id、expected_version、content、reason" in hint
     )
     assert "operation=delete 时必填 memory_id、expected_version" in hint
+    # Folding a memory into one that already exists is a merge too, so update
+    # has to offer lineage as well; the hint is where the model reads that.
+    assert "content、reason，可选 replaces" in hint
 
 
 @pytest.mark.asyncio
@@ -344,6 +347,43 @@ async def test_a_merge_records_the_memories_it_replaced(session_factory) -> None
     )
 
     assert merged["item"]["replaces"] == [first["item"]["id"]]  # type: ignore[index]
+
+
+@pytest.mark.asyncio
+async def test_a_merge_into_an_existing_memory_records_it_too(
+    session_factory,
+) -> None:
+    """The dream folds duplicates into a surviving memory as often as into a
+    new one, and that half used to leave no trace at all."""
+
+    tool = MemoryWriteTool(session_factory)
+
+    absorbed = await tool.run_for_call(
+        run_id=1,
+        tool_call_id="call-1",
+        operation="create",
+        content="缩量反弹不追高。",
+        reason="盘中观察。",
+    )
+    host = await tool.run_for_call(
+        run_id=1,
+        tool_call_id="call-2",
+        operation="create",
+        content="撤单只有两类正当理由。",
+        reason="盘中观察。",
+    )
+    merged = await tool.run_for_call(
+        run_id=20260917401,
+        tool_call_id="call-3",
+        operation="update",
+        memory_id=host["item"]["id"],  # type: ignore[index]
+        expected_version=host["item"]["version"],  # type: ignore[index]
+        content="撤单只有两类正当理由，并入不追高一条。",
+        reason="并入重复经验。",
+        replaces=[absorbed["item"]["id"]],  # type: ignore[index]
+    )
+
+    assert merged["item"]["replaces"] == [absorbed["item"]["id"]]  # type: ignore[index]
 
 
 @pytest.mark.asyncio

@@ -225,8 +225,10 @@ class MemoryWriteTool:
             "type": "array",
             "items": {"type": "integer", "minimum": 1},
             "description": (
-                "合并多条旧记忆时，填写被这条取代的记忆 id。"
-                "只在 create 时有意义，用于日后追溯这条经验由哪些经验凝练而来。"
+                "合并多条旧记忆时，填写被这条取代的记忆 id，用于日后追溯。"
+                "凝练成新记忆时填在 create 上；把旧记忆并进一条已有记忆时，"
+                "填在那条记忆的 update 上——只写本次并入的 id，"
+                "它会追加到已有的取代记录后面，不会覆盖。"
             ),
         }
         branches: list[ProviderJsonObject] = []
@@ -251,6 +253,7 @@ class MemoryWriteTool:
                         "expected_version": expected_version,
                         "content": content,
                         "reason": reason,
+                        "replaces": replaces,
                     },
                     [
                         "operation",

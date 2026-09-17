@@ -392,3 +392,121 @@ async def test_activities_can_be_read_for_one_memory(session) -> None:
     assert [entry.operation.value for entry in history] == ["update", "create"]
     assert all(entry.memory_id == watched.id for entry in history)
     assert other.id not in {entry.memory_id for entry in history}
+
+
+@pytest.mark.asyncio
+async def test_absorbing_a_memory_by_update_records_it_too(session) -> None:
+    """A merge that keeps an existing memory is a merge like any other.
+
+    The nightly dream folds duplicates two ways: several into a brand new
+    memory, and one into a memory that already exists. Only the first used to
+    leave a trace, so the second's lineage survived in the report prose and
+    nowhere in the data.
+    """
+
+    service = MemoryService(MemoryRepository(session))
+    host = await service.write(_create_command())
+    absorbed = await service.write(_create_command())
+
+    merged = await service.write(
+        MemoryWriteCommand(
+            operation=MemoryOperation.UPDATE,
+            task_id=20260917401,
+            memory_id=host.id,
+            expected_version=host.version,
+            content="不追高：缩量反弹与利好兑现日都等确认再动。",
+            reason="并入重复的那条后，本条成为唯一判据。",
+            replaces=(absorbed.id,),
+        )
+    )
+    await session.commit()
+
+    assert merged.replaces == (absorbed.id,)
+
+
+@pytest.mark.asyncio
+async def test_a_later_merge_keeps_the_earlier_lineage(session) -> None:
+    """An update states only what it folds in now, not the whole history."""
+
+    service = MemoryService(MemoryRepository(session))
+    first_source = await service.write(_create_command())
+    second_source = await service.write(_create_command())
+    host = await service.write(
+        MemoryWriteCommand(
+            operation=MemoryOperation.CREATE,
+            task_id=20260916401,
+            content="撤单只有两类正当理由。",
+            reason="凝练重复的撤单经验。",
+            replaces=(first_source.id,),
+        )
+    )
+
+    merged = await service.write(
+        MemoryWriteCommand(
+            operation=MemoryOperation.UPDATE,
+            task_id=20260917401,
+            memory_id=host.id,
+            expected_version=host.version,
+            content="撤单只有两类正当理由，并入派发组合信号。",
+            reason="把派发信号那条并进来。",
+            replaces=(second_source.id,),
+        )
+    )
+    await session.commit()
+
+    assert merged.replaces == (first_source.id, second_source.id)
+
+
+@pytest.mark.asyncio
+async def test_an_ordinary_edit_leaves_the_lineage_alone(session) -> None:
+    """Editing wording is not a merge, and must not read as un-merging."""
+
+    service = MemoryService(MemoryRepository(session))
+    source = await service.write(_create_command())
+    host = await service.write(
+        MemoryWriteCommand(
+            operation=MemoryOperation.CREATE,
+            task_id=20260916401,
+            content="撤单只有两类正当理由。",
+            reason="凝练重复的撤单经验。",
+            replaces=(source.id,),
+        )
+    )
+
+    edited = await service.write(
+        MemoryWriteCommand(
+            operation=MemoryOperation.UPDATE,
+            task_id=20260917401,
+            memory_id=host.id,
+            expected_version=host.version,
+            content="撤单只有两类正当理由，措辞收紧。",
+            reason="只改措辞，没有并入任何记忆。",
+        )
+    )
+    await session.commit()
+
+    assert edited.replaces == (source.id,)
+
+
+@pytest.mark.asyncio
+async def test_a_memory_cannot_be_recorded_as_replacing_itself(session) -> None:
+    """Dropping the bad id matches how a malformed one is already handled."""
+
+    service = MemoryService(MemoryRepository(session))
+    source = await service.write(_create_command())
+    host = await service.write(_create_command())
+
+    merged = await service.write(
+        MemoryWriteCommand(
+            operation=MemoryOperation.UPDATE,
+            task_id=20260917401,
+            memory_id=host.id,
+            expected_version=host.version,
+            content="不追高：缩量反弹与利好兑现日都等确认再动。",
+            reason="并入重复的那条。",
+            replaces=(host.id, source.id, source.id),
+        )
+    )
+    await session.commit()
+
+    assert merged.replaces == (source.id,)
