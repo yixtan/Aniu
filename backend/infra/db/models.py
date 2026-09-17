@@ -491,6 +491,39 @@ class RunJobModel(Base):
     )
 
 
+class RunEvaluationModel(Base):
+    """One independent review of a finished run.
+
+    Its own table rather than a row in `strategy_runs`: an evaluation is not a
+    scheduled event, and the runs page draws a day's timetable from that table.
+    Nor does it hold the trading account, so it never becomes a run job and
+    never takes `active_guard`.
+    """
+
+    __tablename__ = "run_evaluations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("strategy_runs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING")
+    questions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    answers: Mapped[str | None] = mapped_column(Text, nullable=True)
+    total_tokens: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    cached_tokens: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[str] = mapped_column(Text, nullable=False, default=utc_now_iso)
+    started_at: Mapped[str | None] = mapped_column(Text, nullable=True)
+    completed_at: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class ToolInvocationModel(Base):
     """At-most-once execution record for external write tools."""
 
