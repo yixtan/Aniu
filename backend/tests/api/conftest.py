@@ -78,6 +78,16 @@ class FakeDreamWorker:
         self.submitted.append(task_id)
 
 
+class FakeEvaluationWorker:
+    """Records what the route queued; the lane itself is tested elsewhere."""
+
+    def __init__(self) -> None:
+        self.submitted: list[int] = []
+
+    async def submit(self, evaluation_id: int) -> None:
+        self.submitted.append(evaluation_id)
+
+
 class FakeJobRunner:
     def __init__(self, session_factory) -> None:
         self._session_factory = session_factory
@@ -172,6 +182,7 @@ async def api_client(
     app.state.runtime.models_dev_catalog = FakeModelsDevCatalog()
     app.state.runtime.job_runner = FakeJobRunner(session_factory)
     app.state.runtime.dream_worker = FakeDreamWorker()
+    app.state.runtime.evaluation_worker = FakeEvaluationWorker()
 
     async def resolve_mx_api_key() -> str | None:
         return "test-only"

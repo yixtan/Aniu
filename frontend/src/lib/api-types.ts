@@ -114,6 +114,8 @@ export interface RunTrace {
   stages: TraceStage[];
 }
 
+export type RunEvaluation = Schemas["EvaluationResponse"];
+
 export type RunDetail = Omit<Schemas["RunDetailResponse"], "trace"> & {
   trace: RunTrace;
 };

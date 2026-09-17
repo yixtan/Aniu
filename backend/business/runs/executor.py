@@ -14,6 +14,7 @@ from backend.business.notifications import (
     NotificationEventKind,
     NotificationPublisherPort,
 )
+from backend.business.open_findings import OpenFindingsPort
 from backend.business.runs import StrategyRun
 from backend.business.runs.abort_registry import ActiveRunAbortRegistry
 from backend.business.runs.agent_runner import AgentRunnerFactoryPort
@@ -79,6 +80,7 @@ class RunExecutor:
         run_completion_hook: RunCompletionHookPort | None = None,
         watchlist: FollowedCompaniesPort | None = None,
         order_plan: OrderPlanPort | None = None,
+        open_findings: OpenFindingsPort | None = None,
     ) -> None:
         self._run_repo = run_repo
         self._committer = committer
@@ -93,6 +95,7 @@ class RunExecutor:
         self._notifier = notifier
         self._watchlist = watchlist
         self._order_plan = order_plan
+        self._open_findings = open_findings
         self._run_completion_hook = run_completion_hook
         self._execution_callbacks = RunExecutionCallbacks(
             runtime=self._runtime,
@@ -156,6 +159,7 @@ class RunExecutor:
                         now_provider=self._now_provider,
                         watchlist=self._watchlist,
                         order_plan=self._order_plan,
+                        open_findings=self._open_findings,
                     )
                 )
         except RunAbortError as exc:

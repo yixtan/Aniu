@@ -7,6 +7,11 @@ from types import SimpleNamespace
 
 import pytest
 
+from backend.business.open_findings import (
+    FindingStatus,
+    OpenFinding,
+    Verdict,
+)
 from backend.business.order_directives import DirectiveAction, OrderDirective
 from backend.business.runs import StrategyRun, StrategySnapshot
 from backend.business.runs.agent_runner import AgentStageResult
@@ -227,3 +232,86 @@ async def test_no_plan_sends_no_plan_section() -> None:
     prompt = runner.prompts[0]
     assert "standing_order_plan" not in prompt
     assert "previous_order_plan" not in prompt
+
+
+def _finding(finding_id: int, *, disputed: int = 0) -> OpenFinding:
+    item = OpenFinding(
+        finding="五笔买入限价单全属 AI 硬件链，成交条件与风险条件相同",
+        resolution_test="说明在什么行情下它们会分批而非同时成交",
+        finding_id=finding_id,
+    )
+    for index in range(disputed):
+        item.dispose(
+            run_id=20260917100 + index,
+            verdict=Verdict.DISAGREED,
+            note="经复核，该顾虑不成立",
+        )
+    return item
+
+
+@pytest.mark.asyncio
+async def test_an_open_finding_reaches_the_run_with_what_would_settle_it() -> None:
+    """An objection has to arrive with its own test.
+
+    Without one it can only be argued about, and it would then be answered in
+    every future run forever. The count of times it has been disputed travels
+    with it so that being talked past is as legible as being addressed.
+    """
+
+    context = _context(market_open=True)
+    context.open_findings = (_finding(7, disputed=3),)
+    runner = RecordingRunner(AgentStageResult(content="报告"))
+
+    await RunStage().execute(context, runner)
+
+    prompt = runner.prompts[0]
+    assert "open_findings" in prompt
+    assert "AI 硬件链" in prompt
+    assert "分批而非同时成交" in prompt
+    # Three runs have answered and not acted, and the next one can see that.
+    assert '"times_disputed":3' in prompt
+
+
+@pytest.mark.asyncio
+async def test_no_open_finding_sends_no_section() -> None:
+    """The watchlist rule: an empty list only invites a sentence saying so."""
+
+    context = _context(market_open=True)
+    runner = RecordingRunner(AgentStageResult(content="报告"))
+
+    await RunStage().execute(context, runner)
+
+    assert "open_findings" not in runner.prompts[0]
+
+
+def test_a_finding_nobody_can_settle_is_refused() -> None:
+    """The gate against 「是否考虑了流动性风险」.
+
+    An objection with no test is paid for in every run and never leaves the
+    list, so it is rejected where it is built rather than argued about later.
+    """
+
+    with pytest.raises(ValueError, match="what would settle it"):
+        OpenFinding(finding="风险是否充分考虑", resolution_test="   ")
+
+
+def test_a_run_may_state_where_it_stands_but_only_a_person_closes() -> None:
+    item = _finding(7)
+    item.dispose(run_id=20260917101, verdict=Verdict.DISAGREED, note="不同意")
+
+    assert item.status is FindingStatus.OPEN
+    assert item.times_disputed == 1
+
+    item.close()
+
+    assert item.status is FindingStatus.CLOSED
+    with pytest.raises(ValueError, match="closed finding"):
+        item.dispose(run_id=20260917102, verdict=Verdict.ADJUSTED, note="已调整")
+
+
+def test_acting_on_a_finding_is_not_counted_as_disputing_it() -> None:
+    item = _finding(7)
+    item.dispose(run_id=20260917101, verdict=Verdict.ADJUSTED, note="已按此调整")
+    item.dispose(run_id=20260917102, verdict=Verdict.UNDECIDED, note="还需要证据")
+
+    assert item.times_disputed == 1

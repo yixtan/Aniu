@@ -26,10 +26,12 @@ from backend.api.routes import (
     account,
     auth,
     away_mode,
+    evaluation,
     market,
     memories,
     memory_dreams,
     notifications,
+    open_findings,
     report_email,
     runs,
     schedules,
@@ -242,6 +244,7 @@ async def _initialize_runtime(application: FastAPI, config: RuntimeConfig) -> No
         build_memory_dream_handler,
         build_order_watch_handler,
     )
+    from backend.infra.workers.evaluation_worker import EvaluationWorker
     from backend.infra.workers.memory_dream_worker import MemoryDreamWorker
     from backend.infra.workers.run_worker import build_run_worker
     from backend.infra.workers.summary_worker import SummaryWorker
@@ -252,6 +255,13 @@ async def _initialize_runtime(application: FastAPI, config: RuntimeConfig) -> No
     )
     summary_worker.start()
     runtime.summary_worker = summary_worker
+
+    evaluation_worker = EvaluationWorker(
+        session_factory=session_factory,
+        service_factory=runtime.evaluation_service,
+    )
+    evaluation_worker.start()
+    runtime.evaluation_worker = evaluation_worker
 
     run_worker = build_run_worker(
         session_factory=session_factory,
@@ -335,6 +345,9 @@ async def _shutdown_runtime(application: FastAPI) -> None:
     if runtime.dream_worker is not None:
         await cleanup("dream_worker", runtime.dream_worker.stop)
         runtime.dream_worker = None
+    if runtime.evaluation_worker is not None:
+        await cleanup("evaluation_worker", runtime.evaluation_worker.stop)
+        runtime.evaluation_worker = None
     if runtime.summary_worker is not None:
         await cleanup("summary_worker", runtime.summary_worker.stop)
         runtime.summary_worker = None
@@ -482,6 +495,8 @@ def create_app(config: RuntimeConfig | None = None) -> FastAPI:
     register_exception_handlers(application)
     application.include_router(auth.router)
     application.include_router(runs.router)
+    application.include_router(evaluation.router)
+    application.include_router(open_findings.router)
     application.include_router(account.router)
     application.include_router(schedules.router)
     application.include_router(settings.router)

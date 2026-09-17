@@ -512,6 +512,36 @@ class RunRepository:
             )
         return reports
 
+    async def report_for_run(self, run_id: int) -> RunReportRecord | None:
+        """One run's Markdown report, straight off its trace.
+
+        The Markdown, not `summary`: that column holds the rendered HTML once
+        the summary stage has run, which is three times the size for the same
+        words and nothing a model should be asked to read.
+        """
+
+        row = (
+            await self._session.execute(
+                select(
+                    StrategyRunModel.id,
+                    StrategyRunModel.started_at,
+                    StrategyRunModel.completed_at,
+                    StrategyRunModel.trace_json,
+                ).where(StrategyRunModel.id == run_id)
+            )
+        ).first()
+        if row is None:
+            return None
+        content = _extract_run_report(dict(row.trace_json or {}))
+        if not content:
+            return None
+        return RunReportRecord(
+            run_id=int(row.id),
+            started_at=datetime.fromisoformat(row.started_at),
+            completed_at=_deserialize_datetime(row.completed_at),
+            content=content,
+        )
+
     async def delete(self, run_id: int) -> None:
         await self._session.execute(
             delete(StrategyRunModel).where(StrategyRunModel.id == run_id)

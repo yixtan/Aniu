@@ -51,6 +51,11 @@ class RunRepositoryPort(Protocol):
         offset: int = 0,
     ) -> list[RunReportRecord]: ...
 
+    async def report_for_run(
+        self,
+        run_id: int,
+    ) -> RunReportRecord | None: ...
+
     async def delete(self, run_id: int) -> None: ...
 
 

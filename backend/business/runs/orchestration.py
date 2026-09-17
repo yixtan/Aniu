@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from time import perf_counter
 from typing import Protocol, cast
 
+from backend.business.open_findings import OpenFindingsPort
 from backend.business.order_directives import OrderDirective
 from backend.business.runs import StrategyRun
 from backend.business.runs.abort import RunAbortSignal
@@ -136,6 +137,7 @@ class AniuOrchestrator:
         now_provider: NowProvider | None = None,
         watchlist: FollowedCompaniesPort | None = None,
         order_plan: OrderPlanPort | None = None,
+        open_findings: OpenFindingsPort | None = None,
         watch_deadline_seconds: float = WATCH_DEADLINE_SECONDS,
     ) -> None:
         self._callbacks = state_callbacks
@@ -152,6 +154,7 @@ class AniuOrchestrator:
         self._now_provider = now_provider or (lambda: datetime.now(tz=UTC))
         self._watchlist = watchlist
         self._order_plan = order_plan
+        self._open_findings = open_findings
         self._watch_deadline_seconds = watch_deadline_seconds
 
     async def _followed_companies(self, run_id: int) -> tuple[tuple[str, str], ...]:
@@ -213,6 +216,7 @@ class AniuOrchestrator:
             return await self._execute_watch(run, context, started_at, abort_signal)
 
         await self._attach_order_plan_for_review(context)
+        await self._attach_open_findings(context)
         report = await self._execute_run_stage(context)
         context.run_report = report
         run.set_summary(report.content, render_mode="markdown")
@@ -375,6 +379,25 @@ class AniuOrchestrator:
                 exc_info=True,
             )
             return ()
+
+    async def _attach_open_findings(self, context: RunExecutionContext) -> None:
+        """Put unanswered objections in front of the run.
+
+        Failing to read them costs context and nothing else, the same trade
+        the order plan makes: an objection the run never saw leaves it exactly
+        as it was before any of this existed.
+        """
+
+        if self._open_findings is None:
+            return
+        try:
+            context.open_findings = await self._open_findings.current()
+        except Exception:
+            logger.warning(
+                "failed to read open findings for an analysis",
+                extra={"run_id": context.run.run_id},
+                exc_info=True,
+            )
 
     async def _attach_order_plan_for_review(
         self, context: RunExecutionContext

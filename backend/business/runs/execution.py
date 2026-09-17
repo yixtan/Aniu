@@ -6,6 +6,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import ClassVar
 
+from backend.business.open_findings.models import OpenFinding
 from backend.business.order_directives import OrderDirective
 from backend.business.runs import StrategyRun, StrategySnapshot
 from backend.business.shared.trading import is_successful_trade_call
@@ -140,6 +141,15 @@ class RunExecutionContext:
 
     One generation back, not the whole archive: a run needs to see the arc of
     a decision it is about to revisit, not every statement ever made.
+    """
+    open_findings: tuple[OpenFinding, ...] = ()
+    """Objections a reviewer raised that nobody has closed yet.
+
+    Read live and capped, like the watchlist, and for the same reason: an
+    objection raised this morning belongs in this afternoon's run. Each one
+    must be answered — silence on an open finding is what the per-order
+    disposition rule already exists to prevent, applied to the same failure
+    one level up.
     """
     authorized_order_ids: frozenset[str] | None = None
     """Orders the current plan speaks about, or None outside an order watch.

@@ -69,6 +69,19 @@ class RunStage:
                     directive_payload(item, include_issuer=True)
                     for item in context.previous_order_plan
                 ]
+        # Unanswered objections, left out entirely when there are none — the
+        # watchlist pattern. Each carries what would settle it, so answering
+        # one is a check against evidence rather than a matter of opinion.
+        if context.open_findings:
+            runtime_payload["open_findings"] = [
+                {
+                    "id": item.finding_id,
+                    "finding": item.finding,
+                    "resolution_test": item.resolution_test,
+                    "times_disputed": item.times_disputed,
+                }
+                for item in context.open_findings
+            ]
         agent_prompt = "\n\n".join(prompt_parts)
         user_prompt = "\n\n".join(
             (
