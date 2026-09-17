@@ -74,6 +74,12 @@ class MemoryRepository:
             content = _required_text(command.content)
             reason = _required_text(command.reason)
             values.update({"content": content, "reason": reason})
+            if command.replaces:
+                # Only when the caller names sources, so an ordinary edit leaves
+                # the existing lineage alone instead of clearing it.
+                values["replaces_json"] = _merged_replaces(
+                    row.replaces_json, command.replaces, row.id
+                )
             operation = MemoryActivityOperation.UPDATE
         elif command.operation is MemoryOperation.DELETE:
             values["deleted_at"] = now
@@ -279,6 +285,27 @@ def _serialize_replaces(replaces: tuple[int, ...]) -> str | None:
     if not replaces:
         return None
     return json.dumps(list(replaces))
+
+
+def _merged_replaces(
+    stored: str | None, incoming: tuple[int, ...], memory_id: int
+) -> str | None:
+    """Add this update's absorbed ids to whatever lineage the row already has.
+
+    Merging is additive because an update only knows what it is folding in this
+    time. A memory that absorbed one predecessor last week and another today
+    replaced both, and a curator restating only today's would otherwise erase
+    the older link. Restating an id already present is therefore harmless.
+    """
+
+    lineage = list(_deserialize_replaces(stored))
+    for source_id in incoming:
+        # A memory cannot descend from itself; dropping the id rather than
+        # refusing the write matches how a malformed one is handled.
+        if source_id == memory_id or source_id in lineage:
+            continue
+        lineage.append(source_id)
+    return _serialize_replaces(tuple(lineage))
 
 
 def _item_from_row(row: MemoryItemModel) -> MemoryItem:
