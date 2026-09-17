@@ -301,6 +301,35 @@ describe("SystemStatusPanel", () => {
     expect(failed).not.toHaveTextContent("缓存");
   });
 
+  it("washes out the cached foot of a bar without recolouring the providers", async () => {
+    // The stack is already spoken for by provider. Cache is a second split of
+    // the same height, so it lays over the bands rather than replacing them:
+    // 2.4M of today's 2.78M bar, which is 86%.
+    api.getSystemStatus.mockResolvedValue(status);
+
+    renderPanel();
+
+    const chart = await screen.findByText("Token 消耗（近 30 天）");
+    const card = chart.closest("[data-slot=card]") as HTMLElement;
+    const bars = within(card).getAllByRole("listitem");
+    const today = bars[bars.length - 1] as HTMLElement;
+
+    const scrim = today.querySelector("[data-cached-share]") as HTMLElement;
+    expect(scrim).not.toBeNull();
+    // 2,400,000 of 780,000 + 2,000,000 = 86.33%.
+    expect(scrim.style.height).toBe("86.33093525179856%");
+    // The provider bands underneath are untouched.
+    expect(today.querySelectorAll("[data-channel]")).toHaveLength(2);
+
+    // A day that spent nothing gets no wash at all.
+    const quiet = bars.find(
+      (bar) => bar.getAttribute("aria-label")?.includes("其中缓存命中 0 tokens"),
+    ) as HTMLElement;
+    expect(quiet.querySelector("[data-cached-share]")).toBeNull();
+
+    expect(within(card).getByText("浅色部分为缓存命中")).toBeVisible();
+  });
+
   it("says so when the status cannot be loaded", async () => {
     api.getSystemStatus.mockRejectedValue(new Error("boom"));
 
