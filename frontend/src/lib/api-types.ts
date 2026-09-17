@@ -116,6 +116,8 @@ export interface RunTrace {
 
 export type RunEvaluation = Schemas["EvaluationResponse"];
 
+export type OpenFinding = Schemas["OpenFindingResponse"];
+
 export type RunDetail = Omit<Schemas["RunDetailResponse"], "trace"> & {
   trace: RunTrace;
 };

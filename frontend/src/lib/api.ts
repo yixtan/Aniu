@@ -217,6 +217,27 @@ export async function abortRun(runId: number, reason = "user_requested") {
   return getResponseData(result);
 }
 
+export async function listOpenFindings() {
+  const result = await openapiClient.GET("/api/aniu/open-findings");
+  return getResponseData(result);
+}
+
+export async function raiseOpenFinding(payload: {
+  finding: string;
+  resolution_test: string;
+  evaluation_id?: number | null;
+}) {
+  const result = await openapiClient.POST("/api/aniu/open-findings", { body: payload });
+  return getResponseData(result);
+}
+
+export async function closeOpenFinding(findingId: number) {
+  const result = await openapiClient.POST("/api/aniu/open-findings/{finding_id}/close", {
+    params: { path: { finding_id: findingId } },
+  });
+  return getResponseData(result);
+}
+
 export async function requestRunEvaluation(runId: number) {
   const result = await openapiClient.POST("/api/aniu/runs/{run_id}/evaluation", {
     params: { path: { run_id: runId } },

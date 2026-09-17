@@ -20,6 +20,11 @@ const MemoryOverviewPage = lazy(() =>
     default: module.MemoryOverviewPage,
   })),
 );
+const FindingsPage = lazy(() =>
+  import("./features/findings/findings-page").then((module) => ({
+    default: module.FindingsPage,
+  })),
+);
 const WatchlistPage = lazy(() =>
   import("./features/watchlist/watchlist-page").then((module) => ({
     default: module.WatchlistPage,
@@ -92,6 +97,10 @@ const router = createBrowserRouter([
           {
             path: "watchlist",
             element: page(<WatchlistPage />),
+          },
+          {
+            path: "findings",
+            element: page(<FindingsPage />),
           },
           {
             element: page(<SettingsLayout />),

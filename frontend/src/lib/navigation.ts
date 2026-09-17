@@ -8,6 +8,7 @@ import {
   MessageSquareTextIcon,
   MoonStarIcon,
   NetworkIcon,
+  ScaleIcon,
   Settings2Icon,
   StarIcon,
   TimerIcon,
@@ -109,6 +110,12 @@ export const navigationGroups: NavigationGroup[] = [
         description: "可验证交易经验的读取与演化",
         to: "/memories",
         icon: MoonStarIcon,
+      },
+      {
+        title: "未结议题",
+        description: "评估提出、尚未了结的质疑，每次操盘都要当面表态",
+        to: "/findings",
+        icon: ScaleIcon,
       },
       {
         title: "关注清单",
