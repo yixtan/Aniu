@@ -476,6 +476,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/aniu/runs/{run_id}/evaluation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Latest Evaluation */
+        get: operations["read_latest_evaluation_api_aniu_runs__run_id__evaluation_get"];
+        put?: never;
+        /**
+         * Request Evaluation
+         * @description Queue a review. It runs off the exclusive lane, so this never waits.
+         */
+        post: operations["request_evaluation_api_aniu_runs__run_id__evaluation_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/aniu/schedules": {
         parameters: {
             query?: never;
@@ -1168,6 +1189,40 @@ export interface components {
         ErrorResponse: {
             error: components["schemas"]["ErrorDetailResponse"];
         };
+        /** EvaluationResponse */
+        EvaluationResponse: {
+            /** Answers */
+            answers?: string | null;
+            /**
+             * Cached Tokens
+             * @default 0
+             */
+            cached_tokens: number;
+            /** Completed At */
+            completed_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Evaluation Id */
+            evaluation_id: number;
+            /** Failure Reason */
+            failure_reason?: string | null;
+            /** Questions */
+            questions?: string | null;
+            /** Run Id */
+            run_id: number;
+            /** Started At */
+            started_at?: string | null;
+            /** Status */
+            status: string;
+            /**
+             * Total Tokens
+             * @default 0
+             */
+            total_tokens: number;
+        };
         /** FetchModelCatalogRequest */
         FetchModelCatalogRequest: {
             /** Llm Api Key */
@@ -1176,6 +1231,11 @@ export interface components {
             llm_base_url: string;
             llm_protocol: components["schemas"]["ModelProtocol"];
             provider_config?: components["schemas"]["ModelProviderConfigFields"];
+        };
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
         };
         /** LoginRequest */
         LoginRequest: {
@@ -2373,6 +2433,19 @@ export interface components {
             prompt_profile?: components["schemas"]["AniuAgentPromptRequest"] | null;
             /** Stage Settings */
             stage_settings?: components["schemas"]["StageSettingsRequest"][] | null;
+        };
+        /** ValidationError */
+        ValidationError: {
+            /** Context */
+            ctx?: Record<string, never>;
+            /** Input */
+            input?: unknown;
+            /** Location */
+            loc: (string | number)[];
+            /** Message */
+            msg: string;
+            /** Error Type */
+            type: string;
         };
         /** WatchlistItemResponse */
         WatchlistItemResponse: {
@@ -4447,6 +4520,122 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    read_latest_evaluation_api_aniu_runs__run_id__evaluation_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationResponse"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_evaluation_api_aniu_runs__run_id__evaluation_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluationResponse"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

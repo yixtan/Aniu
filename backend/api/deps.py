@@ -12,6 +12,7 @@ from backend.business.account.service import AccountAppService
 from backend.business.auth.service import AuthAppService
 from backend.business.away import AwayModeService
 from backend.business.dreams.service import DreamService
+from backend.business.evaluations import EvaluationService
 from backend.business.market import MarketOverviewQueryPort
 from backend.business.memories.service import MemoryService
 from backend.business.notifications.service import NotificationService
@@ -27,10 +28,15 @@ from backend.business.watchlist import WatchlistService
 __all__ = ["get_db_session", "get_session_factory"]
 
 
+class EvaluationWorkerPort(Protocol):
+    async def submit(self, evaluation_id: int) -> None: ...
+
+
 class ApiRuntimePort(Protocol):
     run_worker: object | None
     dream_worker: object | None
     job_runner: object | None
+    evaluation_worker: EvaluationWorkerPort | None
 
     def run_service(self, session: AsyncSession) -> RunService: ...
 
@@ -51,6 +57,10 @@ class ApiRuntimePort(Protocol):
     def watchlist_service(self, session: AsyncSession) -> WatchlistService: ...
 
     def system_status_service(self, session: AsyncSession) -> SystemStatusService: ...
+
+    def evaluation_query_service(
+        self, session: AsyncSession
+    ) -> EvaluationService: ...
 
     def dream_query_service(self, session: AsyncSession) -> DreamService: ...
 
@@ -178,6 +188,13 @@ def get_watchlist_service(
     runtime: Annotated[ApiRuntimePort, Depends(get_runtime)],
 ) -> WatchlistService:
     return runtime.watchlist_service(session)
+
+
+def get_evaluation_service(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    runtime: Annotated[ApiRuntimePort, Depends(get_runtime)],
+) -> EvaluationService:
+    return runtime.evaluation_query_service(session)
 
 
 def get_system_status_service(

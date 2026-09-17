@@ -16,6 +16,8 @@ from backend.business.account.service import AccountAppService
 from backend.business.auth.service import AuthAppService, AuthLoginThrottle
 from backend.business.away import AwayModeService
 from backend.business.dreams.service import DreamService
+from backend.business.evaluations import EvaluationService
+from backend.business.fill_record import FillRecordService
 from backend.business.market import MarketOverviewQueryPort
 from backend.business.memories.service import MemoryService
 from backend.business.notifications.service import NotificationService
@@ -41,6 +43,10 @@ from backend.infra.integrations.agent_runtime import AgentRuntimeFactory
 from backend.infra.integrations.dream_agent import DreamAgentRunner
 from backend.infra.integrations.email import ResendReportMailer
 from backend.infra.integrations.email.run_report_query import RunReportQuery
+from backend.infra.integrations.evaluation_agent import (
+    EvaluationAgent,
+    EvaluationContextReader,
+)
 from backend.infra.integrations.notifications import (
     RoutingNotificationSender,
     TradeNotificationDispatcher,
@@ -71,6 +77,8 @@ from backend.infra.repositories.auth_repo import (
 )
 from backend.infra.repositories.away_mode_repo import AwayModeRepository
 from backend.infra.repositories.email_settings_repo import EmailSettingsRepository
+from backend.infra.repositories.fill_record_repo import FillRecordRepository
+from backend.infra.repositories.run_evaluation_repo import RunEvaluationRepository
 from backend.infra.security.password_hasher import hash_password, verify_password
 from backend.stock_api import MxClients
 from backend.stock_api.public import PublicMarketOverviewQuery, StockMarketDataService
@@ -79,6 +87,7 @@ if TYPE_CHECKING:
     from backend.api.sse import StreamHub
     from backend.infra.integrations.models_dev_catalog import ModelsDevCatalog
     from backend.infra.scheduler import JobRunner
+    from backend.infra.workers.evaluation_worker import EvaluationWorker
     from backend.infra.workers.memory_dream_worker import MemoryDreamWorker
     from backend.infra.workers.run_worker import RunWorker
     from backend.infra.workers.summary_worker import SummaryWorker
@@ -106,6 +115,7 @@ class AppRuntime:
     run_worker: RunWorker | None = None
     dream_worker: MemoryDreamWorker | None = None
     summary_worker: SummaryWorker | None = None
+    evaluation_worker: EvaluationWorker | None = None
     job_runner: JobRunner | None = None
     mx_http_client: httpx.AsyncClient | None = None
     mx_clients: MxClients | None = None
@@ -391,6 +401,47 @@ class AppRuntime:
             ),
             committer=session,
             run_days=RunRepository(session),
+        )
+
+    def evaluation_query_service(self, session: AsyncSession) -> EvaluationService:
+        """What the HTTP layer needs: request one, read the last one.
+
+        No evaluator, so no LLM client — the request side only writes a
+        pending row and hands its id to the worker, which builds its own
+        service on its own session when it actually runs the review.
+        """
+
+        return EvaluationService(
+            RunEvaluationRepository(session),
+            committer=session,
+        )
+
+    def evaluation_service(self, session: AsyncSession) -> EvaluationService:
+        """The evaluation lane's session-scoped half.
+
+        No mx clients and no tool registry reach the reviewer: it reads a
+        finished run's own report and the account's order record, both out of
+        this database, and writes only its own row.
+        """
+
+        run_repo = RunRepository(session)
+        fill_records = FillRecordService(FillRecordRepository(session))
+        return EvaluationService(
+            RunEvaluationRepository(session),
+            EvaluationAgent(
+                llm_client=self.require_llm_client(),
+                runtime_factory=AgentRuntimeFactory(
+                    model_profile_repo=ModelProfileRepository(session),
+                    selected_model_repo=SelectedModelRepository(session),
+                    session_factory=self.require_session_factory(),
+                ),
+                settings_repo=SettingsRepository(session),
+                context_reader=EvaluationContextReader(
+                    report_for_run=run_repo.report_for_run,
+                    fill_record_for_run=fill_records.for_run,
+                ),
+            ),
+            committer=session,
         )
 
     def run_executor(self, session: AsyncSession) -> RunExecutor:

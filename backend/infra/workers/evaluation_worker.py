@@ -46,9 +46,10 @@ class EvaluationWorker:
         )
         self._task: asyncio.Task[None] | None = None
 
-    async def start(self) -> None:
-        if self._task is None:
-            self._task = asyncio.create_task(self._loop(), name="evaluation-worker")
+    def start(self) -> None:
+        if self._task is not None and not self._task.done():
+            return
+        self._task = asyncio.create_task(self._loop(), name="aniu-evaluation-worker")
 
     async def stop(self) -> None:
         task, self._task = self._task, None

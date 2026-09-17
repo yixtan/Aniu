@@ -217,6 +217,24 @@ export async function abortRun(runId: number, reason = "user_requested") {
   return getResponseData(result);
 }
 
+export async function requestRunEvaluation(runId: number) {
+  const result = await openapiClient.POST("/api/aniu/runs/{run_id}/evaluation", {
+    params: { path: { run_id: runId } },
+  });
+  return getResponseData(result);
+}
+
+/** The latest review of this run, or null when nobody has asked for one. */
+export async function getRunEvaluation(runId: number) {
+  const result = await openapiClient.GET("/api/aniu/runs/{run_id}/evaluation", {
+    params: { path: { run_id: runId } },
+  });
+  if (result.response.status === 404) {
+    return null;
+  }
+  return getResponseData(result);
+}
+
 export async function getAccountDashboard() {
   const result = await openapiClient.GET("/api/aniu/account/dashboard");
   return getResponseData(result);

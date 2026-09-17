@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 
 from backend.business.evaluations import (
@@ -9,7 +11,9 @@ from backend.business.evaluations import (
     EvaluationService,
     EvaluationStatus,
 )
+from backend.business.fill_record import AttributedOrder, assemble_fill_record
 from backend.infra.db.models import RunEvaluationModel, RunJobModel, StrategyRunModel
+from backend.infra.integrations.evaluation_agent import render_fill_record
 from backend.infra.repositories.run_evaluation_repo import RunEvaluationRepository
 from backend.infra.repositories.run_job_repo import RunJobRepository
 
@@ -172,3 +176,43 @@ async def test_the_cached_share_can_never_exceed_the_total(session) -> None:
 
     assert finished is not None
     assert finished.cached_tokens == 100
+
+
+def test_the_record_keeps_a_runs_orders_apart_from_the_days() -> None:
+    """The rendering the reviewer actually reads, in two blocks.
+
+    One merged table is what let a reviewer treat a day's ten orders as this
+    run's five and demand the difference be explained. There was no
+    difference; the rest belonged to later runs.
+    """
+
+    def order(order_id: str, run: int | None, status: str) -> AttributedOrder:
+        return AttributedOrder(
+            order_id=order_id,
+            run_id=run,
+            symbol="300394",
+            stock_name="天孚通信",
+            direction="BUY",
+            quantity=200,
+            order_price=265.0,
+            status=status,
+            submitted_at=datetime(2026, 9, 17, 1, 37, tzinfo=UTC),
+        )
+
+    rendered = render_fill_record(
+        assemble_fill_record(
+            RUN_ID,
+            [
+                order("a", RUN_ID, "PENDING"),
+                order("b", RUN_ID, "CANCELLED"),
+                order("c", 20260917102, "FILLED"),
+                order("d", None, "REJECTED"),
+            ],
+        )
+    )
+
+    assert f"## 本次运行（{RUN_ID}）自己下的委托" in rendered
+    assert "本次共 2 笔，成交 0 笔" in rendered
+    # The day counts all four and says how many runs placed them.
+    assert "| 2026-09-17 | 2 | 4 | 1 | 25% |" in rendered
+    assert "其中 1 笔早期委托归属不明" in rendered

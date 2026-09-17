@@ -5,6 +5,7 @@ import { getRunDetail } from "@/lib/api";
 import { getErrorMessage } from "@/lib/format";
 import { useRunSnapshotStream } from "@/features/runs/hooks/use-run-snapshot-stream";
 import type { RunDetail } from "@/lib/api-types";
+import { EvaluationCard } from "@/features/runs/components/run-workbench/evaluation-card";
 import { StageTimeline } from "@/features/runs/components/run-workbench/timeline/stage-timeline";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
@@ -164,6 +165,7 @@ function RunWorkbenchContent({
           </div>
         </CardContent>
       </Card>
+      {isLiveRun ? null : <EvaluationCard runId={snapshot.run_id} />}
     </div>
   );
 }
