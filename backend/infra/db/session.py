@@ -464,6 +464,14 @@ def _upgrade_sqlite_schema(connection: Connection) -> None:
             text("ALTER TABLE run_evaluations ADD COLUMN candidates_json TEXT")
         )
 
+    finding_columns = {
+        column["name"] for column in inspect(connection).get_columns("open_findings")
+    }
+    if "closing_note" not in finding_columns:
+        connection.execute(
+            text("ALTER TABLE open_findings ADD COLUMN closing_note TEXT")
+        )
+
     _ensure_stock_api_log_schema(connection)
 
 

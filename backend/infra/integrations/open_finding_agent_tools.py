@@ -65,12 +65,18 @@ class DisposeOpenFindingTool:
                             "type": "string",
                             "enum": [
                                 Verdict.ADJUSTED.value,
+                                Verdict.SETTLED.value,
                                 Verdict.DISAGREED.value,
                                 Verdict.UNDECIDED.value,
                             ],
                             "description": (
-                                "ADJUSTED=已按此调整；DISAGREED=不同意；"
-                                "UNDECIDED=尚无法判断。"
+                                "ADJUSTED=已按此调整（说的是你自己的计划）；"
+                                "SETTLED=resolution_test 已被满足（说的是计划之外"
+                                "已经发生的事，note 必须指出那个证据是什么）；"
+                                "DISAGREED=不同意；UNDECIDED=尚无法判断。"
+                                "SETTLED 不会关闭议题，它只是请操作者来确认；"
+                                "若该议题已标着 settlement_proposed，说明上一次"
+                                "已经提过，仍在等人，不必重复论证。"
                             ),
                         },
                         "note": {
@@ -112,7 +118,7 @@ class DisposeOpenFindingTool:
             verdict = Verdict(str(verdict_raw))
         except ValueError as exc:
             raise ValueError(
-                "verdict must be ADJUSTED, DISAGREED or UNDECIDED"
+                "verdict must be ADJUSTED, SETTLED, DISAGREED or UNDECIDED"
             ) from exc
         async with self.session_factory() as session:
             stored = await OpenFindingService(
@@ -126,6 +132,9 @@ class DisposeOpenFindingTool:
             "finding_id": finding_id,
             "verdict": verdict.value,
             "times_disputed": stored.times_disputed,
+            # Echoed so a run that just proposed settlement can see it landed
+            # as a request rather than as a close.
+            "settlement_proposed": stored.settlement_proposed,
         }
 
     async def run(self, **_: object) -> object:

@@ -1,6 +1,7 @@
 """Objections that stay in front of a run until a person closes them."""
 
 from backend.business.open_findings.models import (
+    ACTED_ON,
     MAX_OPEN_FINDINGS,
     Disposition,
     FindingStatus,
@@ -14,6 +15,7 @@ from backend.business.open_findings.ports import (
 from backend.business.open_findings.service import OpenFindingService
 
 __all__ = [
+    "ACTED_ON",
     "MAX_OPEN_FINDINGS",
     "Disposition",
     "FindingStatus",

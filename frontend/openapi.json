@@ -542,6 +542,22 @@
         "title": "ChannelTokensResponse",
         "type": "object"
       },
+      "CloseFindingRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "note"
+        ],
+        "title": "CloseFindingRequest",
+        "type": "object"
+      },
       "CreateMemoryRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2424,6 +2440,11 @@
             ],
             "title": "Closed At"
           },
+          "closing_note": {
+            "default": "",
+            "title": "Closing Note",
+            "type": "string"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -2459,6 +2480,11 @@
           "resolution_test": {
             "title": "Resolution Test",
             "type": "string"
+          },
+          "settlement_proposed": {
+            "default": false,
+            "title": "Settlement Proposed",
+            "type": "boolean"
           },
           "status": {
             "title": "Status",
@@ -6883,7 +6909,7 @@
     },
     "/api/aniu/open-findings/{finding_id}/close": {
       "post": {
-        "description": "Only reachable by a person. A run may say where it stands, not that\nthe matter is settled.",
+        "description": "Only reachable by a person. A run may say where it stands — including\nthat it believes the test is met — but not that the matter is settled.",
         "operationId": "close_finding_api_aniu_open_findings__finding_id__close_post",
         "parameters": [
           {
@@ -6896,6 +6922,16 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloseFindingRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {

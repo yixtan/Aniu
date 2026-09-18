@@ -231,9 +231,16 @@ export async function raiseOpenFinding(payload: {
   return getResponseData(result);
 }
 
-export async function closeOpenFinding(findingId: number) {
+export async function closeOpenFinding({
+  findingId,
+  note,
+}: {
+  findingId: number;
+  note: string;
+}) {
   const result = await openapiClient.POST("/api/aniu/open-findings/{finding_id}/close", {
     params: { path: { finding_id: findingId } },
+    body: { note },
   });
   return getResponseData(result);
 }

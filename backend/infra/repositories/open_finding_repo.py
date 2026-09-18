@@ -74,6 +74,7 @@ def _to_domain(model: OpenFindingModel) -> OpenFinding:
         status=FindingStatus(model.status),
         dispositions=_to_dispositions(model.dispositions_json),
         closed_at=_parse(model.closed_at),
+        closing_note=model.closing_note or "",
     )
     created = _parse(model.created_at)
     if created is not None:
@@ -126,6 +127,7 @@ class OpenFindingRepository:
             raise ValueError(f"unknown finding: {finding.finding_id}")
         model.status = finding.status.value
         model.dispositions_json = _from_dispositions(finding.dispositions)
+        model.closing_note = finding.closing_note or None
         model.closed_at = (
             None if finding.closed_at is None else finding.closed_at.isoformat()
         )
