@@ -550,9 +550,18 @@
             "minLength": 1,
             "title": "Note",
             "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "MET",
+              "WITHDRAWN"
+            ],
+            "title": "Outcome",
+            "type": "string"
           }
         },
         "required": [
+          "outcome",
           "note"
         ],
         "title": "CloseFindingRequest",
@@ -2443,6 +2452,11 @@
           "closing_note": {
             "default": "",
             "title": "Closing Note",
+            "type": "string"
+          },
+          "closing_outcome": {
+            "default": "",
+            "title": "Closing Outcome",
             "type": "string"
           },
           "created_at": {

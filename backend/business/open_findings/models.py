@@ -63,6 +63,23 @@ ACTED_ON = frozenset({Verdict.ADJUSTED, Verdict.SETTLED})
 """Verdicts that are not a run talking past the objection."""
 
 
+class ClosingOutcome(StrEnum):
+    """How a finding ended. Two things, and they are not the same thing.
+
+    Stored rather than left to the note, because the note is prose and this
+    distinction is the whole reason closing asks for anything: a finding whose
+    test was met says the mechanism worked, and one withdrawn says the question
+    was wrong. Counting them apart is how anyone tells, later, whether raising
+    findings is worth doing at all.
+    """
+
+    MET = "MET"
+    """The resolution test was satisfied."""
+
+    WITHDRAWN = "WITHDRAWN"
+    """The objection no longer stands, or stopped mattering."""
+
+
 @dataclass(frozen=True, slots=True)
 class Disposition:
     run_id: int
@@ -81,9 +98,10 @@ class OpenFinding:
     dispositions: tuple[Disposition, ...] = ()
     created_at: datetime = field(default_factory=utc_now)
     closed_at: datetime | None = None
+    closing_outcome: ClosingOutcome | None = None
     closing_note: str = ""
     """Why it closed. Not validated on load: rows closed before this existed
-    have none, and refusing to read them would lose the finding itself."""
+    have neither, and refusing to read them would lose the finding itself."""
 
     def __post_init__(self) -> None:
         if not self.finding.strip():
@@ -129,8 +147,8 @@ class OpenFinding:
             ),
         )
 
-    def close(self, note: str) -> None:
-        """Say why, in one line.
+    def close(self, *, outcome: ClosingOutcome, note: str) -> None:
+        """Which of the two endings this was, and why, in one line.
 
         The same gate as the resolution test, at the other end: "settled, the
         fills came in three batches" and "dropped, it was the wrong question"
@@ -143,6 +161,7 @@ class OpenFinding:
         if self.status is FindingStatus.CLOSED:
             return
         self.status = FindingStatus.CLOSED
+        self.closing_outcome = outcome
         self.closing_note = note.strip()
         self.closed_at = utc_now()
 
@@ -150,6 +169,7 @@ class OpenFinding:
 __all__ = [
     "ACTED_ON",
     "MAX_OPEN_FINDINGS",
+    "ClosingOutcome",
     "Disposition",
     "FindingStatus",
     "OpenFinding",

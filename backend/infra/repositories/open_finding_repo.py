@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.business.open_findings.models import (
+    ClosingOutcome,
     Disposition,
     FindingStatus,
     OpenFinding,
@@ -63,6 +64,15 @@ def _from_dispositions(items: tuple[Disposition, ...]) -> list[dict[str, Any]]:
     ]
 
 
+def _to_outcome(raw: str | None) -> ClosingOutcome | None:
+    # Unknown or absent reads as "not recorded", which is what every finding
+    # closed before the two endings were told apart genuinely is.
+    try:
+        return None if not raw else ClosingOutcome(raw)
+    except ValueError:
+        return None
+
+
 def _to_domain(model: OpenFindingModel) -> OpenFinding:
     finding = OpenFinding(
         finding=model.finding,
@@ -74,6 +84,7 @@ def _to_domain(model: OpenFindingModel) -> OpenFinding:
         status=FindingStatus(model.status),
         dispositions=_to_dispositions(model.dispositions_json),
         closed_at=_parse(model.closed_at),
+        closing_outcome=_to_outcome(model.closing_outcome),
         closing_note=model.closing_note or "",
     )
     created = _parse(model.created_at)
@@ -127,6 +138,9 @@ class OpenFindingRepository:
             raise ValueError(f"unknown finding: {finding.finding_id}")
         model.status = finding.status.value
         model.dispositions_json = _from_dispositions(finding.dispositions)
+        model.closing_outcome = (
+            None if finding.closing_outcome is None else finding.closing_outcome.value
+        )
         model.closing_note = finding.closing_note or None
         model.closed_at = (
             None if finding.closed_at is None else finding.closed_at.isoformat()

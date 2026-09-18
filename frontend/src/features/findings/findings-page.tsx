@@ -19,7 +19,22 @@ const MAX_INJECTED = 5;
 /** After this many answers that changed nothing, the item asks to be looked at. */
 const TALKED_PAST = 3;
 
-type Closing = { findingId: number; note: string };
+type Outcome = "MET" | "WITHDRAWN";
+
+/** Named, not asked. The old form put an open question above a blank box. */
+const OUTCOMES: { value: Outcome; label: string; hint: string }[] = [
+  {
+    value: "MET",
+    label: "做到了，可以结了",
+    hint: "上面那条了结条件，智能体已经做到",
+  },
+  {
+    value: "WITHDRAWN",
+    label: "这条不问了",
+    hint: "问题本身不成立，或者已经不重要了",
+  },
+];
+type Closing = { findingId: number; outcome: Outcome | null; note: string };
 
 export function FindingsPage() {
   const queryClient = useQueryClient();
@@ -59,8 +74,8 @@ export function FindingsPage() {
         <EmptyHeader>
           <EmptyTitle>还没有未结议题</EmptyTitle>
           <EmptyDescription>
-            在某次运行的「独立评估」里,把值得追究的问题立为议题。立项后每次操盘都要当面表态,
-            直到你关闭它。
+            去某次运行的「独立评估」里挑一条值得追究的,立成议题。
+            立了之后,每次操盘都要当面回答它,直到你关掉为止。
           </EmptyDescription>
         </EmptyHeader>
       </Empty>
@@ -69,10 +84,17 @@ export function FindingsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-muted-foreground text-xs">
-        每条未结议题都会随运行上下文送到操盘阶段,要求逐条表态,空了则整段不发。
-        智能体只能表态,关闭权在你 —— 上限 {MAX_INJECTED} 条,超出的不会送出去。
-      </p>
+      <div className="text-muted-foreground space-y-1 text-xs">
+        <p>
+          这里挂着的每条议题,每次操盘都会摆到智能体面前,要求它当面回答 ——
+          它可以说「改了」「不同意」「还看不出来」,
+          <span className="text-foreground font-medium">但它划不掉任何一条</span>。
+        </p>
+        <p>
+          什么时候算完,由你说了算:对着每条自己的「了结条件」看一眼,做到了就关掉它。
+          最多同时挂 {MAX_INJECTED} 条,多出来的不会送给它。
+        </p>
+      </div>
       {open.map((item) => (
         <Card key={item.finding_id} className="gap-2 py-4">
           <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-0">
@@ -88,12 +110,12 @@ export function FindingsPage() {
                 setClosing((current) =>
                   current?.findingId === item.finding_id
                     ? null
-                    : { findingId: item.finding_id, note: "" },
+                    : { findingId: item.finding_id, outcome: null, note: "" },
                 )
               }
             >
               <CheckIcon aria-hidden className="size-3.5" />
-              关闭
+              结掉这条
             </Button>
           </CardHeader>
           <CardContent className="space-y-2 text-xs">
@@ -105,7 +127,7 @@ export function FindingsPage() {
                 finding raised a minute ago is a row of chrome saying nothing. */}
             {item.dispositions.length > 0 ? (
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline">已被 {item.dispositions.length} 次运行处置</Badge>
+                <Badge variant="outline">智能体回答过 {item.dispositions.length} 次</Badge>
                 {/* The newest verdict, so "this looks done" is one glance rather
                     than four paragraphs of disposition notes. */}
                 <Badge variant="outline">
@@ -113,7 +135,7 @@ export function FindingsPage() {
                 </Badge>
                 {item.settlement_proposed ? (
                   <Badge variant="outline" className="border-emerald-500 text-emerald-700">
-                    运行认为可了结 —— 等你确认
+                    它说已经做到了 —— 等你确认
                   </Badge>
                 ) : null}
                 {item.times_disputed > 0 ? (
@@ -124,45 +146,86 @@ export function FindingsPage() {
                         "border-amber-500 text-amber-700",
                     )}
                   >
-                    其中 {item.times_disputed} 次未做调整
+                    其中 {item.times_disputed} 次没有改动
                   </Badge>
                 ) : null}
               </div>
             ) : null}
             {closing?.findingId === item.finding_id ? (
-              <div className="border-border/60 space-y-2 rounded-md border p-2">
-                <label
-                  className="text-foreground block text-xs font-medium"
-                  htmlFor={`closing-note-${item.finding_id}`}
-                >
-                  了结说明（必填）
-                </label>
-                <Input
-                  id={`closing-note-${item.finding_id}`}
-                  value={closing.note}
-                  placeholder="是了结条件被满足了，还是这条议题作废了？"
-                  onChange={(event) =>
-                    setClosing({ ...closing, note: event.target.value })
-                  }
-                />
-                <p className="text-muted-foreground text-xs">
-                  没有这一句，「按证据了结」和「问错了，放弃」在记录里是同一行。
-                </p>
+              <div className="border-border/60 space-y-3 rounded-md border p-3">
+                {/* The thing being judged, at the moment of judging. It is also
+                    at the top of the card, but not on screen while you type. */}
+                <div className="space-y-1">
+                  <p className="text-foreground text-xs font-medium">
+                    先看一眼当初说好的了结条件
+                  </p>
+                  <p className="text-muted-foreground bg-muted/50 rounded px-2 py-1.5 text-xs leading-relaxed">
+                    {item.resolution_test}
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-foreground text-xs font-medium">这条怎么收尾？</p>
+                  {OUTCOMES.map((choice) => (
+                    <button
+                      key={choice.value}
+                      type="button"
+                      aria-pressed={closing.outcome === choice.value}
+                      className={cn(
+                        "border-border/60 hover:bg-muted/60 w-full rounded-md border px-2 py-1.5 text-left",
+                        closing.outcome === choice.value && "border-primary bg-muted",
+                      )}
+                      onClick={() => setClosing({ ...closing, outcome: choice.value })}
+                    >
+                      <span className="text-foreground block text-xs font-medium">
+                        {choice.label}
+                      </span>
+                      <span className="text-muted-foreground block text-xs">
+                        {choice.hint}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <div className="space-y-1">
+                  <label
+                    className="text-foreground block text-xs font-medium"
+                    htmlFor={`closing-note-${item.finding_id}`}
+                  >
+                    说点什么（必填）
+                  </label>
+                  <Input
+                    id={`closing-note-${item.finding_id}`}
+                    value={closing.note}
+                    placeholder="一句话就行，比如「阈值已经写进记忆 144」"
+                    onChange={(event) =>
+                      setClosing({ ...closing, note: event.target.value })
+                    }
+                  />
+                  <p className="text-muted-foreground text-xs">
+                    以后回头看，就靠这一句想起当时为什么关掉它。
+                  </p>
+                </div>
                 <div className="flex items-center gap-2">
                   <Button
                     size="sm"
-                    disabled={close.isPending || closing.note.trim() === ""}
+                    disabled={
+                      close.isPending ||
+                      closing.outcome === null ||
+                      closing.note.trim() === ""
+                    }
                     onClick={() =>
-                      close.mutate({
-                        findingId: item.finding_id,
-                        note: closing.note,
-                      })
+                      closing.outcome === null
+                        ? undefined
+                        : close.mutate({
+                            findingId: item.finding_id,
+                            outcome: closing.outcome,
+                            note: closing.note,
+                          })
                     }
                   >
-                    确认关闭
+                    关掉它
                   </Button>
                   <Button size="sm" variant="ghost" onClick={() => setClosing(null)}>
-                    取消
+                    再想想
                   </Button>
                 </div>
               </div>
@@ -179,7 +242,7 @@ export function FindingsPage() {
                     className="border-border/60 space-y-0.5 border-s ps-2"
                   >
                     <p className="text-foreground text-xs font-medium tabular-nums">
-                      运行 {disposition.run_id} · {verdictLabel(disposition.verdict)}
+                      第 {disposition.run_id} 次操盘 · {verdictLabel(disposition.verdict)}
                     </p>
                     {disposition.note ? (
                       <p className="text-muted-foreground text-xs leading-relaxed">
@@ -201,7 +264,9 @@ export function FindingsPage() {
               <p className="text-muted-foreground text-xs line-through">{item.finding}</p>
               {item.closing_note ? (
                 <p className="text-muted-foreground text-xs">
-                  <span className="text-foreground font-medium">了结说明：</span>
+                  <span className="text-foreground font-medium">
+                    {outcomeLabel(item.closing_outcome)}：
+                  </span>
                   {item.closing_note}
                 </p>
               ) : null}
@@ -214,10 +279,17 @@ export function FindingsPage() {
 }
 
 function verdictLabel(verdict: string) {
-  if (verdict === "ADJUSTED") return "已按此调整";
-  if (verdict === "SETTLED") return "认为可了结";
+  if (verdict === "ADJUSTED") return "按这条改了";
+  if (verdict === "SETTLED") return "说已经做到了";
   if (verdict === "DISAGREED") return "不同意";
-  return "尚无法判断";
+  return "还看不出来";
+}
+
+function outcomeLabel(outcome: string) {
+  if (outcome === "MET") return "做到了";
+  if (outcome === "WITHDRAWN") return "不问了";
+  // Closed before the two endings were told apart.
+  return "关闭原因";
 }
 
 function latestVerdict(dispositions: { verdict: string }[]) {

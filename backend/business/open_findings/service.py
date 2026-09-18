@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from backend.business.open_findings.models import (
     MAX_OPEN_FINDINGS,
+    ClosingOutcome,
     OpenFinding,
     Verdict,
 )
@@ -62,7 +63,9 @@ class OpenFindingService:
         await self._commit()
         return stored
 
-    async def close(self, finding_id: int, *, note: str) -> OpenFinding | None:
+    async def close(
+        self, finding_id: int, *, outcome: ClosingOutcome, note: str
+    ) -> OpenFinding | None:
         """Only a person gets here.
 
         A run may state where it stands — including that it believes the
@@ -74,7 +77,7 @@ class OpenFindingService:
         finding = await self._repository.get_by_id(finding_id)
         if finding is None:
             return None
-        finding.close(note)
+        finding.close(outcome=outcome, note=note)
         stored = await self._repository.save(finding)
         await self._commit()
         return stored

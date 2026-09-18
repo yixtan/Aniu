@@ -471,6 +471,10 @@ def _upgrade_sqlite_schema(connection: Connection) -> None:
         connection.execute(
             text("ALTER TABLE open_findings ADD COLUMN closing_note TEXT")
         )
+    if "closing_outcome" not in finding_columns:
+        connection.execute(
+            text("ALTER TABLE open_findings ADD COLUMN closing_outcome VARCHAR(16)")
+        )
 
     _ensure_stock_api_log_schema(connection)
 

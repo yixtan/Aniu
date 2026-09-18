@@ -12,7 +12,7 @@ from backend.api.schemas.open_finding import (
     RaiseFindingRequest,
 )
 from backend.api.security import require_authenticated
-from backend.business.open_findings import OpenFindingService
+from backend.business.open_findings import ClosingOutcome, OpenFindingService
 
 router = APIRouter(
     prefix="/api/aniu/open-findings",
@@ -54,7 +54,11 @@ async def close_finding(
     """Only reachable by a person. A run may say where it stands — including
     that it believes the test is met — but not that the matter is settled."""
 
-    closed = await service.close(finding_id, note=payload.note)
+    closed = await service.close(
+        finding_id,
+        outcome=ClosingOutcome(payload.outcome),
+        note=payload.note,
+    )
     if closed is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
