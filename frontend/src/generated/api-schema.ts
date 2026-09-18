@@ -362,8 +362,8 @@ export interface paths {
         put?: never;
         /**
          * Close Finding
-         * @description Only reachable by a person. A run may say where it stands, not that
-         *     the matter is settled.
+         * @description Only reachable by a person. A run may say where it stands — including
+         *     that it believes the test is met — but not that the matter is settled.
          */
         post: operations["close_finding_api_aniu_open_findings__finding_id__close_post"];
         delete?: never;
@@ -1038,6 +1038,11 @@ export interface components {
             name: string;
             /** Tokens */
             tokens: number;
+        };
+        /** CloseFindingRequest */
+        CloseFindingRequest: {
+            /** Note */
+            note: string;
         };
         /** CreateMemoryRequest */
         CreateMemoryRequest: {
@@ -1761,6 +1766,11 @@ export interface components {
             /** Closed At */
             closed_at?: string | null;
             /**
+             * Closing Note
+             * @default
+             */
+            closing_note: string;
+            /**
              * Created At
              * Format: date-time
              */
@@ -1778,6 +1788,11 @@ export interface components {
             finding_id: number;
             /** Resolution Test */
             resolution_test: string;
+            /**
+             * Settlement Proposed
+             * @default false
+             */
+            settlement_proposed: boolean;
             /** Status */
             status: string;
             /**
@@ -4120,7 +4135,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloseFindingRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

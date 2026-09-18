@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from backend.api.deps import get_open_finding_service
 from backend.api.schemas.error import error_responses
 from backend.api.schemas.open_finding import (
+    CloseFindingRequest,
     OpenFindingResponse,
     RaiseFindingRequest,
 )
@@ -47,12 +48,13 @@ async def list_findings(
 @router.post("/{finding_id}/close", response_model=OpenFindingResponse)
 async def close_finding(
     finding_id: int,
+    payload: CloseFindingRequest,
     service: Annotated[OpenFindingService, Depends(get_open_finding_service)],
 ) -> object:
-    """Only reachable by a person. A run may say where it stands, not that
-    the matter is settled."""
+    """Only reachable by a person. A run may say where it stands — including
+    that it believes the test is met — but not that the matter is settled."""
 
-    closed = await service.close(finding_id)
+    closed = await service.close(finding_id, note=payload.note)
     if closed is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

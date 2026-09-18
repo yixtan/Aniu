@@ -62,18 +62,19 @@ class OpenFindingService:
         await self._commit()
         return stored
 
-    async def close(self, finding_id: int) -> OpenFinding | None:
+    async def close(self, finding_id: int, *, note: str) -> OpenFinding | None:
         """Only a person gets here.
 
-        A run may state where it stands; letting it also decide the objection
-        is answered would let it write "经复核，该顾虑不成立" and move on, which
-        is exactly what the memory it writes for itself already does.
+        A run may state where it stands — including that it believes the
+        resolution test is met — but letting it also decide the objection is
+        answered would let it write "经复核，该顾虑不成立" and move on, which is
+        exactly what the memory it writes for itself already does.
         """
 
         finding = await self._repository.get_by_id(finding_id)
         if finding is None:
             return None
-        finding.close()
+        finding.close(note)
         stored = await self._repository.save(finding)
         await self._commit()
         return stored

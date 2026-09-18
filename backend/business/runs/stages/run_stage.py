@@ -79,6 +79,9 @@ class RunStage:
                     "finding": item.finding,
                     "resolution_test": item.resolution_test,
                     "times_disputed": item.times_disputed,
+                    # So a run that already asked for closure does not spend
+                    # another turn re-arguing a case nobody has answered yet.
+                    "settlement_proposed": item.settlement_proposed,
                 }
                 for item in context.open_findings
             ]

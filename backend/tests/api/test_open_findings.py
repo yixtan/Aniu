@@ -61,7 +61,10 @@ async def test_closing_one_takes_it_off_the_list_a_run_sees(
         )
     ).json()["finding_id"]
 
-    closed = await api_client.post(f"/api/aniu/open-findings/{finding_id}/close")
+    closed = await api_client.post(
+        f"/api/aniu/open-findings/{finding_id}/close",
+        json={"note": "浅档三笔分批成交，了结条件已由行情满足。"},
+    )
 
     assert closed.status_code == 200
     assert closed.json()["status"] == "CLOSED"
@@ -72,6 +75,63 @@ async def test_closing_one_takes_it_off_the_list_a_run_sees(
 async def test_closing_something_that_is_not_there_says_so(
     api_client: AsyncClient,
 ) -> None:
-    missing = await api_client.post("/api/aniu/open-findings/999/close")
+    missing = await api_client.post(
+        "/api/aniu/open-findings/999/close", json={"note": "了结。"}
+    )
 
     assert missing.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_closing_without_a_reason_is_refused(api_client: AsyncClient) -> None:
+    """Same gate as the resolution test, at the other end of the finding."""
+
+    raised = await api_client.post(
+        "/api/aniu/open-findings",
+        json={"finding": FINDING, "resolution_test": TEST},
+    )
+    finding_id = raised.json()["finding_id"]
+
+    response = await api_client.post(
+        f"/api/aniu/open-findings/{finding_id}/close", json={"note": ""}
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_a_closed_finding_carries_why_it_closed(
+    api_client: AsyncClient,
+) -> None:
+    raised = await api_client.post(
+        "/api/aniu/open-findings",
+        json={"finding": FINDING, "resolution_test": TEST},
+    )
+    finding_id = raised.json()["finding_id"]
+
+    body = (
+        await api_client.post(
+            f"/api/aniu/open-findings/{finding_id}/close",
+            json={"note": "浅档三笔分批成交、深档未触发，了结条件由行情满足。"},
+        )
+    ).json()
+
+    assert body["status"] == "CLOSED"
+    assert body["closing_note"].startswith("浅档三笔")
+
+
+@pytest.mark.asyncio
+async def test_a_fresh_finding_is_not_waiting_on_anyone(
+    api_client: AsyncClient,
+) -> None:
+    """Never null: the page reads this to decide whether to badge the row."""
+
+    body = (
+        await api_client.post(
+            "/api/aniu/open-findings",
+            json={"finding": FINDING, "resolution_test": TEST},
+        )
+    ).json()
+
+    assert body["settlement_proposed"] is False
+    assert body["closing_note"] == ""

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckIcon, ScaleIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -7,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import { Input } from "@/components/ui/input";
 import { findingKeys } from "@/features/findings/query-keys";
 import { closeOpenFinding, listOpenFindings } from "@/lib/api";
 import { getErrorMessage } from "@/lib/format";
@@ -17,16 +19,22 @@ const MAX_INJECTED = 5;
 /** After this many answers that changed nothing, the item asks to be looked at. */
 const TALKED_PAST = 3;
 
+type Closing = { findingId: number; note: string };
+
 export function FindingsPage() {
   const queryClient = useQueryClient();
   const listQuery = useQuery({
     queryKey: findingKeys.list(),
     queryFn: listOpenFindings,
   });
+  // Null until the operator picks one to close: closing now asks for a
+  // sentence, and a permanently open box on every card would read as noise.
+  const [closing, setClosing] = useState<Closing | null>(null);
   const close = useMutation({
     mutationFn: closeOpenFinding,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: findingKeys.all });
+      setClosing(null);
       toast.success("议题已关闭");
     },
     onError: (error: unknown) => toast.error(getErrorMessage(error)),
@@ -76,7 +84,13 @@ export function FindingsPage() {
               size="sm"
               variant="outline"
               disabled={close.isPending}
-              onClick={() => close.mutate(item.finding_id)}
+              onClick={() =>
+                setClosing((current) =>
+                  current?.findingId === item.finding_id
+                    ? null
+                    : { findingId: item.finding_id, note: "" },
+                )
+              }
             >
               <CheckIcon aria-hidden className="size-3.5" />
               关闭
@@ -89,6 +103,18 @@ export function FindingsPage() {
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline">已被 {item.dispositions.length} 次运行处置</Badge>
+              {/* The newest verdict, so "this looks done" is one glance rather
+                  than four paragraphs of disposition notes. */}
+              {latestVerdict(item.dispositions) !== null ? (
+                <Badge variant="outline">
+                  最近：{verdictLabel(latestVerdict(item.dispositions) ?? "")}
+                </Badge>
+              ) : null}
+              {item.settlement_proposed ? (
+                <Badge variant="outline" className="border-emerald-500 text-emerald-700">
+                  运行认为可了结 —— 等你确认
+                </Badge>
+              ) : null}
               {item.times_disputed > 0 ? (
                 <Badge
                   variant="outline"
@@ -100,6 +126,44 @@ export function FindingsPage() {
                 </Badge>
               ) : null}
             </div>
+            {closing?.findingId === item.finding_id ? (
+              <div className="border-border/60 space-y-2 rounded-md border p-2">
+                <label
+                  className="text-foreground block text-xs font-medium"
+                  htmlFor={`closing-note-${item.finding_id}`}
+                >
+                  了结说明（必填）
+                </label>
+                <Input
+                  id={`closing-note-${item.finding_id}`}
+                  value={closing.note}
+                  placeholder="是了结条件被满足了，还是这条议题作废了？"
+                  onChange={(event) =>
+                    setClosing({ ...closing, note: event.target.value })
+                  }
+                />
+                <p className="text-muted-foreground text-xs">
+                  没有这一句，「按证据了结」和「问错了，放弃」在记录里是同一行。
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    disabled={close.isPending || closing.note.trim() === ""}
+                    onClick={() =>
+                      close.mutate({
+                        findingId: item.finding_id,
+                        note: closing.note,
+                      })
+                    }
+                  >
+                    确认关闭
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setClosing(null)}>
+                    取消
+                  </Button>
+                </div>
+              </div>
+            ) : null}
             {item.dispositions.length > 0 ? (
               <ul className="text-muted-foreground space-y-1">
                 {item.dispositions.map((disposition) => (
@@ -117,9 +181,15 @@ export function FindingsPage() {
         <section className="space-y-2">
           <h2 className="text-muted-foreground text-xs font-medium">已关闭</h2>
           {closed.map((item) => (
-            <p key={item.finding_id} className="text-muted-foreground text-xs line-through">
-              {item.finding}
-            </p>
+            <div key={item.finding_id} className="space-y-0.5">
+              <p className="text-muted-foreground text-xs line-through">{item.finding}</p>
+              {item.closing_note ? (
+                <p className="text-muted-foreground text-xs">
+                  <span className="text-foreground font-medium">了结说明：</span>
+                  {item.closing_note}
+                </p>
+              ) : null}
+            </div>
           ))}
         </section>
       ) : null}
@@ -129,6 +199,11 @@ export function FindingsPage() {
 
 function verdictLabel(verdict: string) {
   if (verdict === "ADJUSTED") return "已按此调整";
+  if (verdict === "SETTLED") return "认为可了结";
   if (verdict === "DISAGREED") return "不同意";
   return "尚无法判断";
+}
+
+function latestVerdict(dispositions: { verdict: string }[]) {
+  return dispositions.at(-1)?.verdict ?? null;
 }

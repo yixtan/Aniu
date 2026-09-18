@@ -38,8 +38,23 @@ class Verdict(StrEnum):
     """What a run said about a finding. Silence is not one of them."""
 
     ADJUSTED = "ADJUSTED"
+    SETTLED = "SETTLED"
+    """The run believes the resolution test is now met. It still cannot close.
+
+    Separate from ADJUSTED because "I changed what you asked about" and "the
+    thing you said would settle this has happened" are answered by different
+    evidence. The first is the run's own plan; the second has to point at
+    something outside it. Finding 1 was disposed ADJUSTED three times on its
+    own account before a fill demonstrated it, and a rule that closed on
+    repeated agreement would have closed it an hour before the evidence.
+    """
+
     DISAGREED = "DISAGREED"
     UNDECIDED = "UNDECIDED"
+
+
+ACTED_ON = frozenset({Verdict.ADJUSTED, Verdict.SETTLED})
+"""Verdicts that are not a run talking past the objection."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +75,9 @@ class OpenFinding:
     dispositions: tuple[Disposition, ...] = ()
     created_at: datetime = field(default_factory=utc_now)
     closed_at: datetime | None = None
+    closing_note: str = ""
+    """Why it closed. Not validated on load: rows closed before this existed
+    have none, and refusing to read them would lose the finding itself."""
 
     def __post_init__(self) -> None:
         if not self.finding.strip():
@@ -77,9 +95,20 @@ class OpenFinding:
         being addressed. A run may state a disposition; only a person closes.
         """
 
-        return sum(
-            item.verdict is not Verdict.ADJUSTED for item in self.dispositions
-        )
+        return sum(item.verdict not in ACTED_ON for item in self.dispositions)
+
+    @property
+    def settlement_proposed(self) -> bool:
+        """Whether the run is waiting on a person, right now.
+
+        The latest disposition only. An open finding that was called settled
+        on Tuesday and adjusted again on Wednesday is not waiting on anybody;
+        it moved on, and a badge left standing would be read as a backlog.
+        """
+
+        if self.status is not FindingStatus.OPEN or not self.dispositions:
+            return False
+        return self.dispositions[-1].verdict is Verdict.SETTLED
 
     def dispose(self, *, run_id: int, verdict: Verdict, note: str) -> None:
         if self.status is not FindingStatus.OPEN:
@@ -94,14 +123,26 @@ class OpenFinding:
             ),
         )
 
-    def close(self) -> None:
+    def close(self, note: str) -> None:
+        """Say why, in one line.
+
+        The same gate as the resolution test, at the other end: "settled, the
+        fills came in three batches" and "dropped, it was the wrong question"
+        are the same row without it, and a month later nobody can tell which
+        of them a closed finding was.
+        """
+
+        if not note.strip():
+            raise ValueError("closing a finding must say why")
         if self.status is FindingStatus.CLOSED:
             return
         self.status = FindingStatus.CLOSED
+        self.closing_note = note.strip()
         self.closed_at = utc_now()
 
 
 __all__ = [
+    "ACTED_ON",
     "MAX_OPEN_FINDINGS",
     "Disposition",
     "FindingStatus",
