@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from pydantic import Field
+
 from backend.api.schemas.common import ApiModel
 
 
@@ -14,10 +16,18 @@ class FindingCandidateResponse(ApiModel):
     resolution_test: str
 
 
+class RequestEvaluationBody(ApiModel):
+    """What the operator wants asked, if anything. Optional: the button on its
+    own is still the ordinary way to run one."""
+
+    operator_question: str = Field(default="", max_length=1000)
+
+
 class EvaluationResponse(ApiModel):
     evaluation_id: int
     run_id: int
     status: str
+    operator_question: str = ""
     questions: str | None = None
     answers: str | None = None
     # The lead, written for someone who does not read the argument.
@@ -31,4 +41,8 @@ class EvaluationResponse(ApiModel):
     completed_at: datetime | None = None
 
 
-__all__ = ["EvaluationResponse", "FindingCandidateResponse"]
+__all__ = [
+    "EvaluationResponse",
+    "FindingCandidateResponse",
+    "RequestEvaluationBody",
+]

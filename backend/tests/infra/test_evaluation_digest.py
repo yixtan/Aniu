@@ -161,12 +161,14 @@ class _StubHarness:
 
     replies: dict[str, Any] = {}
     labels: list[str] = []
+    prompts: dict[str, str] = {}
 
     def __init__(self, **kwargs: Any) -> None:
         self._label = str(kwargs["label"])
 
-    async def prompt(self, _message: str) -> Any:
+    async def prompt(self, message: str) -> Any:
         _StubHarness.labels.append(self._label)
+        _StubHarness.prompts[self._label] = message
         reply = _StubHarness.replies[self._label]
         if isinstance(reply, Exception):
             raise reply
@@ -196,6 +198,7 @@ class _StubContextReader:
 @pytest.fixture
 def agent(monkeypatch: pytest.MonkeyPatch) -> EvaluationAgent:
     _StubHarness.labels = []
+    _StubHarness.prompts = {}
     monkeypatch.setattr(module, "AgentHarness", _StubHarness)
     return EvaluationAgent(
         llm_client=object(),  # type: ignore[arg-type]
@@ -270,3 +273,43 @@ async def test_an_empty_review_is_not_sent_to_be_drafted(
 
     assert _StubHarness.labels == ["Evaluate", "Answer"]
     assert result.candidates == ()
+
+
+@pytest.mark.asyncio
+async def test_your_question_reaches_the_critic_and_goes_first(
+    agent: EvaluationAgent,
+) -> None:
+    """Sharpened rather than forwarded: the reviewer holds the record, and a
+    doubt written in ordinary words is worth more once it carries numbers."""
+
+    _StubHarness.replies = {
+        "Evaluate": _Reply("一、仓位为什么还是 20%？"),
+        "Answer": _Reply("因为上限是按总资产定的。"),
+        "Draft": _Reply('{"digest": "", "candidates": []}'),
+    }
+
+    await agent.evaluate(
+        RUN_ID, operator_question="今天行情已经变了，为什么仓位还保持 20%？"
+    )
+
+    brief = _StubHarness.prompts["Evaluate"]
+    assert "今天行情已经变了" in brief
+    assert "第一个问题" in brief
+    # Added, not substituted: the reviewer's own agenda is the reason it exists.
+    assert "追加" in brief
+
+
+@pytest.mark.asyncio
+async def test_no_question_sends_no_brief_at_all(agent: EvaluationAgent) -> None:
+    """The watchlist rule: asking a reviewer to consider an empty question only
+    buys a sentence saying the operator had none."""
+
+    _StubHarness.replies = {
+        "Evaluate": _Reply("一、证伪条件是什么？"),
+        "Answer": _Reply("这个数我手上没有。"),
+        "Draft": _Reply('{"digest": "", "candidates": []}'),
+    }
+
+    await agent.evaluate(RUN_ID)
+
+    assert "操作者" not in _StubHarness.prompts["Evaluate"]

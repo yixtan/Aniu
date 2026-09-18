@@ -527,7 +527,10 @@ export interface paths {
         put?: never;
         /**
          * Request Evaluation
-         * @description Queue a review. It runs off the exclusive lane, so this never waits.
+         * @description Queue a review, optionally with a question of the operator's own.
+         *
+         *     Optional body, so the button alone still works and nothing that called
+         *     this before has to start sending one.
          */
         post: operations["request_evaluation_api_aniu_runs__run_id__evaluation_post"];
         delete?: never;
@@ -1282,6 +1285,11 @@ export interface components {
             evaluation_id: number;
             /** Failure Reason */
             failure_reason?: string | null;
+            /**
+             * Operator Question
+             * @default
+             */
+            operator_question: string;
             /** Questions */
             questions?: string | null;
             /** Run Id */
@@ -1918,6 +1926,18 @@ export interface components {
             message: string;
             /** Run Id */
             run_id: number;
+        };
+        /**
+         * RequestEvaluationBody
+         * @description What the operator wants asked, if anything. Optional: the button on its
+         *     own is still the ordinary way to run one.
+         */
+        RequestEvaluationBody: {
+            /**
+             * Operator Question
+             * @default
+             */
+            operator_question: string;
         };
         /**
          * RunDayResponse
@@ -4897,7 +4917,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RequestEvaluationBody"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             201: {

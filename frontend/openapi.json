@@ -1100,6 +1100,11 @@
             ],
             "title": "Failure Reason"
           },
+          "operator_question": {
+            "default": "",
+            "title": "Operator Question",
+            "type": "string"
+          },
           "questions": {
             "anyOf": [
               {
@@ -2864,6 +2869,20 @@
           "message"
         ],
         "title": "ReportMailResultResponse",
+        "type": "object"
+      },
+      "RequestEvaluationBody": {
+        "additionalProperties": false,
+        "description": "What the operator wants asked, if anything. Optional: the button on its\nown is still the ordinary way to run one.",
+        "properties": {
+          "operator_question": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Operator Question",
+            "type": "string"
+          }
+        },
+        "title": "RequestEvaluationBody",
         "type": "object"
       },
       "RunDayResponse": {
@@ -7942,7 +7961,7 @@
         ]
       },
       "post": {
-        "description": "Queue a review. It runs off the exclusive lane, so this never waits.",
+        "description": "Queue a review, optionally with a question of the operator's own.\n\nOptional body, so the button alone still works and nothing that called\nthis before has to start sending one.",
         "operationId": "request_evaluation_api_aniu_runs__run_id__evaluation_post",
         "parameters": [
           {
@@ -7955,6 +7974,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/RequestEvaluationBody"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "content": {

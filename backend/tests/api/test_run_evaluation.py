@@ -157,3 +157,35 @@ async def test_a_review_with_no_drafts_reads_as_an_empty_list(
 
     assert body["candidates"] == []
     assert body["digest"] == ""
+
+
+@pytest.mark.asyncio
+async def test_a_question_of_your_own_is_kept_with_the_review(
+    api_client: AsyncClient, session
+) -> None:
+    _finished_run(session)
+    await session.commit()
+
+    body = (
+        await api_client.post(
+            f"/api/aniu/runs/{RUN_ID}/evaluation",
+            json={"operator_question": "今天行情已经变了，为什么仓位还保持 20%？"},
+        )
+    ).json()
+
+    assert body["operator_question"].startswith("今天行情已经变了")
+
+
+@pytest.mark.asyncio
+async def test_the_button_alone_still_works(
+    api_client: AsyncClient, session
+) -> None:
+    """The body is optional, so nothing that called this before has to change."""
+
+    _finished_run(session)
+    await session.commit()
+
+    response = await api_client.post(f"/api/aniu/runs/{RUN_ID}/evaluation")
+
+    assert response.status_code == 201
+    assert response.json()["operator_question"] == ""

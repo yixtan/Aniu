@@ -30,16 +30,22 @@ class StubEvaluator:
             cached_tokens=500,
         )
         self.calls = 0
+        self.asked = ""
 
-    async def evaluate(self, run_id: int) -> EvaluationResult:
+    async def evaluate(
+        self, run_id: int, *, operator_question: str = ""
+    ) -> EvaluationResult:
         del run_id
         self.calls += 1
+        self.asked = operator_question
         return self.result
 
 
 class ExplodingEvaluator:
-    async def evaluate(self, run_id: int) -> EvaluationResult:
-        del run_id
+    async def evaluate(
+        self, run_id: int, *, operator_question: str = ""
+    ) -> EvaluationResult:
+        del run_id, operator_question
         raise RuntimeError("provider refused the request")
 
 
@@ -213,6 +219,51 @@ async def test_drafted_candidates_survive_a_round_trip(session) -> None:
     assert reloaded is not None
     assert len(reloaded.candidates) == 1
     assert reloaded.candidates[0].resolution_test == "把敞口拆到不相关的主线上。"
+
+
+@pytest.mark.asyncio
+async def test_a_question_of_your_own_reaches_the_reviewer(session) -> None:
+    """The button on its own lets the reviewer pick every angle. A person with
+    a doubt of their own had nowhere to put it."""
+
+    _run(session)
+    await session.commit()
+
+    evaluator = StubEvaluator()
+    service = EvaluationService(RunEvaluationRepository(session), evaluator)
+    requested = await service.request(
+        RUN_ID, operator_question="今天行情已经变了，为什么仓位还保持 20%？"
+    )
+    await service.execute(requested.evaluation_id)
+    await session.commit()
+
+    assert evaluator.asked == "今天行情已经变了，为什么仓位还保持 20%？"
+    reloaded = await RunEvaluationRepository(session).get_by_id(
+        requested.evaluation_id
+    )
+    assert reloaded is not None
+    # Kept, not passed through: a review that asked something unusual cannot
+    # be read back later without the reason it did.
+    assert reloaded.operator_question.startswith("今天行情已经变了")
+
+
+@pytest.mark.asyncio
+async def test_pressing_the_button_alone_asks_nothing_extra(session) -> None:
+    _run(session)
+    await session.commit()
+
+    evaluator = StubEvaluator()
+    service = EvaluationService(RunEvaluationRepository(session), evaluator)
+    requested = await service.request(RUN_ID)
+    await service.execute(requested.evaluation_id)
+    await session.commit()
+
+    assert evaluator.asked == ""
+    reloaded = await RunEvaluationRepository(session).get_by_id(
+        requested.evaluation_id
+    )
+    assert reloaded is not None
+    assert reloaded.operator_question == ""
 
 
 @pytest.mark.asyncio

@@ -247,9 +247,10 @@ export async function closeOpenFinding({
   return getResponseData(result);
 }
 
-export async function requestRunEvaluation(runId: number) {
+export async function requestRunEvaluation(runId: number, operatorQuestion = "") {
   const result = await openapiClient.POST("/api/aniu/runs/{run_id}/evaluation", {
     params: { path: { run_id: runId } },
+    body: { operator_question: operatorQuestion },
   });
   return getResponseData(result);
 }

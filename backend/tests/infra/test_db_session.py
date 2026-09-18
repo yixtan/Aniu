@@ -631,6 +631,9 @@ async def test_init_db_adds_the_candidate_column(tmp_path: pathlib.Path) -> None
     try:
         connection.execute("ALTER TABLE run_evaluations DROP COLUMN candidates_json")
         connection.execute("ALTER TABLE run_evaluations DROP COLUMN digest")
+        connection.execute(
+            "ALTER TABLE run_evaluations DROP COLUMN operator_question"
+        )
         connection.commit()
     finally:
         connection.close()
@@ -647,6 +650,7 @@ async def test_init_db_adds_the_candidate_column(tmp_path: pathlib.Path) -> None
         }
         assert "candidates_json" in columns
         assert "digest" in columns
+        assert "operator_question" in columns
     finally:
         connection.close()
 

@@ -33,6 +33,14 @@ competing for a scarce slot, not a list to work through. Offering as many as
 the cap allows invites filling it.
 """
 
+MAX_OPERATOR_QUESTION_LENGTH = 1000
+"""What one person can usefully put to a reviewer at once.
+
+Long enough for a real doubt with its reasoning, short enough that it cannot
+become a second brief competing with the record the reviewer is checking
+against.
+"""
+
 MAX_DIGEST_LENGTH = 400
 """A lead, not a second report.
 
@@ -78,6 +86,13 @@ class Evaluation:
     run_id: int
     evaluation_id: int = 0
     status: EvaluationStatus = EvaluationStatus.PENDING
+    operator_question: str = ""
+    """What the operator wanted asked, if anything.
+
+    Kept on the review rather than passed through and forgotten, because a
+    review that asked an unusual question is unreadable later without it.
+    """
+
     questions: str | None = None
     answers: str | None = None
     digest: str = ""
@@ -133,6 +148,7 @@ class Evaluation:
 __all__ = [
     "MAX_CANDIDATE_LENGTH",
     "MAX_DIGEST_LENGTH",
+    "MAX_OPERATOR_QUESTION_LENGTH",
     "TERMINAL_STATUSES",
     "Evaluation",
     "EvaluationStatus",

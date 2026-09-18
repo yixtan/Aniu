@@ -21,7 +21,9 @@ class EvaluationResult:
 
 
 class EvaluationRepositoryPort(Protocol):
-    async def create(self, run_id: int) -> Evaluation: ...
+    async def create(
+        self, run_id: int, *, operator_question: str = ""
+    ) -> Evaluation: ...
 
     async def get_by_id(self, evaluation_id: int) -> Evaluation | None: ...
 
@@ -31,7 +33,9 @@ class EvaluationRepositoryPort(Protocol):
 
 
 class EvaluatorPort(Protocol):
-    async def evaluate(self, run_id: int) -> EvaluationResult: ...
+    async def evaluate(
+        self, run_id: int, *, operator_question: str = ""
+    ) -> EvaluationResult: ...
 
 
 __all__ = ["EvaluationRepositoryPort", "EvaluationResult", "EvaluatorPort"]
