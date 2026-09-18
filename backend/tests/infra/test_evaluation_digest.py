@@ -7,6 +7,7 @@ take the other down either.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -348,3 +349,75 @@ async def test_no_question_leaves_the_lead_brief_alone(
     await agent.evaluate(RUN_ID)
 
     assert "操作者" not in _StubHarness.prompts["Draft"]
+
+
+class _StubOpenFindings:
+    def __init__(self, findings: list[str], fails: bool = False) -> None:
+        self._findings = findings
+        self._fails = fails
+
+    async def current(self) -> tuple[Any, ...]:
+        if self._fails:
+            raise RuntimeError("the findings table is unavailable")
+        return tuple(
+            SimpleNamespace(finding=text, resolution_test="x")
+            for text in self._findings
+        )
+
+
+@pytest.mark.asyncio
+async def test_drafting_is_told_what_is_already_open(
+    agent: EvaluationAgent,
+) -> None:
+    """Finding 4 was raised at 08:09 and drafted again at 08:12, because the
+    drafting call reads only the exchange. Left alone it re-proposes the same
+    objection every time until someone closes it."""
+
+    agent.open_findings = _StubOpenFindings(["未成交挂单仍全额占用额度。"])  # type: ignore[assignment]
+    _StubHarness.replies = {
+        "Evaluate": _Reply("一、证伪条件是什么？"),
+        "Answer": _Reply("这个数我手上没有。"),
+        "Draft": _Reply('{"digest": "", "candidates": []}'),
+    }
+
+    await agent.evaluate(RUN_ID)
+
+    brief = _StubHarness.prompts["Draft"]
+    assert "未成交挂单仍全额占用额度。" in brief
+    assert "不要再起草这些" in brief
+
+
+@pytest.mark.asyncio
+async def test_nothing_open_sends_no_brief(agent: EvaluationAgent) -> None:
+    agent.open_findings = _StubOpenFindings([])  # type: ignore[assignment]
+    _StubHarness.replies = {
+        "Evaluate": _Reply("一、证伪条件是什么？"),
+        "Answer": _Reply("这个数我手上没有。"),
+        "Draft": _Reply('{"digest": "", "candidates": []}'),
+    }
+
+    await agent.evaluate(RUN_ID)
+
+    assert "未结议题列表" not in _StubHarness.prompts["Draft"]
+
+
+@pytest.mark.asyncio
+async def test_a_failed_read_costs_the_dedupe_not_the_review(
+    agent: EvaluationAgent,
+) -> None:
+    """The watchlist rule: a reference, not an input the work depends on."""
+
+    agent.open_findings = _StubOpenFindings([], fails=True)  # type: ignore[assignment]
+    _StubHarness.replies = {
+        "Evaluate": _Reply("一、证伪条件是什么？"),
+        "Answer": _Reply("这个数我手上没有。"),
+        "Draft": _Reply(
+            '{"digest": "值得看第二段。", "candidates": '
+            '[{"finding": "甲", "resolution_test": "一"}]}'
+        ),
+    }
+
+    result = await agent.evaluate(RUN_ID)
+
+    assert result.digest == "值得看第二段。"
+    assert len(result.candidates) == 1

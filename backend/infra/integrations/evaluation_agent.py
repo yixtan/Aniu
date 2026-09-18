@@ -33,6 +33,7 @@ from backend.business.evaluations import (
     FindingCandidate,
 )
 from backend.business.fill_record import FillRecord
+from backend.business.open_findings import OpenFindingsPort
 from backend.business.runs.reports import RunReportRecord
 from backend.business.settings import AppSettings
 from backend.business.settings.ports import SettingsRepositoryPort
@@ -132,6 +133,15 @@ DIGEST_OPERATOR_BRIEF = """## 账户的操作者这次自己提了一个问题
 评估把它作为第一个问题问了出去。**导读的第一句必须先交代它**：
 评审把他的问题问成了什么、执行者怎么答的、要看第几问。
 先答他这一条，再说其余的。"""
+
+DIGEST_OPEN_FINDINGS_BRIEF = """## 下面这些质疑已经在未结议题列表上了
+
+{findings}
+
+**不要再起草这些。** 它们已经在每次操盘面前，重复起草只会占掉候选名额，
+让人从三条里挑出两条早就立过的。把名额留给列表上没有的。
+
+如果这次问答让某条已立议题有了新证据，写进导读，不要做成候选。"""
 
 MISSING_REPORT = "（这次运行没有留下 Markdown 报告。）"
 
@@ -284,6 +294,14 @@ class EvaluationAgent(EvaluatorPort):
     runtime_factory: AgentRuntimeFactory
     settings_repo: SettingsRepositoryPort
     context_reader: EvaluationContextReader
+    open_findings: OpenFindingsPort | None = None
+    """Read for the drafting call only.
+
+    Deliberately not for the critic. It is given no memory and no global
+    prompt so that it cannot measure the account against the account's own
+    framing, and an open finding is exactly that framing — handed the list it
+    would ask the questions already being asked.
+    """
 
     async def evaluate(
         self, run_id: int, *, operator_question: str = ""
@@ -329,7 +347,9 @@ class EvaluationAgent(EvaluatorPort):
         )
         answers = answered.content.strip()
 
-        drafted = await self._write_digest(runtime, questions, answers, brief)
+        drafted = await self._write_digest(
+            runtime, questions, answers, brief, await self._already_open()
+        )
         return EvaluationResult(
             questions=questions,
             answers=answers,
@@ -347,12 +367,29 @@ class EvaluationAgent(EvaluatorPort):
             ),
         )
 
+    async def _already_open(self) -> tuple[str, ...]:
+        """What is already in front of every run, so drafting does not repeat it.
+
+        A failure here costs the deduplication, not the review — the same rule
+        the watchlist follows, for the same reason: it is a reference, not an
+        input the work depends on.
+        """
+
+        if self.open_findings is None:
+            return ()
+        try:
+            return tuple(item.finding for item in await self.open_findings.current())
+        except Exception:  # noqa: BLE001 - a reference, not a dependency
+            logger.warning("reading open findings for drafting failed", exc_info=True)
+            return ()
+
     async def _write_digest(
         self,
         runtime: LlmRuntimeConfig,
         questions: str,
         answers: str,
         operator_question: str = "",
+        already_open: tuple[str, ...] = (),
     ) -> _Digest:
         """Never fails the review it rides on.
 
@@ -381,6 +418,14 @@ class EvaluationAgent(EvaluatorPort):
                     "\n\n"
                     + DIGEST_OPERATOR_BRIEF.format(question=operator_question)
                     if operator_question
+                    else ""
+                )
+                + (
+                    "\n\n"
+                    + DIGEST_OPEN_FINDINGS_BRIEF.format(
+                        findings="\n".join(f"- {item}" for item in already_open)
+                    )
+                    if already_open
                     else ""
                 )
             )
@@ -418,6 +463,7 @@ class EvaluationContextReader:
 __all__ = [
     "ANSWER_PROMPT",
     "CRITIC_PROMPT",
+    "DIGEST_OPEN_FINDINGS_BRIEF",
     "DIGEST_OPERATOR_BRIEF",
     "DIGEST_PROMPT",
     "OPERATOR_QUESTION_BRIEF",

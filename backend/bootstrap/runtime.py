@@ -449,6 +449,7 @@ class AppRuntime:
                     report_for_run=run_repo.report_for_run,
                     fill_record_for_run=fill_records.for_run,
                 ),
+                open_findings=RunOpenFindingsQuery(self.require_session_factory()),
             ),
             committer=session,
         )
