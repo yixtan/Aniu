@@ -97,3 +97,59 @@ async def test_reading_a_review_returns_the_latest_one(
     assert body["questions"] == "新的提问"
     assert body["total_tokens"] == 200
     assert body["cached_tokens"] == 80
+
+
+@pytest.mark.asyncio
+async def test_drafted_candidates_reach_the_page(
+    api_client: AsyncClient, session
+) -> None:
+    """The page fills its form from these, so they have to be on the contract
+    and not merely in the database."""
+
+    _finished_run(session)
+    session.add(
+        RunEvaluationModel(
+            run_id=RUN_ID,
+            status="COMPLETED",
+            questions="一、证伪条件是什么？",
+            answers="这个数我手上没有。",
+            candidates_json=(
+                '[{"finding": "五笔全在一条链上。", '
+                '"resolution_test": "把敞口拆到不相关的主线上。"}]'
+            ),
+            created_at="2026-09-18T03:00:00+00:00",
+        )
+    )
+    await session.commit()
+
+    body = (await api_client.get(f"/api/aniu/runs/{RUN_ID}/evaluation")).json()
+
+    assert body["candidates"] == [
+        {
+            "finding": "五笔全在一条链上。",
+            "resolution_test": "把敞口拆到不相关的主线上。",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_review_with_no_drafts_reads_as_an_empty_list(
+    api_client: AsyncClient, session
+) -> None:
+    """Never null: the page maps over this without a guard."""
+
+    _finished_run(session)
+    session.add(
+        RunEvaluationModel(
+            run_id=RUN_ID,
+            status="COMPLETED",
+            questions="一、证伪条件是什么？",
+            answers="这个数我手上没有。",
+            created_at="2026-09-18T03:00:00+00:00",
+        )
+    )
+    await session.commit()
+
+    body = (await api_client.get(f"/api/aniu/runs/{RUN_ID}/evaluation")).json()
+
+    assert body["candidates"] == []

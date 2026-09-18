@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.business.evaluations.models import Evaluation, EvaluationStatus
+from backend.business.evaluations.models import (
+    Evaluation,
+    EvaluationStatus,
+    FindingCandidate,
+)
 from backend.infra.db.models import RunEvaluationModel
 
 
@@ -28,6 +34,7 @@ def _to_domain(model: RunEvaluationModel) -> Evaluation:
         status=EvaluationStatus(model.status),
         questions=model.questions,
         answers=model.answers,
+        candidates=_deserialize_candidates(model.candidates_json),
         total_tokens=int(model.total_tokens or 0),
         cached_tokens=int(model.cached_tokens or 0),
         failure_reason=model.failure_reason,
@@ -41,6 +48,49 @@ def _to_domain(model: RunEvaluationModel) -> Evaluation:
 
 def _serialize(value: datetime | None) -> str | None:
     return None if value is None else value.isoformat()
+
+
+def _serialize_candidates(candidates: tuple[FindingCandidate, ...]) -> str | None:
+    # Absent rather than "[]", so a review written before drafting existed and
+    # one whose drafting produced nothing read the same way — they are the
+    # same thing: no drafts to offer.
+    if not candidates:
+        return None
+    return json.dumps(
+        [
+            {
+                "finding": candidate.finding,
+                "resolution_test": candidate.resolution_test,
+            }
+            for candidate in candidates
+        ],
+        ensure_ascii=False,
+    )
+
+
+def _deserialize_candidates(value: str | None) -> tuple[FindingCandidate, ...]:
+    if not value:
+        return ()
+    try:
+        decoded: Any = json.loads(value)
+    except json.JSONDecodeError:
+        return ()
+    if not isinstance(decoded, list):
+        return ()
+    candidates: list[FindingCandidate] = []
+    for entry in decoded:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            candidates.append(
+                FindingCandidate(
+                    finding=str(entry.get("finding", "")),
+                    resolution_test=str(entry.get("resolution_test", "")),
+                )
+            )
+        except ValueError:
+            continue
+    return tuple(candidates)
 
 
 class RunEvaluationRepository:
@@ -80,6 +130,7 @@ class RunEvaluationRepository:
         model.status = evaluation.status.value
         model.questions = evaluation.questions
         model.answers = evaluation.answers
+        model.candidates_json = _serialize_candidates(evaluation.candidates)
         model.total_tokens = evaluation.total_tokens
         model.cached_tokens = evaluation.cached_tokens
         model.failure_reason = evaluation.failure_reason

@@ -1030,6 +1030,14 @@
             "title": "Cached Tokens",
             "type": "integer"
           },
+          "candidates": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FindingCandidateResponse"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
           "completed_at": {
             "anyOf": [
               {
@@ -1139,6 +1147,26 @@
           "llm_base_url"
         ],
         "title": "FetchModelCatalogRequest",
+        "type": "object"
+      },
+      "FindingCandidateResponse": {
+        "additionalProperties": false,
+        "description": "A finding the review drafted. Raising it is still a person's call.",
+        "properties": {
+          "finding": {
+            "title": "Finding",
+            "type": "string"
+          },
+          "resolution_test": {
+            "title": "Resolution Test",
+            "type": "string"
+          }
+        },
+        "required": [
+          "finding",
+          "resolution_test"
+        ],
+        "title": "FindingCandidateResponse",
         "type": "object"
       },
       "HTTPValidationError": {

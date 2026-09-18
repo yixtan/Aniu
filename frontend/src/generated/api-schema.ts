@@ -1251,6 +1251,11 @@ export interface components {
              * @default 0
              */
             cached_tokens: number;
+            /**
+             * Candidates
+             * @default []
+             */
+            candidates: components["schemas"]["FindingCandidateResponse"][];
             /** Completed At */
             completed_at?: string | null;
             /**
@@ -1284,6 +1289,16 @@ export interface components {
             llm_base_url: string;
             llm_protocol: components["schemas"]["ModelProtocol"];
             provider_config?: components["schemas"]["ModelProviderConfigFields"];
+        };
+        /**
+         * FindingCandidateResponse
+         * @description A finding the review drafted. Raising it is still a person's call.
+         */
+        FindingCandidateResponse: {
+            /** Finding */
+            finding: string;
+            /** Resolution Test */
+            resolution_test: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {

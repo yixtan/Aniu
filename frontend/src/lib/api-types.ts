@@ -115,6 +115,7 @@ export interface RunTrace {
 }
 
 export type RunEvaluation = Schemas["EvaluationResponse"];
+export type FindingCandidate = Schemas["FindingCandidateResponse"];
 
 export type OpenFinding = Schemas["OpenFindingResponse"];
 

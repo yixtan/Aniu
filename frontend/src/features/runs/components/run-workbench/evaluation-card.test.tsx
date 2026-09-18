@@ -8,6 +8,7 @@ import { EvaluationCard } from "./evaluation-card";
 const api = vi.hoisted(() => ({
   getRunEvaluation: vi.fn(),
   requestRunEvaluation: vi.fn(),
+  raiseOpenFinding: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => api);
@@ -32,6 +33,7 @@ function evaluation(overrides: Record<string, unknown> = {}) {
     status: "COMPLETED",
     questions: "一、你连续三天零成交，证伪条件是什么？",
     answers: "这个数我手上没有，需要调用组合查询工具。",
+    candidates: [],
     total_tokens: 26_000,
     cached_tokens: 9_000,
     failure_reason: null,
@@ -106,6 +108,79 @@ describe("EvaluationCard", () => {
     renderCard();
 
     expect(await screen.findByText("provider refused the request")).toBeInTheDocument();
+  });
+
+  it("offers the drafts the review wrote, so nobody types them up", async () => {
+    api.getRunEvaluation.mockResolvedValue(
+      evaluation({
+        candidates: [
+          {
+            finding: "五笔买入单全属 AI 硬件链，会在同一天一起成交。",
+            resolution_test: "把敞口拆到与 AI 硬件链不相关的主线上。",
+          },
+        ],
+      }),
+    );
+
+    renderCard();
+
+    const draft = await screen.findByRole("button", {
+      name: /五笔买入单全属 AI 硬件链/,
+    });
+    // Nothing to fill in until one is picked: a long answer followed by two
+    // empty boxes is what this replaces.
+    expect(screen.queryByLabelText("发现")).not.toBeInTheDocument();
+
+    await userEvent.click(draft);
+
+    expect(await screen.findByLabelText("发现")).toHaveValue(
+      "五笔买入单全属 AI 硬件链，会在同一天一起成交。",
+    );
+    expect(screen.getByLabelText("了结条件")).toHaveValue(
+      "把敞口拆到与 AI 硬件链不相关的主线上。",
+    );
+    expect(screen.getByRole("button", { name: "立项" })).toBeEnabled();
+  });
+
+  it("raises what the person confirmed, not what was drafted", async () => {
+    // Drafting is not raising. The text is editable between the two, and the
+    // edited text is what gets filed.
+    api.getRunEvaluation.mockResolvedValue(
+      evaluation({
+        candidates: [{ finding: "起草的说法。", resolution_test: "起草的了结条件。" }],
+      }),
+    );
+    api.raiseOpenFinding.mockResolvedValue({});
+
+    renderCard();
+    await userEvent.click(await screen.findByRole("button", { name: /起草的说法/ }));
+
+    const finding = screen.getByLabelText("发现");
+    await userEvent.clear(finding);
+    await userEvent.type(finding, "我改过的说法。");
+    await userEvent.click(screen.getByRole("button", { name: "立项" }));
+
+    await waitFor(() =>
+      expect(api.raiseOpenFinding).toHaveBeenCalledWith({
+        finding: "我改过的说法。",
+        resolution_test: "起草的了结条件。",
+        evaluation_id: 1,
+      }),
+    );
+  });
+
+  it("still lets a person write their own when nothing was drafted", async () => {
+    // The objection that changed this account's strategy was not among the
+    // reviewer's questions; a person read them and wrote a sixth.
+    api.getRunEvaluation.mockResolvedValue(evaluation());
+
+    renderCard();
+
+    expect(await screen.findByText(/这次评估没有起草候选/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "自己写一条" }));
+
+    expect(screen.getByLabelText("发现")).toHaveValue("");
+    expect(screen.getByRole("button", { name: "立项" })).toBeDisabled();
   });
 
   it("queues a review when the button is pressed", async () => {

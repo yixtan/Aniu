@@ -536,6 +536,10 @@ class RunEvaluationModel(Base):
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING")
     questions: Mapped[str | None] = mapped_column(Text, nullable=True)
     answers: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Drafts, not findings: a row here binds no run to anything until someone
+    # raises it, which is why they live with the review and not in
+    # `open_findings`.
+    candidates_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     total_tokens: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
