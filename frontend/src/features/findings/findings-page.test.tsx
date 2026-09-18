@@ -85,8 +85,12 @@ describe("FindingsPage", () => {
 
     expect(await screen.findByText("已被 2 次运行处置")).toBeInTheDocument();
     expect(screen.getByText("其中 3 次未做调整")).toBeInTheDocument();
-    expect(screen.getByText(/不同意 · 经复核，该顾虑不成立/)).toBeInTheDocument();
-    expect(screen.getByText(/已按此调整 · 已拆到不相关主线/)).toBeInTheDocument();
+    // Which run said what, then the reasoning below it: these notes run to
+    // three hundred characters without a line break of their own.
+    expect(screen.getByText(/运行 20260917101 · 不同意/)).toBeInTheDocument();
+    expect(screen.getByText("经复核，该顾虑不成立")).toBeInTheDocument();
+    expect(screen.getByText(/运行 20260917102 · 已按此调整/)).toBeInTheDocument();
+    expect(screen.getByText("已拆到不相关主线")).toBeInTheDocument();
   });
 
   it("will not close a finding until it is told why", async () => {
@@ -120,6 +124,17 @@ describe("FindingsPage", () => {
       findingId: 7,
       note: "浅档三笔分批成交，条件由行情满足。",
     });
+  });
+
+  it("says nothing about dispositions until a run has answered", async () => {
+    // 「已被 0 次运行处置」 on a finding raised a minute ago is chrome.
+    api.listOpenFindings.mockResolvedValue([finding()]);
+
+    renderPage();
+    await screen.findByText(/五笔买入限价单/);
+
+    expect(screen.queryByText(/次运行处置/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^最近：/)).not.toBeInTheDocument();
   });
 
   it("says which findings are waiting on the operator", async () => {
