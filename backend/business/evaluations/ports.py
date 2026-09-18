@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from backend.business.evaluations.models import Evaluation
+from backend.business.evaluations.models import Evaluation, FindingCandidate
 
 
 @dataclass(frozen=True, slots=True)
@@ -14,6 +14,7 @@ class EvaluationResult:
 
     questions: str
     answers: str
+    candidates: tuple[FindingCandidate, ...] = ()
     total_tokens: int = 0
     cached_tokens: int = 0
 

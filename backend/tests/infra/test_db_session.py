@@ -611,3 +611,39 @@ async def test_init_db_adds_the_cached_token_columns(tmp_path: pathlib.Path) -> 
             assert "cached_tokens" in columns, table
     finally:
         connection.close()
+
+
+@pytest.mark.asyncio
+async def test_init_db_adds_the_candidate_column(tmp_path: pathlib.Path) -> None:
+    """`run_evaluations` predates drafting, so the column has to be added.
+
+    Without it every review reads as having drafted nothing, which is exactly
+    what a review that genuinely drafted nothing reads as — the failure would
+    look like the model simply having no suggestions.
+    """
+
+    sqlite_path = tmp_path / "aniu.sqlite3"
+    engine = create_engine(build_database_url(sqlite_path))
+    await init_db(engine)
+    await engine.dispose()
+
+    connection = sqlite3.connect(sqlite_path)
+    try:
+        connection.execute("ALTER TABLE run_evaluations DROP COLUMN candidates_json")
+        connection.commit()
+    finally:
+        connection.close()
+
+    migrated_engine = create_engine(build_database_url(sqlite_path))
+    await init_db(migrated_engine)
+    await migrated_engine.dispose()
+
+    connection = sqlite3.connect(sqlite_path)
+    try:
+        columns = {
+            str(row[1])
+            for row in connection.execute("PRAGMA table_info(run_evaluations)")
+        }
+        assert "candidates_json" in columns
+    finally:
+        connection.close()

@@ -10,6 +10,7 @@ from backend.business.evaluations import (
     EvaluationResult,
     EvaluationService,
     EvaluationStatus,
+    FindingCandidate,
 )
 from backend.business.fill_record import AttributedOrder, assemble_fill_record
 from backend.infra.db.models import RunEvaluationModel, RunJobModel, StrategyRunModel
@@ -176,6 +177,62 @@ async def test_the_cached_share_can_never_exceed_the_total(session) -> None:
 
     assert finished is not None
     assert finished.cached_tokens == 100
+
+
+@pytest.mark.asyncio
+async def test_drafted_candidates_survive_a_round_trip(session) -> None:
+    """They reach the page on a later poll, not on the reply that wrote them,
+    so storing them is the whole point."""
+
+    _run(session)
+    await session.commit()
+
+    service = EvaluationService(
+        RunEvaluationRepository(session),
+        StubEvaluator(
+            EvaluationResult(
+                questions="一、证伪条件是什么？",
+                answers="这个数我手上没有。",
+                candidates=(
+                    FindingCandidate(
+                        finding="五笔全在一条链上，会同一天一起成交。",
+                        resolution_test="把敞口拆到不相关的主线上。",
+                    ),
+                ),
+            )
+        ),
+    )
+    requested = await service.request(RUN_ID)
+    await service.execute(requested.evaluation_id)
+    await session.commit()
+
+    reloaded = await RunEvaluationRepository(session).get_by_id(
+        requested.evaluation_id
+    )
+
+    assert reloaded is not None
+    assert len(reloaded.candidates) == 1
+    assert reloaded.candidates[0].resolution_test == "把敞口拆到不相关的主线上。"
+
+
+@pytest.mark.asyncio
+async def test_a_review_that_drafted_nothing_reads_as_empty(session) -> None:
+    """Same as a review written before drafting existed: no drafts to offer."""
+
+    _run(session)
+    await session.commit()
+
+    service = EvaluationService(RunEvaluationRepository(session), StubEvaluator())
+    requested = await service.request(RUN_ID)
+    await service.execute(requested.evaluation_id)
+    await session.commit()
+
+    reloaded = await RunEvaluationRepository(session).get_by_id(
+        requested.evaluation_id
+    )
+
+    assert reloaded is not None
+    assert reloaded.candidates == ()
 
 
 def test_the_record_keeps_a_runs_orders_apart_from_the_days() -> None:

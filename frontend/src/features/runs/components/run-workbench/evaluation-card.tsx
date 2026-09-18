@@ -15,6 +15,8 @@ import { getErrorMessage } from "@/lib/format";
 /** Poll only while something is actually being written. */
 const IN_FLIGHT = new Set(["PENDING", "RUNNING"]);
 
+type Draft = { finding: string; resolutionTest: string };
+
 export function EvaluationCard({ runId }: { runId: number }) {
   const queryClient = useQueryClient();
   const queryKey = ["run-evaluation", runId] as const;
@@ -31,19 +33,19 @@ export function EvaluationCard({ runId }: { runId: number }) {
     },
   });
 
-  const [finding, setFinding] = useState("");
-  const [resolutionTest, setResolutionTest] = useState("");
+  // Null while nothing is being raised, so a long answer is not followed by
+  // two empty boxes the reader has to scroll past to reach anything else.
+  const [draft, setDraft] = useState<Draft | null>(null);
   const raise = useMutation({
     mutationFn: () =>
       raiseOpenFinding({
-        finding,
-        resolution_test: resolutionTest,
+        finding: draft?.finding ?? "",
+        resolution_test: draft?.resolutionTest ?? "",
         evaluation_id: evaluationQuery.data?.evaluation_id ?? null,
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: findingKeys.all });
-      setFinding("");
-      setResolutionTest("");
+      setDraft(null);
       toast.success("已立为未结议题，下一次操盘起必须逐条表态");
     },
     onError: (error: unknown) => toast.error(getErrorMessage(error)),
@@ -108,40 +110,94 @@ export function EvaluationCard({ runId }: { runId: number }) {
         ) : null}
         {evaluation?.status === "COMPLETED" ? (
           <section className="border-border/60 space-y-2 border-t pt-3">
-            <h3 className="text-xs font-semibold">立为未结议题</h3>
-            <Field>
-              <FieldLabel htmlFor="finding">发现</FieldLabel>
-              <Textarea
-                id="finding"
-                rows={2}
-                value={finding}
-                placeholder="从上面的问答里挑一条值得追究的，写成一句话"
-                onChange={(event) => setFinding(event.target.value)}
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="resolution-test">了结条件</FieldLabel>
-              <Textarea
-                id="resolution-test"
-                rows={2}
-                value={resolutionTest}
-                placeholder="什么证据或改动会让这条议题了结"
-                onChange={(event) => setResolutionTest(event.target.value)}
-              />
-              <FieldDescription>
-                必填。说不出怎样才算了结的议题，会在此后每一次运行里被回答而永远留在列表上。
-              </FieldDescription>
-            </Field>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={
-                raise.isPending || finding.trim() === "" || resolutionTest.trim() === ""
-              }
-              onClick={() => raise.mutate()}
-            >
-              立项
-            </Button>
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-xs font-semibold">立为未结议题</h3>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs"
+                onClick={() =>
+                  setDraft((current) =>
+                    current === null ? { finding: "", resolutionTest: "" } : null,
+                  )
+                }
+              >
+                {draft === null ? "自己写一条" : "收起"}
+              </Button>
+            </div>
+            {evaluation.candidates.length > 0 ? (
+              <div className="space-y-1.5">
+                <p className="text-muted-foreground text-xs">
+                  评估读完问答后起草了 {evaluation.candidates.length} 条，点一条填进表单。
+                  立不立仍然由你决定。
+                </p>
+                {evaluation.candidates.map((candidate) => (
+                  <button
+                    key={candidate.finding}
+                    type="button"
+                    className="border-border/60 hover:bg-muted/60 w-full space-y-1 rounded-md border p-2 text-left"
+                    onClick={() =>
+                      setDraft({
+                        finding: candidate.finding,
+                        resolutionTest: candidate.resolution_test,
+                      })
+                    }
+                  >
+                    <p className="text-xs leading-relaxed">{candidate.finding}</p>
+                    <p className="text-muted-foreground text-xs leading-relaxed">
+                      了结条件：{candidate.resolution_test}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-muted-foreground text-xs">
+                这次评估没有起草候选。你仍然可以自己写一条。
+              </p>
+            )}
+            {draft !== null ? (
+              <div className="space-y-2 pt-1">
+                <Field>
+                  <FieldLabel htmlFor="finding">发现</FieldLabel>
+                  <Textarea
+                    id="finding"
+                    rows={2}
+                    value={draft.finding}
+                    placeholder="从上面的问答里挑一条值得追究的，写成一句话"
+                    onChange={(event) =>
+                      setDraft({ ...draft, finding: event.target.value })
+                    }
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="resolution-test">了结条件</FieldLabel>
+                  <Textarea
+                    id="resolution-test"
+                    rows={2}
+                    value={draft.resolutionTest}
+                    placeholder="什么证据或改动会让这条议题了结"
+                    onChange={(event) =>
+                      setDraft({ ...draft, resolutionTest: event.target.value })
+                    }
+                  />
+                  <FieldDescription>
+                    必填。说不出怎样才算了结的议题，会在此后每一次运行里被回答而永远留在列表上。
+                  </FieldDescription>
+                </Field>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={
+                    raise.isPending ||
+                    draft.finding.trim() === "" ||
+                    draft.resolutionTest.trim() === ""
+                  }
+                  onClick={() => raise.mutate()}
+                >
+                  立项
+                </Button>
+              </div>
+            ) : null}
           </section>
         ) : null}
         {evaluation?.status === "COMPLETED" && evaluation.total_tokens > 0 ? (

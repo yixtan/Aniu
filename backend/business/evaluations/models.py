@@ -25,6 +25,44 @@ class EvaluationStatus(StrEnum):
 
 TERMINAL_STATUSES = frozenset({EvaluationStatus.COMPLETED, EvaluationStatus.FAILED})
 
+MAX_CANDIDATES = 3
+"""How many drafts one review offers.
+
+Fewer than the five findings a run can carry, because these are suggestions
+competing for a scarce slot, not a list to work through. Offering as many as
+the cap allows invites filling it.
+"""
+
+MAX_CANDIDATE_LENGTH = 2000
+"""What the raise endpoint accepts.
+
+Enforced here too, so a drafted candidate is always something the person can
+actually submit. A suggestion the form then refuses is worse than none.
+"""
+
+
+@dataclass(frozen=True, slots=True)
+class FindingCandidate:
+    """A finding the review drafted, which nobody has decided to raise.
+
+    Drafting is not raising. The review writes the sentence and the test; what
+    it cannot do is judge which objection is worth binding every future run to,
+    and the one objection that has changed this account's strategy so far was
+    not among the questions the reviewer asked — a person read the five and
+    wrote a sixth.
+    """
+
+    finding: str
+    resolution_test: str
+
+    def __post_init__(self) -> None:
+        if not self.finding.strip():
+            raise ValueError("a candidate must say something")
+        if not self.resolution_test.strip():
+            # Same gate as OpenFinding: drafting one without a settling test
+            # only moves the work of inventing one to the person.
+            raise ValueError("a candidate must say what would settle it")
+
 
 @dataclass(slots=True)
 class Evaluation:
@@ -33,6 +71,7 @@ class Evaluation:
     status: EvaluationStatus = EvaluationStatus.PENDING
     questions: str | None = None
     answers: str | None = None
+    candidates: tuple[FindingCandidate, ...] = ()
     total_tokens: int = 0
     cached_tokens: int = 0
     failure_reason: str | None = None
@@ -51,6 +90,7 @@ class Evaluation:
         *,
         questions: str,
         answers: str,
+        candidates: tuple[FindingCandidate, ...] = (),
         total_tokens: int = 0,
         cached_tokens: int = 0,
     ) -> None:
@@ -59,6 +99,7 @@ class Evaluation:
         self.status = EvaluationStatus.COMPLETED
         self.questions = questions.strip() or None
         self.answers = answers.strip() or None
+        self.candidates = candidates
         self.total_tokens = max(0, total_tokens)
         # Never more than the total it sits inside, whatever the provider says.
         self.cached_tokens = min(max(0, cached_tokens), self.total_tokens)
@@ -72,4 +113,10 @@ class Evaluation:
         self.completed_at = utc_now()
 
 
-__all__ = ["TERMINAL_STATUSES", "Evaluation", "EvaluationStatus"]
+__all__ = [
+    "MAX_CANDIDATE_LENGTH",
+    "TERMINAL_STATUSES",
+    "Evaluation",
+    "EvaluationStatus",
+    "FindingCandidate",
+]
