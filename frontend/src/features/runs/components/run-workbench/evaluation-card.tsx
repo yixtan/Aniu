@@ -84,7 +84,7 @@ export function EvaluationCard({ runId }: { runId: number }) {
               className="text-foreground block text-xs font-medium"
               htmlFor={`operator-question-${runId}`}
             >
-              你有想问的吗？（可以空着）
+              {evaluation?.operator_question ? "想再问一个？" : "你有想问的吗？"}（可以空着）
             </label>
             <Textarea
               id={`operator-question-${runId}`}
@@ -100,12 +100,7 @@ export function EvaluationCard({ runId }: { runId: number }) {
             </p>
           </div>
         ) : null}
-        {evaluation?.operator_question ? (
-          <p className="text-muted-foreground border-border/60 border-s ps-2 text-xs">
-            <span className="text-foreground font-medium">你问的是：</span>
-            {evaluation.operator_question}
-          </p>
-        ) : null}
+
         {request.isError ? (
           <p className="text-destructive text-xs">{getErrorMessage(request.error)}</p>
         ) : null}
@@ -119,10 +114,22 @@ export function EvaluationCard({ runId }: { runId: number }) {
             正在生成提问与回答，通常一到两分钟。
           </p>
         ) : null}
-        {evaluation?.digest ? (
-          <section className="border-border/60 bg-muted/40 space-y-1 rounded-md border p-3">
+        {evaluation?.digest || evaluation?.operator_question ? (
+          <section className="border-border/60 bg-muted/40 space-y-2 rounded-md border p-3">
             <h3 className="text-xs font-semibold">先看这段</h3>
-            <p className="text-xs leading-relaxed">{evaluation.digest}</p>
+            {/* Joined to the lead rather than left above it: the lead now
+                opens by answering this, and the two read as one thing. */}
+            {evaluation.operator_question ? (
+              <p className="border-border/60 border-s ps-2 text-xs leading-relaxed">
+                <span className="text-foreground font-medium">你问的是：</span>
+                <span className="text-muted-foreground">
+                  {evaluation.operator_question}
+                </span>
+              </p>
+            ) : null}
+            {evaluation.digest ? (
+              <p className="text-xs leading-relaxed">{evaluation.digest}</p>
+            ) : null}
             <p className="text-muted-foreground text-xs">
               这段只是指路，结论还得看下面的原文。
             </p>

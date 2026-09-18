@@ -222,6 +222,58 @@ async def test_drafted_candidates_survive_a_round_trip(session) -> None:
 
 
 @pytest.mark.asyncio
+async def test_a_review_a_restart_interrupted_is_settled_not_left_spinning(
+    session,
+) -> None:
+    """The worker's queue is in memory, so a restart takes the work with it.
+    The row it had already marked RUNNING is a different matter: nothing will
+    pick it up again, and the card polls RUNNING on a timer — one sat at
+    「正在生成提问与回答，通常一到两分钟」 for 143 minutes."""
+
+    _run(session)
+    await session.commit()
+
+    service = EvaluationService(RunEvaluationRepository(session), StubEvaluator())
+    requested = await service.request(RUN_ID)
+    stranded = await RunEvaluationRepository(session).get_by_id(
+        requested.evaluation_id
+    )
+    assert stranded is not None
+    stranded.start()
+    await RunEvaluationRepository(session).save(stranded)
+    await session.commit()
+
+    settled = await service.settle_orphans()
+    await session.commit()
+
+    assert settled == 1
+    reloaded = await RunEvaluationRepository(session).get_by_id(
+        requested.evaluation_id
+    )
+    assert reloaded is not None
+    assert reloaded.status is EvaluationStatus.FAILED
+    assert "重启" in (reloaded.failure_reason or "")
+
+
+@pytest.mark.asyncio
+async def test_settling_orphans_leaves_a_finished_review_alone(session) -> None:
+    _run(session)
+    await session.commit()
+
+    service = EvaluationService(RunEvaluationRepository(session), StubEvaluator())
+    requested = await service.request(RUN_ID)
+    await service.execute(requested.evaluation_id)
+    await session.commit()
+
+    assert await service.settle_orphans() == 0
+    reloaded = await RunEvaluationRepository(session).get_by_id(
+        requested.evaluation_id
+    )
+    assert reloaded is not None
+    assert reloaded.status is EvaluationStatus.COMPLETED
+
+
+@pytest.mark.asyncio
 async def test_a_question_of_your_own_reaches_the_reviewer(session) -> None:
     """The button on its own lets the reviewer pick every angle. A person with
     a doubt of their own had nowhere to put it."""

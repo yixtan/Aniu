@@ -77,6 +77,27 @@ class EvaluationService:
         await self._commit()
         return stored
 
+    async def settle_orphans(self) -> int:
+        """Fail reviews a previous process was running when it went away.
+
+        The worker's queue is in memory and losing a queued request costs a
+        button press, which is why it has no startup sweep of its own. The row
+        already marked RUNNING is a different matter: nothing will ever pick it
+        up again, and the card polls a PENDING or RUNNING evaluation on a timer
+        — so without this it spins on 「正在生成提问与回答，通常一到两分钟」
+        until someone looks in the database.
+        """
+
+        settled = 0
+        for evaluation in await self._repository.list_running():
+            evaluation.fail("评估被进程重启打断，未完成；请重新发起。")
+            await self._repository.save(evaluation)
+            settled += 1
+        if settled:
+            await self._commit()
+            logger.info("settled orphan evaluations", extra={"count": settled})
+        return settled
+
     async def latest_for_run(self, run_id: int) -> Evaluation | None:
         return await self._repository.latest_for_run(run_id)
 
