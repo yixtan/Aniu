@@ -20,13 +20,14 @@ import logging
 import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from backend.agent.harness import AgentHarness
 from backend.agent.kernel.runtime_config import LlmRuntimeConfig
 from backend.business.evaluations import (
     MAX_CANDIDATE_LENGTH,
     MAX_CANDIDATES,
+    MAX_DIGEST_LENGTH,
     EvaluationResult,
     EvaluatorPort,
     FindingCandidate,
@@ -50,7 +51,8 @@ CRITIC_PROMPT = """你是一位独立的第三方评估者，受托审查一个�
 1. 每个问题必须能被证据回答或推翻。写不出「什么结果会说明你错了」的问题，不要提。
 2. 优先提那些只有对照历史记录才能看出来的问题，而不是复述报告里已经写明的内容。
 3. 不要提程序运维、接口调用、重试之类的技术执行问题，只谈投资判断与风险。
-4. 每个问题配一句话说明你为什么问它，依据是哪个具体数字。
+4. 每个问题配一句「为什么问」，**先用一句不带行话的话说清这是什么问题**，
+   再给出依据的具体数字。读的人可能不熟悉盘口术语，这一句要让他看得懂。
 5. 按重要性排序，最重要的放第一个。
 
 用中文回答。不要写客套话和总结段落。"""
@@ -68,10 +70,23 @@ ANSWER_PROMPT = """你是这次运行的执行者，现在要回答一位独立�
 
 用中文回答。不要客套话。"""
 
-CANDIDATE_PROMPT = """你读到一场独立评估：一位第三方评估者的提问，
+DIGEST_PROMPT = """你读到一场独立评估：一位第三方评估者的提问，
 以及这次运行的执行者的回答。
 
-你的任务是从这场问答里起草 2 到 3 条**未结议题**候选，交给人来决定立不立。
+你要产出两样东西：一段导读，和 2 到 3 条**未结议题**候选。
+
+## 一、导读（150 字以内）
+
+写给一个**不熟悉盘口术语的人**看，让他在不读下面几千字的情况下知道：
+这次评估主要在担心什么、哪一条最要紧、有没有需要他拿主意的地方。
+
+- 说人话。敞口、口径、净流、超大单、VWAP、深档浅档这类词，要么不用，
+  要么用括号顺带解释一次。
+- 只指路，不下结论。你是在告诉他「下面哪一段值得看」，
+  不是替他判断谁对谁错——结论要他自己看原文得出。
+- 不要复述数字清单，不要写「本次评估共提出 5 个问题」这种废话开头。
+
+## 二、候选
 
 未结议题不是问题，是**主张**。立项之后，此后每一次操盘都必须对它逐条表态（已按此调整／不同意／待定），所以它必须是一句能被表态的断言，不是一个问号。
 
@@ -92,13 +107,16 @@ CANDIDATE_PROMPT = """你读到一场独立评估：一位第三方评估者的�
 - 提问者的前提不等于事实。执行者已经用具体数字回应过的，不要再当成事实写进主张。
 - 你手上没有的数，不要推算出来当依据。
 
-只输出一个 JSON 数组，不要任何其他文字：
-[{"finding": "……", "resolution_test": "……"}]"""
+## 输出
+
+只输出一个 JSON 对象，不要任何其他文字：
+{"digest": "……", "candidates": [{"finding": "……", "resolution_test": "……"}]}"""
 
 MISSING_REPORT = "（这次运行没有留下 Markdown 报告。）"
 
 logger = logging.getLogger(__name__)
 
+_JSON_OBJECT = re.compile(r"{.*}", re.DOTALL)
 _JSON_ARRAY = re.compile(r"\[.*]", re.DOTALL)
 
 ReportReader = Callable[[int], Awaitable[RunReportRecord | None]]
@@ -152,22 +170,53 @@ def render_fill_record(record: FillRecord) -> str:
     return "\n".join(lines)
 
 
-def parse_candidates(text: str) -> tuple[FindingCandidate, ...]:
-    """Read the drafts out of whatever the model actually sent.
+def parse_digest(text: str) -> tuple[str, tuple[FindingCandidate, ...]]:
+    """Read the lead and the drafts out of whatever the model actually sent.
 
-    Tolerant on purpose. A draft is a convenience sitting on top of a review
-    that is already worth reading, so a model that wraps its array in a fence,
-    or writes a sentence before it, or emits one malformed entry among three,
-    must cost at most that entry — never the questions and answers underneath.
+    Tolerant on purpose, and tolerant of each half separately. Both sit on top
+    of a review that is already worth reading, so a fence around the object, a
+    sentence before it, a missing lead or one malformed draft among three must
+    cost at most that piece — never the questions and answers underneath.
     """
 
-    match = _JSON_ARRAY.search(text)
-    if match is None:
-        return ()
+    match = _JSON_OBJECT.search(text)
+    if match is not None:
+        try:
+            decoded: Any = json.loads(match.group(0))
+        except json.JSONDecodeError:
+            decoded = None
+        # Carrying neither key means this is not the payload: the regex also
+        # matches the first object inside a bare array, and reading that as
+        # the whole answer would throw the drafts away.
+        carries_payload = isinstance(decoded, dict) and (
+            "digest" in decoded or "candidates" in decoded
+        )
+        if carries_payload:
+            decoded = cast(dict[str, Any], decoded)
+            return (
+                _digest_text(decoded.get("digest")),
+                _read_candidates(decoded.get("candidates")),
+            )
+    # A bare array is what the earlier prompt asked for, and what a model will
+    # still send when it ignores the object wrapper. The drafts are the half
+    # worth salvaging.
+    array = _JSON_ARRAY.search(text)
+    if array is None:
+        return "", ()
     try:
-        decoded: Any = json.loads(match.group(0))
+        fallback: Any = json.loads(array.group(0))
     except json.JSONDecodeError:
-        return ()
+        return "", ()
+    return "", _read_candidates(fallback)
+
+
+def _digest_text(value: object) -> str:
+    if not isinstance(value, str):
+        return ""
+    return value.strip()[:MAX_DIGEST_LENGTH]
+
+
+def _read_candidates(decoded: object) -> tuple[FindingCandidate, ...]:
     if not isinstance(decoded, list):
         return ()
 
@@ -201,7 +250,8 @@ def _candidate_text(value: object) -> str:
 
 
 @dataclass(frozen=True, slots=True)
-class _DraftedCandidates:
+class _Digest:
+    digest: str = ""
     candidates: tuple[FindingCandidate, ...] = ()
     total_tokens: int = 0
     cached_tokens: int = 0
@@ -245,10 +295,11 @@ class EvaluationAgent(EvaluatorPort):
         )
         answers = answered.content.strip()
 
-        drafted = await self._draft_candidates(runtime, questions, answers)
+        drafted = await self._write_digest(runtime, questions, answers)
         return EvaluationResult(
             questions=questions,
             answers=answers,
+            digest=drafted.digest,
             candidates=drafted.candidates,
             total_tokens=(
                 asked.usage.total_tokens
@@ -262,13 +313,13 @@ class EvaluationAgent(EvaluatorPort):
             ),
         )
 
-    async def _draft_candidates(
+    async def _write_digest(
         self, runtime: LlmRuntimeConfig, questions: str, answers: str
-    ) -> _DraftedCandidates:
+    ) -> _Digest:
         """Never fails the review it rides on.
 
-        The questions and answers are the thing that was asked for; the drafts
-        are a shortcut past typing them up. A provider error here would
+        The questions and answers are the thing that was asked for; the lead
+        and the drafts sit on top of them. A provider error here would
         otherwise throw away a review that already cost two calls and is
         already complete.
         """
@@ -277,23 +328,25 @@ class EvaluationAgent(EvaluatorPort):
             # Nothing to draft from. The review already failed to produce the
             # thing drafts are made of, and a third call would only bill for
             # asking the model to invent objections out of an empty page.
-            return _DraftedCandidates()
+            return _Digest()
 
         drafter = AgentHarness(
             runtime=runtime,
             llm_client=self.llm_client,
-            system_prompt=CANDIDATE_PROMPT,
+            system_prompt=DIGEST_PROMPT,
             label="Draft",
         )
         try:
             written = await drafter.prompt(
                 f"## 评估者的提问\n\n{questions}\n\n## 执行者的回答\n\n{answers}"
             )
-        except Exception:  # noqa: BLE001 - the review survives a failed draft
-            logger.warning("drafting finding candidates failed", exc_info=True)
-            return _DraftedCandidates()
-        return _DraftedCandidates(
-            candidates=parse_candidates(written.content),
+        except Exception:  # noqa: BLE001 - the review survives a failed digest
+            logger.warning("writing the evaluation digest failed", exc_info=True)
+            return _Digest()
+        digest, candidates = parse_digest(written.content)
+        return _Digest(
+            digest=digest,
+            candidates=candidates,
             total_tokens=written.usage.total_tokens,
             cached_tokens=written.usage.cache_read,
         )
@@ -320,10 +373,10 @@ class EvaluationContextReader:
 
 __all__ = [
     "ANSWER_PROMPT",
-    "CANDIDATE_PROMPT",
     "CRITIC_PROMPT",
+    "DIGEST_PROMPT",
     "EvaluationAgent",
     "EvaluationContextReader",
-    "parse_candidates",
+    "parse_digest",
     "render_fill_record",
 ]

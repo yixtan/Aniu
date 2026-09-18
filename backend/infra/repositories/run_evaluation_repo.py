@@ -34,6 +34,7 @@ def _to_domain(model: RunEvaluationModel) -> Evaluation:
         status=EvaluationStatus(model.status),
         questions=model.questions,
         answers=model.answers,
+        digest=model.digest or "",
         candidates=_deserialize_candidates(model.candidates_json),
         total_tokens=int(model.total_tokens or 0),
         cached_tokens=int(model.cached_tokens or 0),
@@ -130,6 +131,7 @@ class RunEvaluationRepository:
         model.status = evaluation.status.value
         model.questions = evaluation.questions
         model.answers = evaluation.answers
+        model.digest = evaluation.digest or None
         model.candidates_json = _serialize_candidates(evaluation.candidates)
         model.total_tokens = evaluation.total_tokens
         model.cached_tokens = evaluation.cached_tokens

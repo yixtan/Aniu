@@ -36,6 +36,9 @@ export function EvaluationCard({ runId }: { runId: number }) {
   // Null while nothing is being raised, so a long answer is not followed by
   // two empty boxes the reader has to scroll past to reach anything else.
   const [draft, setDraft] = useState<Draft | null>(null);
+  // The argument is some five thousand characters. It is the evidence and
+  // it stays, but it is not what you open the card to find out.
+  const [showArgument, setShowArgument] = useState(false);
   const raise = useMutation({
     mutationFn: () =>
       raiseOpenFinding({
@@ -84,29 +87,50 @@ export function EvaluationCard({ runId }: { runId: number }) {
             正在生成提问与回答，通常一到两分钟。
           </p>
         ) : null}
-        {/* Both halves answer in Markdown — headings, bold, tables. Rendered as
-            plain text the page filled up with literal ## and **. */}
-        {evaluation?.questions ? (
-          <section className="space-y-1">
-            <h3 className="text-xs font-semibold">提问</h3>
-            <StreamingContent
-              content={evaluation.questions}
-              streaming={false}
-              scrollable={false}
-              variant="process"
-            />
+        {evaluation?.digest ? (
+          <section className="border-border/60 bg-muted/40 space-y-1 rounded-md border p-3">
+            <h3 className="text-xs font-semibold">先看这段</h3>
+            <p className="text-xs leading-relaxed">{evaluation.digest}</p>
+            <p className="text-muted-foreground text-xs">
+              这段只是指路，结论还得看下面的原文。
+            </p>
           </section>
         ) : null}
-        {evaluation?.answers ? (
-          <section className="space-y-1">
-            <h3 className="text-xs font-semibold">回答</h3>
-            <StreamingContent
-              content={evaluation.answers}
-              streaming={false}
-              scrollable={false}
-              variant="process"
-            />
-          </section>
+        {evaluation?.questions || evaluation?.answers ? (
+          <div className="space-y-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-xs"
+              onClick={() => setShowArgument((open) => !open)}
+            >
+              {showArgument ? "收起完整问答" : "看完整问答"}
+            </Button>
+            {/* Both halves answer in Markdown — headings, bold, tables. Rendered
+                as plain text the page filled up with literal ## and **. */}
+            {showArgument && evaluation.questions ? (
+              <section className="space-y-1">
+                <h3 className="text-xs font-semibold">提问</h3>
+                <StreamingContent
+                  content={evaluation.questions}
+                  streaming={false}
+                  scrollable={false}
+                  variant="process"
+                />
+              </section>
+            ) : null}
+            {showArgument && evaluation.answers ? (
+              <section className="space-y-1">
+                <h3 className="text-xs font-semibold">回答</h3>
+                <StreamingContent
+                  content={evaluation.answers}
+                  streaming={false}
+                  scrollable={false}
+                  variant="process"
+                />
+              </section>
+            ) : null}
+          </div>
         ) : null}
         {evaluation?.status === "COMPLETED" ? (
           <section className="border-border/60 space-y-2 border-t pt-3">

@@ -33,6 +33,7 @@ function evaluation(overrides: Record<string, unknown> = {}) {
     status: "COMPLETED",
     questions: "一、你连续三天零成交，证伪条件是什么？",
     answers: "这个数我手上没有，需要调用组合查询工具。",
+    digest: "",
     candidates: [],
     total_tokens: 26_000,
     cached_tokens: 9_000,
@@ -45,6 +46,35 @@ function evaluation(overrides: Record<string, unknown> = {}) {
 }
 
 describe("EvaluationCard", () => {
+  it("opens with the lead, and keeps the argument one click away", async () => {
+    // Five thousand characters of adversarial reasoning is the evidence, not
+    // the thing you open the card to find out.
+    api.getRunEvaluation.mockResolvedValue(
+      evaluation({
+        digest: "主要担心一件事：挂着的单子如果全成交，占用的钱会超过你定的上限。",
+      }),
+    );
+
+    renderCard();
+
+    expect(await screen.findByText(/挂着的单子如果全成交/)).toBeInTheDocument();
+    expect(screen.queryByText(/证伪条件是什么/)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "看完整问答" }));
+
+    expect(screen.getByText(/证伪条件是什么/)).toBeInTheDocument();
+  });
+
+  it("says the lead is only a signpost", async () => {
+    // It is a model's paraphrase of a model's argument. It points at what to
+    // read; it does not stand in for reading it.
+    api.getRunEvaluation.mockResolvedValue(evaluation({ digest: "第 3 问最要紧。" }));
+
+    renderCard();
+
+    expect(await screen.findByText(/这段只是指路/)).toBeInTheDocument();
+  });
+
   it("offers to start one when the run has never been reviewed", async () => {
     api.getRunEvaluation.mockResolvedValue(null);
 
@@ -59,7 +89,9 @@ describe("EvaluationCard", () => {
 
     renderCard();
 
-    expect(await screen.findByText(/证伪条件是什么/)).toBeInTheDocument();
+    // The argument is the evidence and it stays, one click away.
+    await userEvent.click(await screen.findByRole("button", { name: "看完整问答" }));
+    expect(screen.getByText(/证伪条件是什么/)).toBeInTheDocument();
     expect(screen.getByText(/需要调用组合查询工具/)).toBeInTheDocument();
     // The cached share reads as part of the total, never beside it.
     expect(screen.getByText(/26,000（缓存命中 9,000）/)).toBeInTheDocument();
@@ -77,8 +109,9 @@ describe("EvaluationCard", () => {
     );
 
     renderCard();
+    await userEvent.click(await screen.findByRole("button", { name: "看完整问答" }));
 
-    const heading = await screen.findByRole("heading", { name: "一、成交率断崖" });
+    const heading = screen.getByRole("heading", { name: "一、成交率断崖" });
     expect(heading).toBeInTheDocument();
     expect(screen.getByText("连续三天零成交").tagName).toBe("STRONG");
     expect(screen.queryByText(/## 一、成交率断崖/)).not.toBeInTheDocument();

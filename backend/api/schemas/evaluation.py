@@ -20,6 +20,8 @@ class EvaluationResponse(ApiModel):
     status: str
     questions: str | None = None
     answers: str | None = None
+    # The lead, written for someone who does not read the argument.
+    digest: str = ""
     candidates: list[FindingCandidateResponse] = []
     total_tokens: int = 0
     cached_tokens: int = 0

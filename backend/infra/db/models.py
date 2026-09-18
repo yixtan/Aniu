@@ -540,6 +540,10 @@ class RunEvaluationModel(Base):
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING")
     questions: Mapped[str | None] = mapped_column(Text, nullable=True)
     answers: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # What the review comes to, in ordinary words. Its own column rather than
+    # the opening lines of `answers`, because a cap is the only thing that has
+    # ever kept a model's prose short.
+    digest: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Drafts, not findings: a row here binds no run to anything until someone
     # raises it, which is why they live with the review and not in
     # `open_findings`.

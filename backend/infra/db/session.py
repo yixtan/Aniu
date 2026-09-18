@@ -459,6 +459,8 @@ def _upgrade_sqlite_schema(connection: Connection) -> None:
         column["name"]
         for column in inspect(connection).get_columns("run_evaluations")
     }
+    if "digest" not in evaluation_columns:
+        connection.execute(text("ALTER TABLE run_evaluations ADD COLUMN digest TEXT"))
     if "candidates_json" not in evaluation_columns:
         connection.execute(
             text("ALTER TABLE run_evaluations ADD COLUMN candidates_json TEXT")

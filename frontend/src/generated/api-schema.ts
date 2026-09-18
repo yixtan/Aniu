@@ -1273,6 +1273,11 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Digest
+             * @default
+             */
+            digest: string;
             /** Evaluation Id */
             evaluation_id: number;
             /** Failure Reason */
