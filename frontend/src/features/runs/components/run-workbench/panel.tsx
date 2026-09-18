@@ -152,8 +152,16 @@ function RunWorkbenchContent({
   }, [trace.stages, liveStepDeltaByStepId, isLive, now]);
 
   return (
-    <div className="flex h-full flex-col gap-4">
-      <Card className="border-border/75 bg-card/90 flex h-full min-h-0 flex-col overflow-hidden shadow-sm">
+    /* `min-h-full`, not `h-full`: the column has to be allowed to outgrow the
+       panel. With a fixed height the two cards fight over it, and the report
+       loses — it is the only one that may shrink below its content, so a
+       finished evaluation (questions, answers, three drafts) squeezed it to
+       the 2px of its own borders and the report read as blank. */
+    <div className="flex min-h-full flex-col gap-4">
+      {/* A floor rather than a share, for the same reason the panel itself has
+          one. `flex-1` still hands it the whole panel when the evaluation card
+          is small or absent. */}
+      <Card className="border-border/75 bg-card/90 flex min-h-[24rem] flex-1 flex-col overflow-hidden shadow-sm">
         <CardContent className="min-h-0 flex-1 px-4 py-3">
           <div ref={scrollerRef} className="h-full min-h-0 overflow-y-auto">
             <StageTimeline
