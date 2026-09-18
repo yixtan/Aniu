@@ -126,6 +126,22 @@ class RunEvaluationRepository:
         ).first()
         return None if model is None else _to_domain(model)
 
+    async def list_running(self) -> list[Evaluation]:
+        """Reviews a previous process left mid-flight.
+
+        The queue is in memory, so a restart takes the work with it. The row
+        it was working on stays RUNNING, and the card polls that forever.
+        """
+
+        models = (
+            await self._session.scalars(
+                select(RunEvaluationModel)
+                .where(RunEvaluationModel.status == EvaluationStatus.RUNNING.value)
+                .order_by(RunEvaluationModel.id.asc())
+            )
+        ).all()
+        return [_to_domain(model) for model in models]
+
     async def save(self, evaluation: Evaluation) -> Evaluation:
         model = await self._session.get(RunEvaluationModel, evaluation.evaluation_id)
         if model is None:

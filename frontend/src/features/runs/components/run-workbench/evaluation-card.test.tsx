@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -97,15 +97,36 @@ describe("EvaluationCard", () => {
     );
   });
 
-  it("shows afterwards what you asked", async () => {
-    // Otherwise a review that asked something unusual is unreadable later.
+  it("reads your question and the lead as one thing", async () => {
+    // Apart, the lead never mentioned the question and read as if nothing had
+    // been asked — it sent the reader to 「问题3、问题2、问题5」 and skipped
+    // question 1, which was the operator's own.
+    api.getRunEvaluation.mockResolvedValue(
+      evaluation({
+        operator_question: "为什么仓位还保持 20%？",
+        digest: "先答你的问题：额度被三笔没成交的挂单占住了，看问题 1。",
+      }),
+    );
+
+    renderCard();
+
+    const lead = (await screen.findByText("先看这段")).closest("section");
+    expect(lead).not.toBeNull();
+    expect(within(lead as HTMLElement).getByText("你问的是：")).toBeInTheDocument();
+    expect(
+      within(lead as HTMLElement).getByText(/额度被三笔没成交的挂单占住了/),
+    ).toBeInTheDocument();
+  });
+
+  it("offers to ask another once one has been asked", async () => {
+    // An empty box above 「你问的是：X」 reads as if nothing was sent.
     api.getRunEvaluation.mockResolvedValue(
       evaluation({ operator_question: "为什么仓位还保持 20%？" }),
     );
 
     renderCard();
 
-    expect(await screen.findByText("你问的是：")).toBeInTheDocument();
+    expect(await screen.findByLabelText("想再问一个？（可以空着）")).toBeInTheDocument();
   });
 
   it("offers to start one when the run has never been reviewed", async () => {

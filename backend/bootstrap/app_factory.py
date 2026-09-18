@@ -315,6 +315,11 @@ async def _initialize_runtime(application: FastAPI, config: RuntimeConfig) -> No
         await session.commit()
 
     await _recover_stale_run_jobs(session_factory)
+    # Same reason, different lane: a review this process did not start cannot
+    # be finished by it either, and the card polls RUNNING on a timer.
+    async with session_factory() as session:
+        await runtime.evaluation_service(session).settle_orphans()
+        await session.commit()
     run_worker.start()
 
     if config.scheduler_enabled:

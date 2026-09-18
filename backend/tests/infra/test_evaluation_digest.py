@@ -313,3 +313,38 @@ async def test_no_question_sends_no_brief_at_all(agent: EvaluationAgent) -> None
     await agent.evaluate(RUN_ID)
 
     assert "操作者" not in _StubHarness.prompts["Evaluate"]
+
+
+@pytest.mark.asyncio
+async def test_the_lead_is_told_a_question_was_asked(
+    agent: EvaluationAgent,
+) -> None:
+    """Otherwise the lead sends the reader to 「问题3、问题2、问题5」 and never
+    names question 1, which is the operator's own — which is what it did."""
+
+    _StubHarness.replies = {
+        "Evaluate": _Reply("问题1（账户操作者的问题）：为什么额度压在挂单上？"),
+        "Answer": _Reply("因为上限按承诺敞口算。"),
+        "Draft": _Reply('{"digest": "先答你的问题：……", "candidates": []}'),
+    }
+
+    await agent.evaluate(RUN_ID, operator_question="为何还只保持 20% 仓位？")
+
+    brief = _StubHarness.prompts["Draft"]
+    assert "为何还只保持 20% 仓位？" in brief
+    assert "导读的第一句必须先交代它" in brief
+
+
+@pytest.mark.asyncio
+async def test_no_question_leaves_the_lead_brief_alone(
+    agent: EvaluationAgent,
+) -> None:
+    _StubHarness.replies = {
+        "Evaluate": _Reply("一、证伪条件是什么？"),
+        "Answer": _Reply("这个数我手上没有。"),
+        "Draft": _Reply('{"digest": "值得看第二段。", "candidates": []}'),
+    }
+
+    await agent.evaluate(RUN_ID)
+
+    assert "操作者" not in _StubHarness.prompts["Draft"]

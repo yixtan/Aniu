@@ -123,6 +123,16 @@ OPERATOR_QUESTION_BRIEF = """## 账户的操作者另外有一个疑问
 
 这一条是**追加**，不是替换：你自己的 2 到 4 个问题照提。"""
 
+DIGEST_OPERATOR_BRIEF = """## 账户的操作者这次自己提了一个问题
+
+他写的是：
+
+{question}
+
+评估把它作为第一个问题问了出去。**导读的第一句必须先交代它**：
+评审把他的问题问成了什么、执行者怎么答的、要看第几问。
+先答他这一条，再说其余的。"""
+
 MISSING_REPORT = "（这次运行没有留下 Markdown 报告。）"
 
 logger = logging.getLogger(__name__)
@@ -319,7 +329,7 @@ class EvaluationAgent(EvaluatorPort):
         )
         answers = answered.content.strip()
 
-        drafted = await self._write_digest(runtime, questions, answers)
+        drafted = await self._write_digest(runtime, questions, answers, brief)
         return EvaluationResult(
             questions=questions,
             answers=answers,
@@ -338,7 +348,11 @@ class EvaluationAgent(EvaluatorPort):
         )
 
     async def _write_digest(
-        self, runtime: LlmRuntimeConfig, questions: str, answers: str
+        self,
+        runtime: LlmRuntimeConfig,
+        questions: str,
+        answers: str,
+        operator_question: str = "",
     ) -> _Digest:
         """Never fails the review it rides on.
 
@@ -363,6 +377,12 @@ class EvaluationAgent(EvaluatorPort):
         try:
             written = await drafter.prompt(
                 f"## 评估者的提问\n\n{questions}\n\n## 执行者的回答\n\n{answers}"
+                + (
+                    "\n\n"
+                    + DIGEST_OPERATOR_BRIEF.format(question=operator_question)
+                    if operator_question
+                    else ""
+                )
             )
         except Exception:  # noqa: BLE001 - the review survives a failed digest
             logger.warning("writing the evaluation digest failed", exc_info=True)
@@ -398,6 +418,7 @@ class EvaluationContextReader:
 __all__ = [
     "ANSWER_PROMPT",
     "CRITIC_PROMPT",
+    "DIGEST_OPERATOR_BRIEF",
     "DIGEST_PROMPT",
     "OPERATOR_QUESTION_BRIEF",
     "EvaluationAgent",
