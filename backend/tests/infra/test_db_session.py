@@ -630,6 +630,7 @@ async def test_init_db_adds_the_candidate_column(tmp_path: pathlib.Path) -> None
     connection = sqlite3.connect(sqlite_path)
     try:
         connection.execute("ALTER TABLE run_evaluations DROP COLUMN candidates_json")
+        connection.execute("ALTER TABLE run_evaluations DROP COLUMN digest")
         connection.commit()
     finally:
         connection.close()
@@ -645,6 +646,7 @@ async def test_init_db_adds_the_candidate_column(tmp_path: pathlib.Path) -> None
             for row in connection.execute("PRAGMA table_info(run_evaluations)")
         }
         assert "candidates_json" in columns
+        assert "digest" in columns
     finally:
         connection.close()
 

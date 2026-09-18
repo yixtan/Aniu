@@ -61,6 +61,7 @@ class EvaluationService:
             evaluation.complete(
                 questions=result.questions,
                 answers=result.answers,
+                digest=result.digest,
                 candidates=result.candidates,
                 total_tokens=result.total_tokens,
                 cached_tokens=result.cached_tokens,

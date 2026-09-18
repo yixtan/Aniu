@@ -1080,6 +1080,11 @@
             "title": "Created At",
             "type": "string"
           },
+          "digest": {
+            "default": "",
+            "title": "Digest",
+            "type": "string"
+          },
           "evaluation_id": {
             "title": "Evaluation Id",
             "type": "integer"

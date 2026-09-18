@@ -33,6 +33,15 @@ competing for a scarce slot, not a list to work through. Offering as many as
 the cap allows invites filling it.
 """
 
+MAX_DIGEST_LENGTH = 400
+"""A lead, not a second report.
+
+The questions and answers run to some five thousand characters between them,
+which is the price of a review that argues from the record. Nobody reads that
+to find out whether anything needs deciding, so the lead has a cap and the
+argument does not.
+"""
+
 MAX_CANDIDATE_LENGTH = 2000
 """What the raise endpoint accepts.
 
@@ -71,6 +80,12 @@ class Evaluation:
     status: EvaluationStatus = EvaluationStatus.PENDING
     questions: str | None = None
     answers: str | None = None
+    digest: str = ""
+    """What the review comes to, in ordinary words. Written separately from
+    the argument because an instruction to be readable, dropped into five
+    thousand characters of adversarial reasoning, is diluted to nothing —
+    a capped field of its own is not."""
+
     candidates: tuple[FindingCandidate, ...] = ()
     total_tokens: int = 0
     cached_tokens: int = 0
@@ -90,6 +105,7 @@ class Evaluation:
         *,
         questions: str,
         answers: str,
+        digest: str = "",
         candidates: tuple[FindingCandidate, ...] = (),
         total_tokens: int = 0,
         cached_tokens: int = 0,
@@ -99,6 +115,7 @@ class Evaluation:
         self.status = EvaluationStatus.COMPLETED
         self.questions = questions.strip() or None
         self.answers = answers.strip() or None
+        self.digest = digest.strip()[:MAX_DIGEST_LENGTH]
         self.candidates = candidates
         self.total_tokens = max(0, total_tokens)
         # Never more than the total it sits inside, whatever the provider says.
@@ -115,6 +132,7 @@ class Evaluation:
 
 __all__ = [
     "MAX_CANDIDATE_LENGTH",
+    "MAX_DIGEST_LENGTH",
     "TERMINAL_STATUSES",
     "Evaluation",
     "EvaluationStatus",

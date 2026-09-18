@@ -216,6 +216,35 @@ async def test_drafted_candidates_survive_a_round_trip(session) -> None:
 
 
 @pytest.mark.asyncio
+async def test_the_lead_survives_a_round_trip(session) -> None:
+    """It reaches the page on a later poll, like everything else here."""
+
+    _run(session)
+    await session.commit()
+
+    service = EvaluationService(
+        RunEvaluationRepository(session),
+        StubEvaluator(
+            EvaluationResult(
+                questions="一、证伪条件是什么？",
+                answers="这个数我手上没有。",
+                digest="主要担心一件事：挂着的单子全成交会超过你定的上限。",
+            )
+        ),
+    )
+    requested = await service.request(RUN_ID)
+    await service.execute(requested.evaluation_id)
+    await session.commit()
+
+    reloaded = await RunEvaluationRepository(session).get_by_id(
+        requested.evaluation_id
+    )
+
+    assert reloaded is not None
+    assert reloaded.digest.startswith("主要担心一件事")
+
+
+@pytest.mark.asyncio
 async def test_a_review_that_drafted_nothing_reads_as_empty(session) -> None:
     """Same as a review written before drafting existed: no drafts to offer."""
 
@@ -233,6 +262,7 @@ async def test_a_review_that_drafted_nothing_reads_as_empty(session) -> None:
 
     assert reloaded is not None
     assert reloaded.candidates == ()
+    assert reloaded.digest == ""
 
 
 def test_the_record_keeps_a_runs_orders_apart_from_the_days() -> None:

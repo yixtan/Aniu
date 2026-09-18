@@ -113,6 +113,7 @@ async def test_drafted_candidates_reach_the_page(
             status="COMPLETED",
             questions="一、证伪条件是什么？",
             answers="这个数我手上没有。",
+            digest="主要担心挂单全成交会超过上限，第 3 问最要紧。",
             candidates_json=(
                 '[{"finding": "五笔全在一条链上。", '
                 '"resolution_test": "把敞口拆到不相关的主线上。"}]'
@@ -130,6 +131,8 @@ async def test_drafted_candidates_reach_the_page(
             "resolution_test": "把敞口拆到不相关的主线上。",
         }
     ]
+    # The lead is what the page shows first, so it has to be on the contract.
+    assert body["digest"].startswith("主要担心挂单")
 
 
 @pytest.mark.asyncio
@@ -153,3 +156,4 @@ async def test_a_review_with_no_drafts_reads_as_an_empty_list(
     body = (await api_client.get(f"/api/aniu/runs/{RUN_ID}/evaluation")).json()
 
     assert body["candidates"] == []
+    assert body["digest"] == ""

@@ -3,6 +3,7 @@
 from backend.business.evaluations.models import (
     MAX_CANDIDATE_LENGTH,
     MAX_CANDIDATES,
+    MAX_DIGEST_LENGTH,
     TERMINAL_STATUSES,
     Evaluation,
     EvaluationStatus,
@@ -18,6 +19,7 @@ from backend.business.evaluations.service import EvaluationService
 __all__ = [
     "MAX_CANDIDATES",
     "MAX_CANDIDATE_LENGTH",
+    "MAX_DIGEST_LENGTH",
     "TERMINAL_STATUSES",
     "Evaluation",
     "EvaluationRepositoryPort",

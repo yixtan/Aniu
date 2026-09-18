@@ -14,6 +14,7 @@ class EvaluationResult:
 
     questions: str
     answers: str
+    digest: str = ""
     candidates: tuple[FindingCandidate, ...] = ()
     total_tokens: int = 0
     cached_tokens: int = 0
