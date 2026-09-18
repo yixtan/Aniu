@@ -33,6 +33,7 @@ function evaluation(overrides: Record<string, unknown> = {}) {
     status: "COMPLETED",
     questions: "一、你连续三天零成交，证伪条件是什么？",
     answers: "这个数我手上没有，需要调用组合查询工具。",
+    operator_question: "",
     digest: "",
     candidates: [],
     total_tokens: 26_000,
@@ -73,6 +74,38 @@ describe("EvaluationCard", () => {
     renderCard();
 
     expect(await screen.findByText(/这段只是指路/)).toBeInTheDocument();
+  });
+
+  it("sends a question of your own along with the request", async () => {
+    // The button alone leaves every angle to the reviewer. A person with a
+    // doubt of their own had nowhere to put it.
+    api.getRunEvaluation.mockResolvedValue(null);
+    api.requestRunEvaluation.mockResolvedValue(
+      evaluation({ status: "PENDING", questions: null, answers: null }),
+    );
+
+    renderCard();
+    await userEvent.type(
+      await screen.findByLabelText("你有想问的吗？（可以空着）"),
+      "今天行情已经变了，为什么仓位还保持 20%？",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "开始评估" }));
+
+    expect(api.requestRunEvaluation).toHaveBeenCalledWith(
+      RUN_ID,
+      "今天行情已经变了，为什么仓位还保持 20%？",
+    );
+  });
+
+  it("shows afterwards what you asked", async () => {
+    // Otherwise a review that asked something unusual is unreadable later.
+    api.getRunEvaluation.mockResolvedValue(
+      evaluation({ operator_question: "为什么仓位还保持 20%？" }),
+    );
+
+    renderCard();
+
+    expect(await screen.findByText("你问的是：")).toBeInTheDocument();
   });
 
   it("offers to start one when the run has never been reviewed", async () => {
@@ -225,7 +258,7 @@ describe("EvaluationCard", () => {
     renderCard();
     await userEvent.click(await screen.findByRole("button", { name: "开始评估" }));
 
-    expect(api.requestRunEvaluation).toHaveBeenCalledWith(RUN_ID);
+    expect(api.requestRunEvaluation).toHaveBeenCalledWith(RUN_ID, "");
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "评估中…" })).toBeDisabled(),
     );

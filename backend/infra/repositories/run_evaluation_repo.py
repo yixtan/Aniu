@@ -32,6 +32,7 @@ def _to_domain(model: RunEvaluationModel) -> Evaluation:
         run_id=int(model.run_id),
         evaluation_id=int(model.id),
         status=EvaluationStatus(model.status),
+        operator_question=model.operator_question or "",
         questions=model.questions,
         answers=model.answers,
         digest=model.digest or "",
@@ -98,12 +99,13 @@ class RunEvaluationRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def create(self, run_id: int) -> Evaluation:
+    async def create(self, run_id: int, *, operator_question: str = "") -> Evaluation:
         # created_at comes from the column default, the way every other table
         # here stamps it — one clock, in UTC, not this process's local zone.
         model = RunEvaluationModel(
             run_id=run_id,
             status=EvaluationStatus.PENDING.value,
+            operator_question=operator_question.strip() or None,
         )
         self._session.add(model)
         await self._session.flush()

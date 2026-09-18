@@ -34,8 +34,12 @@ class EvaluationService:
         self._evaluator = evaluator
         self._committer = committer
 
-    async def request(self, run_id: int) -> Evaluation:
-        evaluation = await self._repository.create(run_id)
+    async def request(
+        self, run_id: int, *, operator_question: str = ""
+    ) -> Evaluation:
+        evaluation = await self._repository.create(
+            run_id, operator_question=operator_question
+        )
         await self._commit()
         return evaluation
 
@@ -49,7 +53,10 @@ class EvaluationService:
         await self._repository.save(evaluation)
         await self._commit()
         try:
-            result = await self._evaluator.evaluate(evaluation.run_id)
+            result = await self._evaluator.evaluate(
+                evaluation.run_id,
+                operator_question=evaluation.operator_question,
+            )
         except Exception as exc:  # noqa: BLE001 - the failure is the record
             logger.warning(
                 "run evaluation failed",

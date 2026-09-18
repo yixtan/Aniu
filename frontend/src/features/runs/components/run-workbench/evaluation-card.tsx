@@ -26,10 +26,14 @@ export function EvaluationCard({ runId }: { runId: number }) {
     refetchInterval: (query) =>
       IN_FLIGHT.has(query.state.data?.status ?? "") ? 3_000 : false,
   });
+  // Empty is the ordinary case: the button on its own still runs a review
+  // where the reviewer picks every angle.
+  const [question, setQuestion] = useState("");
   const request = useMutation({
-    mutationFn: () => requestRunEvaluation(runId),
+    mutationFn: () => requestRunEvaluation(runId, question),
     onSuccess: (created) => {
       queryClient.setQueryData(queryKey, created);
+      setQuestion("");
     },
   });
 
@@ -74,6 +78,34 @@ export function EvaluationCard({ runId }: { runId: number }) {
           一位不知道本系统规则的第三方，对照账户的委托成交记录审查这次运行，并由本次运行作答。
           它读不到记忆库和全局提示词，也下不了单。
         </p>
+        {evaluation === null || evaluation.status === "COMPLETED" ? (
+          <div className="space-y-1">
+            <label
+              className="text-foreground block text-xs font-medium"
+              htmlFor={`operator-question-${runId}`}
+            >
+              你有想问的吗？（可以空着）
+            </label>
+            <Textarea
+              id={`operator-question-${runId}`}
+              rows={2}
+              value={question}
+              disabled={busy}
+              placeholder="用大白话写就行，比如「今天行情已经变了，为什么仓位还保持 20%？」"
+              onChange={(event) => setQuestion(event.target.value)}
+            />
+            <p className="text-muted-foreground text-xs">
+              写了的话，它会被排在第一个问题，而且评估会先对着记录把它问准。
+              空着就由评估自己决定问什么。
+            </p>
+          </div>
+        ) : null}
+        {evaluation?.operator_question ? (
+          <p className="text-muted-foreground border-border/60 border-s ps-2 text-xs">
+            <span className="text-foreground font-medium">你问的是：</span>
+            {evaluation.operator_question}
+          </p>
+        ) : null}
         {request.isError ? (
           <p className="text-destructive text-xs">{getErrorMessage(request.error)}</p>
         ) : null}

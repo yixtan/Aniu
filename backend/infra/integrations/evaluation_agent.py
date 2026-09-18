@@ -112,6 +112,17 @@ DIGEST_PROMPT = """你读到一场独立评估：一位第三方评估者的提�
 只输出一个 JSON 对象，不要任何其他文字：
 {"digest": "……", "candidates": [{"finding": "……", "resolution_test": "……"}]}"""
 
+OPERATOR_QUESTION_BRIEF = """## 账户的操作者另外有一个疑问
+
+他不是这套系统的一部分，也不一定懂盘口术语，但账是他的。他写的是：
+
+{question}
+
+把它作为你的**第一个问题**，并且用你的方式把它问准——对照记录补上具体数字、
+指出它真正该问的是什么。他的措辞可能不精确，你要问的是他关心的那件事。
+
+这一条是**追加**，不是替换：你自己的 2 到 4 个问题照提。"""
+
 MISSING_REPORT = "（这次运行没有留下 Markdown 报告。）"
 
 logger = logging.getLogger(__name__)
@@ -264,7 +275,9 @@ class EvaluationAgent(EvaluatorPort):
     settings_repo: SettingsRepositoryPort
     context_reader: EvaluationContextReader
 
-    async def evaluate(self, run_id: int) -> EvaluationResult:
+    async def evaluate(
+        self, run_id: int, *, operator_question: str = ""
+    ) -> EvaluationResult:
         report, record = await self.context_reader.read(run_id)
         settings = await self.settings_repo.get() or AppSettings()
         # The reviewer borrows the Run stage's model settings and none of its
@@ -281,7 +294,18 @@ class EvaluationAgent(EvaluatorPort):
             system_prompt=CRITIC_PROMPT,
             label="Evaluate",
         )
-        asked = await critic.prompt(f"## 这次运行的报告\n\n{body}\n\n{rendered}")
+        # Omitted entirely when there is none, the way the watchlist is: asking
+        # a reviewer to consider an empty question only buys a sentence saying
+        # the operator had none.
+        brief = operator_question.strip()
+        asked = await critic.prompt(
+            f"## 这次运行的报告\n\n{body}\n\n{rendered}"
+            + (
+                f"\n\n{OPERATOR_QUESTION_BRIEF.format(question=brief)}"
+                if brief
+                else ""
+            )
+        )
         questions = asked.content.strip()
 
         answerer = AgentHarness(
@@ -375,6 +399,7 @@ __all__ = [
     "ANSWER_PROMPT",
     "CRITIC_PROMPT",
     "DIGEST_PROMPT",
+    "OPERATOR_QUESTION_BRIEF",
     "EvaluationAgent",
     "EvaluationContextReader",
     "parse_digest",

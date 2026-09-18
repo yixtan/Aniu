@@ -540,6 +540,10 @@ class RunEvaluationModel(Base):
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING")
     questions: Mapped[str | None] = mapped_column(Text, nullable=True)
     answers: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # What the operator wanted asked, if anything. Written at request time and
+    # never after, so a review that asked something unusual can be read back
+    # with the reason it did.
+    operator_question: Mapped[str | None] = mapped_column(Text, nullable=True)
     # What the review comes to, in ordinary words. Its own column rather than
     # the opening lines of `answers`, because a cap is the only thing that has
     # ever kept a model's prose short.

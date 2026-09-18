@@ -6,7 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from backend.api.deps import ApiRuntimePort, get_evaluation_service, get_runtime
 from backend.api.schemas.error import error_responses
-from backend.api.schemas.evaluation import EvaluationResponse
+from backend.api.schemas.evaluation import (
+    EvaluationResponse,
+    RequestEvaluationBody,
+)
 from backend.api.security import require_authenticated
 from backend.business.evaluations import EvaluationService
 
@@ -23,10 +26,19 @@ async def request_evaluation(
     run_id: int,
     service: Annotated[EvaluationService, Depends(get_evaluation_service)],
     runtime: Annotated[ApiRuntimePort, Depends(get_runtime)],
+    payload: RequestEvaluationBody | None = None,
 ) -> object:
-    """Queue a review. It runs off the exclusive lane, so this never waits."""
+    """Queue a review, optionally with a question of the operator's own.
 
-    evaluation = await service.request(run_id)
+    Optional body, so the button alone still works and nothing that called
+    this before has to start sending one.
+    """
+
+    payload = payload or RequestEvaluationBody()
+
+    evaluation = await service.request(
+        run_id, operator_question=payload.operator_question
+    )
     worker = runtime.evaluation_worker
     if worker is None:
         raise HTTPException(
