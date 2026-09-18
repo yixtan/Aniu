@@ -63,7 +63,7 @@ async def test_closing_one_takes_it_off_the_list_a_run_sees(
 
     closed = await api_client.post(
         f"/api/aniu/open-findings/{finding_id}/close",
-        json={"note": "浅档三笔分批成交，了结条件已由行情满足。"},
+        json={"outcome": "MET", "note": "浅档三笔分批成交，了结条件已由行情满足。"},
     )
 
     assert closed.status_code == 200
@@ -76,7 +76,8 @@ async def test_closing_something_that_is_not_there_says_so(
     api_client: AsyncClient,
 ) -> None:
     missing = await api_client.post(
-        "/api/aniu/open-findings/999/close", json={"note": "了结。"}
+        "/api/aniu/open-findings/999/close",
+        json={"outcome": "MET", "note": "了结。"},
     )
 
     assert missing.status_code == 404
@@ -93,7 +94,8 @@ async def test_closing_without_a_reason_is_refused(api_client: AsyncClient) -> N
     finding_id = raised.json()["finding_id"]
 
     response = await api_client.post(
-        f"/api/aniu/open-findings/{finding_id}/close", json={"note": ""}
+        f"/api/aniu/open-findings/{finding_id}/close",
+        json={"outcome": "MET", "note": ""},
     )
 
     assert response.status_code == 422
@@ -112,7 +114,10 @@ async def test_a_closed_finding_carries_why_it_closed(
     body = (
         await api_client.post(
             f"/api/aniu/open-findings/{finding_id}/close",
-            json={"note": "浅档三笔分批成交、深档未触发，了结条件由行情满足。"},
+            json={
+                "outcome": "MET",
+                "note": "浅档三笔分批成交、深档未触发，了结条件由行情满足。",
+            },
         )
     ).json()
 
@@ -135,3 +140,45 @@ async def test_a_fresh_finding_is_not_waiting_on_anyone(
 
     assert body["settlement_proposed"] is False
     assert body["closing_note"] == ""
+
+
+@pytest.mark.asyncio
+async def test_closing_must_say_which_of_the_two_endings(
+    api_client: AsyncClient,
+) -> None:
+    """Free text alone made the page ask an open question and left the person
+    with a blank box; naming the two endings is what made it answerable."""
+
+    raised = await api_client.post(
+        "/api/aniu/open-findings",
+        json={"finding": FINDING, "resolution_test": TEST},
+    )
+    finding_id = raised.json()["finding_id"]
+
+    response = await api_client.post(
+        f"/api/aniu/open-findings/{finding_id}/close",
+        json={"note": "关掉了。"},
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_a_withdrawn_finding_is_not_a_settled_one(
+    api_client: AsyncClient,
+) -> None:
+    raised = await api_client.post(
+        "/api/aniu/open-findings",
+        json={"finding": FINDING, "resolution_test": TEST},
+    )
+    finding_id = raised.json()["finding_id"]
+
+    body = (
+        await api_client.post(
+            f"/api/aniu/open-findings/{finding_id}/close",
+            json={"outcome": "WITHDRAWN", "note": "了结条件里的 115 口径是误引。"},
+        )
+    ).json()
+
+    assert body["closing_outcome"] == "WITHDRAWN"
+    assert body["closing_note"].startswith("了结条件里的")

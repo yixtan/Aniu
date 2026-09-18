@@ -1043,6 +1043,11 @@ export interface components {
         CloseFindingRequest: {
             /** Note */
             note: string;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "MET" | "WITHDRAWN";
         };
         /** CreateMemoryRequest */
         CreateMemoryRequest: {
@@ -1770,6 +1775,11 @@ export interface components {
              * @default
              */
             closing_note: string;
+            /**
+             * Closing Outcome
+             * @default
+             */
+            closing_outcome: string;
             /**
              * Created At
              * Format: date-time

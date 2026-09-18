@@ -679,3 +679,37 @@ async def test_init_db_adds_the_closing_note_column(tmp_path: pathlib.Path) -> N
         assert "closing_note" in columns
     finally:
         connection.close()
+
+
+@pytest.mark.asyncio
+async def test_init_db_adds_the_closing_outcome_column(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Findings closed before the two endings were told apart have neither,
+    and must still load rather than take the finding down with them."""
+
+    sqlite_path = tmp_path / "aniu.sqlite3"
+    engine = create_engine(build_database_url(sqlite_path))
+    await init_db(engine)
+    await engine.dispose()
+
+    connection = sqlite3.connect(sqlite_path)
+    try:
+        connection.execute("ALTER TABLE open_findings DROP COLUMN closing_outcome")
+        connection.commit()
+    finally:
+        connection.close()
+
+    migrated_engine = create_engine(build_database_url(sqlite_path))
+    await init_db(migrated_engine)
+    await migrated_engine.dispose()
+
+    connection = sqlite3.connect(sqlite_path)
+    try:
+        columns = {
+            str(row[1])
+            for row in connection.execute("PRAGMA table_info(open_findings)")
+        }
+        assert "closing_outcome" in columns
+    finally:
+        connection.close()

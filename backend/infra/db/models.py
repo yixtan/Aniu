@@ -513,8 +513,9 @@ class OpenFindingModel(Base):
     )
     created_at: Mapped[str] = mapped_column(Text, nullable=False, default=utc_now_iso)
     closed_at: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # Why it closed. Nullable because rows closed before this existed have no
-    # answer, and inventing one for them would be worse than the gap.
+    # How and why it closed. Nullable because rows closed before these existed
+    # have no answer, and inventing one for them would be worse than the gap.
+    closing_outcome: Mapped[str | None] = mapped_column(String(16), nullable=True)
     closing_note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 

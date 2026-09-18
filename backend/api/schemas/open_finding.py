@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from backend.api.schemas.common import ApiModel
 
@@ -29,7 +30,16 @@ class OpenFindingResponse(ApiModel):
     dispositions: list[DispositionResponse] = []
     created_at: datetime
     closed_at: datetime | None = None
+    closing_outcome: str = ""
     closing_note: str = ""
+
+    @field_validator("closing_outcome", mode="before")
+    @classmethod
+    def _unrecorded_reads_as_empty(cls, value: object) -> object:
+        # Never null, so the page can compare it without a guard. An open
+        # finding and one closed before the two endings were told apart both
+        # arrive here as None, and both mean the same thing: not recorded.
+        return "" if value is None else value
 
 
 class RaiseFindingRequest(ApiModel):
@@ -41,9 +51,11 @@ class RaiseFindingRequest(ApiModel):
 
 
 class CloseFindingRequest(ApiModel):
-    # Required for the same reason the resolution test is: without it, a
-    # finding settled by evidence and one abandoned as the wrong question are
-    # the same row, and a month later nobody can tell them apart.
+    # Which of the two endings, and why. Both are required for the same reason
+    # the resolution test is: without them, a finding settled by evidence and
+    # one abandoned as the wrong question are the same row, and a month later
+    # nobody can tell them apart.
+    outcome: Literal["MET", "WITHDRAWN"]
     note: str = Field(min_length=1, max_length=2000)
 
 

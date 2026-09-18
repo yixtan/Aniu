@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { FindingsPage } from "./findings-page";
 
@@ -36,12 +36,19 @@ function finding(overrides: Record<string, unknown> = {}) {
     dispositions: [],
     created_at: "2026-09-17T08:00:00+00:00",
     closed_at: null,
+    closing_outcome: "",
     closing_note: "",
     ...overrides,
   };
 }
 
 describe("FindingsPage", () => {
+  // Calls accumulate across tests otherwise, and `mock.calls[0]` then
+  // belongs to whichever test ran first rather than to this one.
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("explains what an empty list means rather than showing nothing", async () => {
     api.listOpenFindings.mockResolvedValue([]);
 
@@ -83,45 +90,81 @@ describe("FindingsPage", () => {
 
     renderPage();
 
-    expect(await screen.findByText("已被 2 次运行处置")).toBeInTheDocument();
-    expect(screen.getByText("其中 3 次未做调整")).toBeInTheDocument();
+    expect(await screen.findByText("智能体回答过 2 次")).toBeInTheDocument();
+    expect(screen.getByText("其中 3 次没有改动")).toBeInTheDocument();
     // Which run said what, then the reasoning below it: these notes run to
     // three hundred characters without a line break of their own.
-    expect(screen.getByText(/运行 20260917101 · 不同意/)).toBeInTheDocument();
+    expect(screen.getByText(/第 20260917101 次操盘 · 不同意/)).toBeInTheDocument();
     expect(screen.getByText("经复核，该顾虑不成立")).toBeInTheDocument();
-    expect(screen.getByText(/运行 20260917102 · 已按此调整/)).toBeInTheDocument();
+    expect(screen.getByText(/第 20260917102 次操盘 · 按这条改了/)).toBeInTheDocument();
     expect(screen.getByText("已拆到不相关主线")).toBeInTheDocument();
   });
 
-  it("will not close a finding until it is told why", async () => {
-    // Without the sentence, "settled by evidence" and "dropped, wrong
-    // question" are the same row a month later.
+  it("will not close a finding until it is told how it ended and why", async () => {
+    // Without both, "settled by evidence" and "dropped, wrong question" are
+    // the same row a month later.
     api.listOpenFindings.mockResolvedValue([finding()]);
 
     renderPage();
-    await userEvent.click(await screen.findByRole("button", { name: /^关闭/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "结掉这条" }));
 
-    expect(screen.getByRole("button", { name: "确认关闭" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "关掉它" })).toBeDisabled();
+
+    await userEvent.click(screen.getByRole("button", { name: /做到了，可以结了/ }));
+    expect(screen.getByRole("button", { name: "关掉它" })).toBeDisabled();
+
     expect(api.closeOpenFinding).not.toHaveBeenCalled();
   });
 
-  it("closes a finding with the reason the person gave", async () => {
+  it("puts the resolution test in front of the person deciding", async () => {
+    // It is also at the top of the card, but not on screen while you type —
+    // which is what left a blank box with nothing to judge against.
+    api.listOpenFindings.mockResolvedValue([finding()]);
+
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "结掉这条" }));
+
+    expect(screen.getByText("先看一眼当初说好的了结条件")).toBeInTheDocument();
+    expect(screen.getAllByText(/分批而非同时成交/)).toHaveLength(2);
+  });
+
+  it("files a withdrawal as a withdrawal, not as a finding that was met", async () => {
     api.listOpenFindings.mockResolvedValue([finding()]);
     api.closeOpenFinding.mockResolvedValue(finding({ status: "CLOSED" }));
 
     renderPage();
-    await userEvent.click(await screen.findByRole("button", { name: /^关闭/ }));
-    await userEvent.type(
-      screen.getByLabelText("了结说明（必填）"),
-      "浅档三笔分批成交，条件由行情满足。",
-    );
-    await userEvent.click(screen.getByRole("button", { name: "确认关闭" }));
+    await userEvent.click(await screen.findByRole("button", { name: "结掉这条" }));
+    await userEvent.click(screen.getByRole("button", { name: /这条不问了/ }));
+    await userEvent.type(screen.getByLabelText("说点什么（必填）"), "了结条件写错了。");
+    await userEvent.click(screen.getByRole("button", { name: "关掉它" }));
 
-    // react-query hands the mutation a context object as a second argument;
-    // what matters is which finding was closed, and why.
     await waitFor(() => expect(api.closeOpenFinding).toHaveBeenCalled());
     expect(api.closeOpenFinding.mock.calls[0]?.[0]).toEqual({
       findingId: 7,
+      outcome: "WITHDRAWN",
+      note: "了结条件写错了。",
+    });
+  });
+
+  it("closes a finding with the ending and the reason the person gave", async () => {
+    api.listOpenFindings.mockResolvedValue([finding()]);
+    api.closeOpenFinding.mockResolvedValue(finding({ status: "CLOSED" }));
+
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: "结掉这条" }));
+    await userEvent.click(screen.getByRole("button", { name: /做到了，可以结了/ }));
+    await userEvent.type(
+      screen.getByLabelText("说点什么（必填）"),
+      "浅档三笔分批成交，条件由行情满足。",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "关掉它" }));
+
+    // react-query hands the mutation a context object as a second argument;
+    // what matters is which finding was closed, how it ended, and why.
+    await waitFor(() => expect(api.closeOpenFinding).toHaveBeenCalled());
+    expect(api.closeOpenFinding.mock.calls[0]?.[0]).toEqual({
+      findingId: 7,
+      outcome: "MET",
       note: "浅档三笔分批成交，条件由行情满足。",
     });
   });
@@ -133,7 +176,7 @@ describe("FindingsPage", () => {
     renderPage();
     await screen.findByText(/五笔买入限价单/);
 
-    expect(screen.queryByText(/次运行处置/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/智能体回答过/)).not.toBeInTheDocument();
     expect(screen.queryByText(/^最近：/)).not.toBeInTheDocument();
   });
 
@@ -156,8 +199,8 @@ describe("FindingsPage", () => {
 
     renderPage();
 
-    expect(await screen.findByText(/运行认为可了结/)).toBeInTheDocument();
-    expect(screen.getByText("最近：认为可了结")).toBeInTheDocument();
+    expect(await screen.findByText(/它说已经做到了/)).toBeInTheDocument();
+    expect(screen.getByText("最近：说已经做到了")).toBeInTheDocument();
   });
 
   it("shows the newest verdict without expanding four paragraphs", async () => {
@@ -172,13 +215,14 @@ describe("FindingsPage", () => {
 
     renderPage();
 
-    expect(await screen.findByText("最近：已按此调整")).toBeInTheDocument();
+    expect(await screen.findByText("最近：按这条改了")).toBeInTheDocument();
   });
 
   it("says why a closed finding closed", async () => {
     api.listOpenFindings.mockResolvedValue([
       finding({
         status: "CLOSED",
+        closing_outcome: "MET",
         closing_note: "浅档三笔分批成交，条件由行情满足。",
       }),
     ]);
@@ -186,6 +230,7 @@ describe("FindingsPage", () => {
     renderPage();
 
     expect(await screen.findByText(/浅档三笔分批成交/)).toBeInTheDocument();
+    expect(screen.getByText("做到了：")).toBeInTheDocument();
   });
 
   it("keeps closed findings out of the list a run answers", async () => {
@@ -198,6 +243,6 @@ describe("FindingsPage", () => {
     const closed = await screen.findByText("已关闭");
     const section = closed.closest("section") as HTMLElement;
     expect(within(section).getByText("已经解决的那条")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /关闭/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "结掉这条" })).not.toBeInTheDocument();
   });
 });

@@ -11,7 +11,12 @@ from __future__ import annotations
 
 import pytest
 
-from backend.business.open_findings import FindingStatus, OpenFinding, Verdict
+from backend.business.open_findings import (
+    ClosingOutcome,
+    FindingStatus,
+    OpenFinding,
+    Verdict,
+)
 
 FINDING = "五笔买入限价单全属 AI 硬件链，成交条件与风险条件相同。"
 TEST = "说明在什么行情下它们会分批而非同时成交，或把敞口拆到不相关的主线上。"
@@ -25,14 +30,18 @@ def test_closing_must_say_why() -> None:
     """Without it, settled-by-evidence and abandoned-as-wrong are one row."""
 
     with pytest.raises(ValueError, match="must say why"):
-        _one().close("   ")
+        _one().close(outcome=ClosingOutcome.MET, note="   ")
 
 
 def test_a_closed_finding_keeps_its_reason() -> None:
     item = _one()
-    item.close("浅档三笔分批成交、深档三笔未触发，了结条件由行情满足。")
+    item.close(
+        outcome=ClosingOutcome.MET,
+        note="浅档三笔分批成交、深档三笔未触发，了结条件由行情满足。",
+    )
 
     assert item.status is FindingStatus.CLOSED
+    assert item.closing_outcome is ClosingOutcome.MET
     assert item.closing_note.startswith("浅档三笔")
     assert item.closed_at is not None
 
@@ -85,6 +94,31 @@ def test_only_the_newest_disposition_asks_for_a_decision() -> None:
 def test_a_closed_finding_is_never_waiting_on_anyone() -> None:
     item = _one()
     item.dispose(run_id=1, verdict=Verdict.SETTLED, note="三笔分批成交。")
-    item.close("确认了结。")
+    item.close(outcome=ClosingOutcome.MET, note="确认了结。")
 
     assert item.settlement_proposed is False
+
+
+def test_the_two_endings_are_told_apart_in_the_record() -> None:
+    """A test that was met says the mechanism worked; a withdrawal says the
+    question was wrong. Counting them apart is how anyone tells, later,
+    whether raising findings is worth doing."""
+
+    met = _one()
+    met.close(outcome=ClosingOutcome.MET, note="三笔分批成交。")
+    dropped = _one()
+    dropped.close(outcome=ClosingOutcome.WITHDRAWN, note="前提本来就不成立。")
+
+    assert met.closing_outcome is ClosingOutcome.MET
+    assert dropped.closing_outcome is ClosingOutcome.WITHDRAWN
+
+
+def test_a_row_closed_before_the_endings_existed_has_neither() -> None:
+    item = OpenFinding(
+        finding=FINDING,
+        resolution_test=TEST,
+        status=FindingStatus.CLOSED,
+    )
+
+    assert item.closing_outcome is None
+    assert item.closing_note == ""

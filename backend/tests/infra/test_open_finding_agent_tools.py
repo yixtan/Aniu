@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from backend.business.open_findings import (
+    ClosingOutcome,
     FindingStatus,
     OpenFinding,
     OpenFindingService,
@@ -156,7 +157,7 @@ async def test_a_closed_finding_takes_no_further_verdict(session_factory) -> Non
     finding_id = await _raise_one(session_factory)
     async with session_factory() as session:
         await OpenFindingService(OpenFindingRepository(session)).close(
-            finding_id, note="按证据了结。"
+            finding_id, outcome=ClosingOutcome.MET, note="按证据了结。"
         )
         await session.commit()
 

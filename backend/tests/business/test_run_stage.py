@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend.business.open_findings import (
+    ClosingOutcome,
     FindingStatus,
     OpenFinding,
     Verdict,
@@ -302,7 +303,7 @@ def test_a_run_may_state_where_it_stands_but_only_a_person_closes() -> None:
     assert item.status is FindingStatus.OPEN
     assert item.times_disputed == 1
 
-    item.close("按证据了结。")
+    item.close(outcome=ClosingOutcome.MET, note="按证据了结。")
 
     assert item.status is FindingStatus.CLOSED
     with pytest.raises(ValueError, match="closed finding"):
