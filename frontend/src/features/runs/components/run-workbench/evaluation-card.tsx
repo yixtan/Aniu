@@ -56,7 +56,7 @@ export function EvaluationCard({ runId }: { runId: number }) {
   const busy = request.isPending || running;
 
   return (
-    <Card className="border-border/75 bg-card/90 gap-2 py-4 shadow-sm">
+    <Card className="border-border/75 bg-card/90 shrink-0 gap-2 py-4 shadow-sm">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0">
         <CardTitle className="flex items-center gap-2 text-sm font-medium">
           <ScaleIcon aria-hidden className="text-muted-foreground size-4" />
