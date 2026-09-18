@@ -41,10 +41,16 @@ class Verdict(StrEnum):
     SETTLED = "SETTLED"
     """The run believes the resolution test is now met. It still cannot close.
 
-    Separate from ADJUSTED because "I changed what you asked about" and "the
-    thing you said would settle this has happened" are answered by different
-    evidence. The first is the run's own plan; the second has to point at
-    something outside it. Finding 1 was disposed ADJUSTED three times on its
+    Separate from ADJUSTED because "I changed what you asked about" and "what
+    you said would settle this is now true" are different claims, and only the
+    second asks anybody for a decision. Which one it is turns on the test, not
+    on where the evidence came from: finding 2's test asked for three
+    artifacts the run could produce itself, and the first wording here said
+    settlement had to point outside the run's own plan — so the run wrote
+    「三项齐备……请按 resolution_test 核验」 and filed it as ADJUSTED, which is a
+    settlement request under a verdict that asks for nothing.
+
+    It still cannot close. Finding 1 was disposed ADJUSTED three times on its
     own account before a fill demonstrated it, and a rule that closed on
     repeated agreement would have closed it an hour before the evidence.
     """

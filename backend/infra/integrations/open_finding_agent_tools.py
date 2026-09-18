@@ -70,9 +70,11 @@ class DisposeOpenFindingTool:
                                 Verdict.UNDECIDED.value,
                             ],
                             "description": (
-                                "ADJUSTED=已按此调整（说的是你自己的计划）；"
-                                "SETTLED=resolution_test 已被满足（说的是计划之外"
-                                "已经发生的事，note 必须指出那个证据是什么）；"
+                                "ADJUSTED=我改了做法，但 resolution_test 还没成立；"
+                                "SETTLED=resolution_test 现在已经成立，"
+                                "note 说清证据是什么——证据由谁产出不重要，"
+                                "条件成立与否才是判据，你自己补齐了它要的东西"
+                                "同样算成立；"
                                 "DISAGREED=不同意；UNDECIDED=尚无法判断。"
                                 "SETTLED 不会关闭议题，它只是请操作者来确认；"
                                 "若该议题已标着 settlement_proposed，说明上一次"
@@ -85,6 +87,7 @@ class DisposeOpenFindingTool:
                                 "对着该议题的 resolution_test 说话："
                                 "调整了什么／为什么不同意且什么证据会改变看法／"
                                 "缺哪个数据要怎么取。"
+                                "开头不要复述 verdict，它已经单独记下了，直接说证据。"
                             ),
                         },
                     },

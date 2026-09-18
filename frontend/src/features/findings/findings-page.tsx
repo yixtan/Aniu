@@ -101,31 +101,34 @@ export function FindingsPage() {
               <span className="text-foreground font-medium">了结条件：</span>
               {item.resolution_test}
             </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline">已被 {item.dispositions.length} 次运行处置</Badge>
-              {/* The newest verdict, so "this looks done" is one glance rather
-                  than four paragraphs of disposition notes. */}
-              {latestVerdict(item.dispositions) !== null ? (
+            {/* Nothing at all until a run has answered: "已被 0 次运行处置" on a
+                finding raised a minute ago is a row of chrome saying nothing. */}
+            {item.dispositions.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline">已被 {item.dispositions.length} 次运行处置</Badge>
+                {/* The newest verdict, so "this looks done" is one glance rather
+                    than four paragraphs of disposition notes. */}
                 <Badge variant="outline">
                   最近：{verdictLabel(latestVerdict(item.dispositions) ?? "")}
                 </Badge>
-              ) : null}
-              {item.settlement_proposed ? (
-                <Badge variant="outline" className="border-emerald-500 text-emerald-700">
-                  运行认为可了结 —— 等你确认
-                </Badge>
-              ) : null}
-              {item.times_disputed > 0 ? (
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    item.times_disputed >= TALKED_PAST && "border-amber-500 text-amber-700",
-                  )}
-                >
-                  其中 {item.times_disputed} 次未做调整
-                </Badge>
-              ) : null}
-            </div>
+                {item.settlement_proposed ? (
+                  <Badge variant="outline" className="border-emerald-500 text-emerald-700">
+                    运行认为可了结 —— 等你确认
+                  </Badge>
+                ) : null}
+                {item.times_disputed > 0 ? (
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      item.times_disputed >= TALKED_PAST &&
+                        "border-amber-500 text-amber-700",
+                    )}
+                  >
+                    其中 {item.times_disputed} 次未做调整
+                  </Badge>
+                ) : null}
+              </div>
+            ) : null}
             {closing?.findingId === item.finding_id ? (
               <div className="border-border/60 space-y-2 rounded-md border p-2">
                 <label
@@ -165,11 +168,24 @@ export function FindingsPage() {
               </div>
             ) : null}
             {item.dispositions.length > 0 ? (
-              <ul className="text-muted-foreground space-y-1">
+              /* Which run said what goes on its own line, and the reasoning
+                 below it. These notes run to three hundred characters with no
+                 line breaks of their own, so run id, verdict and argument on
+                 one line is a wall nobody reads. */
+              <ul className="space-y-2">
                 {item.dispositions.map((disposition) => (
-                  <li key={`${disposition.run_id}-${disposition.at}`}>
-                    运行 {disposition.run_id} · {verdictLabel(disposition.verdict)}
-                    {disposition.note ? ` · ${disposition.note}` : ""}
+                  <li
+                    key={`${disposition.run_id}-${disposition.at}`}
+                    className="border-border/60 space-y-0.5 border-s ps-2"
+                  >
+                    <p className="text-foreground text-xs font-medium tabular-nums">
+                      运行 {disposition.run_id} · {verdictLabel(disposition.verdict)}
+                    </p>
+                    {disposition.note ? (
+                      <p className="text-muted-foreground text-xs leading-relaxed">
+                        {disposition.note}
+                      </p>
+                    ) : null}
                   </li>
                 ))}
               </ul>
