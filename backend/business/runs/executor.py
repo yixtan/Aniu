@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from time import perf_counter
 
 from backend.business.away import RunCompletionHookPort
+from backend.business.exposure import LatestExposureCapPort
 from backend.business.notifications import (
     NotificationEvent,
     NotificationEventKind,
@@ -81,6 +82,7 @@ class RunExecutor:
         watchlist: FollowedCompaniesPort | None = None,
         order_plan: OrderPlanPort | None = None,
         open_findings: OpenFindingsPort | None = None,
+        latest_exposure_cap: LatestExposureCapPort | None = None,
     ) -> None:
         self._run_repo = run_repo
         self._committer = committer
@@ -96,6 +98,7 @@ class RunExecutor:
         self._watchlist = watchlist
         self._order_plan = order_plan
         self._open_findings = open_findings
+        self._latest_exposure_cap = latest_exposure_cap
         self._run_completion_hook = run_completion_hook
         self._execution_callbacks = RunExecutionCallbacks(
             runtime=self._runtime,
@@ -160,6 +163,7 @@ class RunExecutor:
                         watchlist=self._watchlist,
                         order_plan=self._order_plan,
                         open_findings=self._open_findings,
+                        latest_exposure_cap=self._latest_exposure_cap,
                     )
                 )
         except RunAbortError as exc:

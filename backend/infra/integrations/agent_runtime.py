@@ -15,6 +15,9 @@ from backend.business.settings import STRATEGY_STAGE_IDS, StageSettings
 from backend.infra.integrations.aggregate_stock_agent_tools import (
     register_aggregate_stock_tools,
 )
+from backend.infra.integrations.exposure_cap_agent_tools import (
+    DeclareExposureCapTool,
+)
 from backend.infra.integrations.kline_agent_tool import QueryKlineTool
 from backend.infra.integrations.memory_agent_tools import (
     AUTHORING_OPERATIONS,
@@ -69,6 +72,7 @@ class AgentRuntimeFactory:
                 )
             )
             registry.register(DeclareOrderPlanTool(self._session_factory))
+            registry.register(DeclareExposureCapTool(self._session_factory))
             registry.register(DisposeOpenFindingTool(self._session_factory))
         if self._public_stock_data is not None:
             register_public_stock_tools(registry, service=self._public_stock_data)

@@ -6,6 +6,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import ClassVar
 
+from backend.business.exposure.models import ExposureCap
 from backend.business.open_findings.models import OpenFinding
 from backend.business.order_directives import OrderDirective
 from backend.business.runs import StrategyRun, StrategySnapshot
@@ -141,6 +142,13 @@ class RunExecutionContext:
 
     One generation back, not the whole archive: a run needs to see the arc of
     a decision it is about to revisit, not every statement ever made.
+    """
+    previous_exposure_cap: ExposureCap | None = None
+    """The last cap any run declared, so this one can say why it moves or not.
+
+    Read rather than remembered: the number is a state of today, and a state
+    kept in long-term memory is what turned 「总敞口约20%封顶」 into a fact
+    about the world that six days of rules inherited.
     """
     open_findings: tuple[OpenFinding, ...] = ()
     """Objections a reviewer raised that nobody has closed yet.

@@ -52,6 +52,7 @@ from backend.infra.integrations.notifications import (
     RoutingNotificationSender,
     TradeNotificationDispatcher,
 )
+from backend.infra.integrations.run_exposure_cap import LatestExposureCapQuery
 from backend.infra.integrations.run_open_findings import RunOpenFindingsQuery
 from backend.infra.integrations.run_order_plan import RunOrderPlanQuery
 from backend.infra.integrations.run_watchlist import RunWatchlistQuery
@@ -79,6 +80,7 @@ from backend.infra.repositories.auth_repo import (
 )
 from backend.infra.repositories.away_mode_repo import AwayModeRepository
 from backend.infra.repositories.email_settings_repo import EmailSettingsRepository
+from backend.infra.repositories.exposure_cap_repo import ExposureCapRepository
 from backend.infra.repositories.fill_record_repo import FillRecordRepository
 from backend.infra.repositories.open_finding_repo import OpenFindingRepository
 from backend.infra.repositories.run_evaluation_repo import RunEvaluationRepository
@@ -450,6 +452,7 @@ class AppRuntime:
                     fill_record_for_run=fill_records.for_run,
                 ),
                 open_findings=RunOpenFindingsQuery(self.require_session_factory()),
+                exposure_caps=ExposureCapRepository(session),
             ),
             committer=session,
         )
@@ -486,5 +489,8 @@ class AppRuntime:
             watchlist=RunWatchlistQuery(self.require_session_factory()),
             order_plan=RunOrderPlanQuery(self.require_session_factory()),
             open_findings=RunOpenFindingsQuery(self.require_session_factory()),
+            latest_exposure_cap=LatestExposureCapQuery(
+                self.require_session_factory()
+            ),
             run_completion_hook=self.optional_away_mode_service(session),
         )

@@ -491,6 +491,34 @@ class RunJobModel(Base):
     )
 
 
+class ExposureCapModel(Base):
+    """What one run said it may hold today, before it traded.
+
+    Its own table, and one row per run rather than one standing value: the
+    point of the record is the series. A single mutable number answers "what
+    is the cap" and nothing else; a row per run answers whether it ever moves,
+    against what, and at what cost.
+    """
+
+    __tablename__ = "exposure_caps"
+    __table_args__ = (Index("idx_exposure_caps_declared", "declared_at", "id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("strategy_runs.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    cap_pct: Mapped[float] = mapped_column(Float, nullable=False)
+    basis: Mapped[str] = mapped_column(Text, nullable=False)
+    changed_from: Mapped[str] = mapped_column(Text, nullable=False)
+    # What the cap cost today. Recorded once in six days as prose in a memory;
+    # a column is the difference between an anecdote and a series.
+    forgone: Mapped[str] = mapped_column(Text, nullable=False)
+    declared_at: Mapped[str] = mapped_column(Text, nullable=False, default=utc_now_iso)
+
+
 class OpenFindingModel(Base):
     """An objection a run must answer until a person closes it."""
 
