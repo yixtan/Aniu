@@ -69,6 +69,17 @@ class RunStage:
                     directive_payload(item, include_issuer=True)
                     for item in context.previous_order_plan
                 ]
+        # The last cap anybody declared. Left out when there is none, so the
+        # first run after this shipped declares one from today rather than
+        # explaining a move from nothing.
+        if context.previous_exposure_cap is not None:
+            previous = context.previous_exposure_cap
+            runtime_payload["previous_exposure_cap"] = {
+                "run_id": previous.run_id,
+                "cap_pct": previous.cap_pct,
+                "basis": previous.basis,
+                "declared_at": previous.declared_at.isoformat(),
+            }
         # Unanswered objections, left out entirely when there are none — the
         # watchlist pattern. Each carries what would settle it, so answering
         # one is a check against evidence rather than a matter of opinion.

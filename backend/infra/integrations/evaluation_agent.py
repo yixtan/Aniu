@@ -32,6 +32,7 @@ from backend.business.evaluations import (
     EvaluatorPort,
     FindingCandidate,
 )
+from backend.business.exposure import ExposureCap, ExposureCapHistoryPort
 from backend.business.fill_record import FillRecord
 from backend.business.open_findings import OpenFindingsPort
 from backend.business.runs.reports import RunReportRecord
@@ -134,6 +135,32 @@ DIGEST_OPERATOR_BRIEF = """## 账户的操作者这次自己提了一个问题
 评审把他的问题问成了什么、执行者怎么答的、要看第几问。
 先答他这一条，再说其余的。"""
 
+def render_exposure_caps(caps: list[ExposureCap]) -> str:
+    """The cap series, newest first, so a reviewer can see whether it moves.
+
+    One number tells a reviewer what the cap is. The series tells it whether
+    the cap responds to anything, which is the question a single declaration
+    cannot answer no matter how well argued.
+    """
+
+    lines = ["## 各次运行自己声明的当日敞口上限（最近在前）", ""]
+    lines += [
+        "| 运行 | 上限 | 依据 | 相比上次 | 因此放弃了什么 |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    lines += [
+        f"| {cap.run_id} | {cap.cap_pct:g}% | {cap.basis} | "
+        f"{cap.changed_from} | {cap.forgone} |"
+        for cap in caps
+    ]
+    lines += [
+        "",
+        "这个数字不是别处规定的常量，是每次运行自己定的。"
+        "它该不该随行情变、有没有真的变过，你看得到整列就能判断。",
+    ]
+    return "\n".join(lines)
+
+
 DIGEST_OPEN_FINDINGS_BRIEF = """## 下面这些质疑已经在未结议题列表上了
 
 {findings}
@@ -144,6 +171,9 @@ DIGEST_OPEN_FINDINGS_BRIEF = """## 下面这些质疑已经在未结议题列表
 如果这次问答让某条已立议题有了新证据，写进导读，不要做成候选。"""
 
 MISSING_REPORT = "（这次运行没有留下 Markdown 报告。）"
+
+EXPOSURE_CAP_HISTORY = 12
+"""Enough declarations to show whether the number tracks anything."""
 
 logger = logging.getLogger(__name__)
 
@@ -294,6 +324,14 @@ class EvaluationAgent(EvaluatorPort):
     runtime_factory: AgentRuntimeFactory
     settings_repo: SettingsRepositoryPort
     context_reader: EvaluationContextReader
+    exposure_caps: ExposureCapHistoryPort | None = None
+    """The declared cap series, for the critic.
+
+    Given to the critic and not only the drafter, unlike the open findings:
+    a cap the run set for itself is not the account's framing handed down, it
+    is a decision this run made and is answerable for.
+    """
+
     open_findings: OpenFindingsPort | None = None
     """Read for the drafting call only.
 
@@ -326,8 +364,10 @@ class EvaluationAgent(EvaluatorPort):
         # a reviewer to consider an empty question only buys a sentence saying
         # the operator had none.
         brief = operator_question.strip()
+        caps = await self._recent_caps()
         asked = await critic.prompt(
             f"## 这次运行的报告\n\n{body}\n\n{rendered}"
+            + (f"\n\n{render_exposure_caps(caps)}" if caps else "")
             + (
                 f"\n\n{OPERATOR_QUESTION_BRIEF.format(question=brief)}"
                 if brief
@@ -366,6 +406,17 @@ class EvaluationAgent(EvaluatorPort):
                 + drafted.cached_tokens
             ),
         )
+
+    async def _recent_caps(self) -> list[ExposureCap]:
+        """A reference, not a dependency — the watchlist trade again."""
+
+        if self.exposure_caps is None:
+            return []
+        try:
+            return await self.exposure_caps.recent(limit=EXPOSURE_CAP_HISTORY)
+        except Exception:  # noqa: BLE001 - the review stands without it
+            logger.warning("reading the exposure cap history failed", exc_info=True)
+            return []
 
     async def _already_open(self) -> tuple[str, ...]:
         """What is already in front of every run, so drafting does not repeat it.
@@ -470,5 +521,6 @@ __all__ = [
     "EvaluationAgent",
     "EvaluationContextReader",
     "parse_digest",
+    "render_exposure_caps",
     "render_fill_record",
 ]

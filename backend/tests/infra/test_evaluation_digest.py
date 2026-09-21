@@ -18,6 +18,7 @@ from backend.business.evaluations import (
     MAX_CANDIDATES,
     MAX_DIGEST_LENGTH,
 )
+from backend.business.exposure import ExposureCap
 from backend.business.fill_record import FillRecord
 from backend.business.settings import AppSettings
 from backend.infra.integrations import evaluation_agent as module
@@ -421,3 +422,80 @@ async def test_a_failed_read_costs_the_dedupe_not_the_review(
 
     assert result.digest == "值得看第二段。"
     assert len(result.candidates) == 1
+
+
+class _StubCaps:
+    def __init__(self, caps: list[Any], fails: bool = False) -> None:
+        self._caps = caps
+        self._fails = fails
+
+    async def recent(self, *, limit: int) -> list[Any]:
+        del limit
+        if self._fails:
+            raise RuntimeError("the cap table is unavailable")
+        return self._caps
+
+
+def _cap(run_id: int, pct: float) -> ExposureCap:
+    return ExposureCap(
+        run_id=run_id,
+        cap_pct=pct,
+        basis="指数站上 20 日线。",
+        changed_from="上次 20%，今天不动。",
+        forgone="兆易创新符合标准，因额度未买。",
+    )
+
+
+@pytest.mark.asyncio
+async def test_the_critic_sees_the_whole_cap_series(agent: EvaluationAgent) -> None:
+    """One number tells a reviewer what the cap is; only the series tells it
+    whether the cap responds to anything — which is the question that six
+    days of 「数字沿用未变」 was never asked."""
+
+    agent.exposure_caps = _StubCaps(  # type: ignore[assignment]
+        [_cap(20260921102, 22.0), _cap(20260921101, 20.0)]
+    )
+    _StubHarness.replies = {
+        "Evaluate": _Reply("一、上限为什么不动？"),
+        "Answer": _Reply("因为相关性没降。"),
+        "Draft": _Reply('{"digest": "", "candidates": []}'),
+    }
+
+    await agent.evaluate(RUN_ID)
+
+    brief = _StubHarness.prompts["Evaluate"]
+    assert "22%" in brief
+    assert "20%" in brief
+    assert "因此放弃了什么" in brief
+    assert "不是别处规定的常量" in brief
+
+
+@pytest.mark.asyncio
+async def test_no_declarations_send_no_table(agent: EvaluationAgent) -> None:
+    agent.exposure_caps = _StubCaps([])  # type: ignore[assignment]
+    _StubHarness.replies = {
+        "Evaluate": _Reply("一、证伪条件是什么？"),
+        "Answer": _Reply("这个数我手上没有。"),
+        "Draft": _Reply('{"digest": "", "candidates": []}'),
+    }
+
+    await agent.evaluate(RUN_ID)
+
+    assert "敞口上限" not in _StubHarness.prompts["Evaluate"]
+
+
+@pytest.mark.asyncio
+async def test_a_failed_cap_read_costs_the_table_not_the_review(
+    agent: EvaluationAgent,
+) -> None:
+    agent.exposure_caps = _StubCaps([], fails=True)  # type: ignore[assignment]
+    _StubHarness.replies = {
+        "Evaluate": _Reply("一、证伪条件是什么？"),
+        "Answer": _Reply("这个数我手上没有。"),
+        "Draft": _Reply('{"digest": "值得看第二段。", "candidates": []}'),
+    }
+
+    result = await agent.evaluate(RUN_ID)
+
+    assert result.questions == "一、证伪条件是什么？"
+    assert result.digest == "值得看第二段。"

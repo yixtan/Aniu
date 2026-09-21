@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from time import perf_counter
 from typing import Protocol, cast
 
+from backend.business.exposure import LatestExposureCapPort
 from backend.business.open_findings import OpenFindingsPort
 from backend.business.order_directives import OrderDirective
 from backend.business.runs import StrategyRun
@@ -138,6 +139,7 @@ class AniuOrchestrator:
         watchlist: FollowedCompaniesPort | None = None,
         order_plan: OrderPlanPort | None = None,
         open_findings: OpenFindingsPort | None = None,
+        latest_exposure_cap: LatestExposureCapPort | None = None,
         watch_deadline_seconds: float = WATCH_DEADLINE_SECONDS,
     ) -> None:
         self._callbacks = state_callbacks
@@ -155,6 +157,7 @@ class AniuOrchestrator:
         self._watchlist = watchlist
         self._order_plan = order_plan
         self._open_findings = open_findings
+        self._latest_exposure_cap = latest_exposure_cap
         self._watch_deadline_seconds = watch_deadline_seconds
 
     async def _followed_companies(self, run_id: int) -> tuple[tuple[str, str], ...]:
@@ -217,6 +220,7 @@ class AniuOrchestrator:
 
         await self._attach_order_plan_for_review(context)
         await self._attach_open_findings(context)
+        await self._attach_previous_exposure_cap(context)
         report = await self._execute_run_stage(context)
         context.run_report = report
         run.set_summary(report.content, render_mode="markdown")
@@ -379,6 +383,27 @@ class AniuOrchestrator:
                 exc_info=True,
             )
             return ()
+
+    async def _attach_previous_exposure_cap(
+        self, context: RunExecutionContext
+    ) -> None:
+        """The last declared cap, so 「为什么不动」 has something to be against.
+
+        Same trade as the objections: failing to read it costs context. A run
+        that cannot see the previous number declares one from today alone,
+        which is worse than knowing but not fatal.
+        """
+
+        if self._latest_exposure_cap is None:
+            return
+        try:
+            context.previous_exposure_cap = await self._latest_exposure_cap.latest()
+        except Exception:
+            logger.warning(
+                "failed to read the previous exposure cap",
+                extra={"run_id": context.run.run_id},
+                exc_info=True,
+            )
 
     async def _attach_open_findings(self, context: RunExecutionContext) -> None:
         """Put unanswered objections in front of the run.
