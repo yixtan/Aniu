@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { CheckIcon, ChevronRightIcon, CircleAlertIcon, CopyIcon, MailIcon } from "lucide-react";
 import { toast } from "sonner";
 
+import { RecordId } from "@/components/record-id";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { emailRunReport } from "@/lib/api";
@@ -187,6 +188,10 @@ export function StageTimeline({
             )}
           />
         </button>
+        {/* Outside the toggle on purpose: the id is here to be read and
+            copied, and tapping it should not collapse the stage list. The
+            timetable had it only in a `title`, which a phone never shows. */}
+        <RecordId id={run.run_id} label="运行" />
         <button
           type="button"
           aria-controls={stageListId}
