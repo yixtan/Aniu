@@ -132,6 +132,8 @@ async def test_the_series_reads_newest_first(session) -> None:
     series = await ExposureCapRepository(session).recent(limit=10)
 
     assert [cap.cap_pct for cap in series] == [18.0, 24.0, 20.0]
-    latest = await ExposureCapRepository(session).latest()
-    assert latest is not None
-    assert latest.cap_pct == 18.0
+    # There is no separate way to ask for just the newest one. A run that is
+    # shown a single row is shown a number to agree with, which is how
+    # 「参数无变化」 outlived the memory it came from.
+    newest = await ExposureCapRepository(session).recent(limit=1)
+    assert [cap.cap_pct for cap in newest] == [18.0]

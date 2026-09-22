@@ -4,7 +4,6 @@ from backend.business.exposure.models import MAX_REASON_LENGTH, ExposureCap
 from backend.business.exposure.ports import (
     ExposureCapHistoryPort,
     ExposureCapRepositoryPort,
-    LatestExposureCapPort,
 )
 from backend.business.exposure.service import ExposureCapService
 
@@ -14,5 +13,4 @@ __all__ = [
     "ExposureCapHistoryPort",
     "ExposureCapRepositoryPort",
     "ExposureCapService",
-    "LatestExposureCapPort",
 ]

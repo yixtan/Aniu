@@ -69,17 +69,28 @@ class RunStage:
                     directive_payload(item, include_issuer=True)
                     for item in context.previous_order_plan
                 ]
-        # The last cap anybody declared. Left out when there is none, so the
-        # first run after this shipped declares one from today rather than
-        # explaining a move from nothing.
-        if context.previous_exposure_cap is not None:
-            previous = context.previous_exposure_cap
-            runtime_payload["previous_exposure_cap"] = {
-                "run_id": previous.run_id,
-                "cap_pct": previous.cap_pct,
-                "basis": previous.basis,
-                "declared_at": previous.declared_at.isoformat(),
-            }
+        # The caps already declared, newest first, and deliberately without the
+        # reasoning that produced them. That reasoning used to travel with the
+        # last row, and on 2026-09-22 it carried 「按id150公式1%÷5%=20%」 into a
+        # run whose memory of the formula had been cleared the night before:
+        # the run reported 「参数无变化」 and moved on, having re-checked
+        # yesterday's arithmetic rather than deriving today's number. The
+        # instruction to derive it was already in the field description and
+        # lost to the data, which is the 长飞光纤 lesson — when the context
+        # supplies an answer, another sentence asking for work does not.
+        #
+        # Numbers alone leave nothing to re-check and add what one row could
+        # not say: whether this has moved lately. Left out when the table is
+        # empty, like the watchlist.
+        if context.recent_exposure_caps:
+            runtime_payload["recent_exposure_caps"] = [
+                {
+                    "run_id": cap.run_id,
+                    "cap_pct": cap.cap_pct,
+                    "declared_at": cap.declared_at.isoformat(),
+                }
+                for cap in context.recent_exposure_caps
+            ]
         # Unanswered objections, left out entirely when there are none — the
         # watchlist pattern. Each carries what would settle it, so answering
         # one is a check against evidence rather than a matter of opinion.
