@@ -1,7 +1,7 @@
-"""The last declared cap, read on its own session.
+"""The caps already declared, read on their own session.
 
 Same reason as the watchlist and the open findings: a run holds its session
-for minutes at a time, and a single row read at the start has no business
+for minutes at a time, and a few rows read at the start have no business
 sitting inside that transaction.
 """
 
@@ -16,12 +16,12 @@ from backend.infra.repositories.exposure_cap_repo import ExposureCapRepository
 
 
 @dataclass(slots=True)
-class LatestExposureCapQuery:
+class RecentExposureCapsQuery:
     session_factory: async_sessionmaker[AsyncSession]
 
-    async def latest(self) -> ExposureCap | None:
+    async def recent(self, *, limit: int) -> list[ExposureCap]:
         async with self.session_factory() as session:
-            return await ExposureCapRepository(session).latest()
+            return await ExposureCapRepository(session).recent(limit=limit)
 
 
-__all__ = ["LatestExposureCapQuery"]
+__all__ = ["RecentExposureCapsQuery"]

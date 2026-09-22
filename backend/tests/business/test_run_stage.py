@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from backend.business.exposure import ExposureCap
 from backend.business.open_findings import (
     ClosingOutcome,
     FindingStatus,
@@ -316,3 +317,73 @@ def test_acting_on_a_finding_is_not_counted_as_disputing_it() -> None:
     item.dispose(run_id=20260917102, verdict=Verdict.UNDECIDED, note="还需要证据")
 
     assert item.times_disputed == 1
+
+
+def _cap(run_id: int, pct: float = 20.0) -> ExposureCap:
+    return ExposureCap(
+        run_id=run_id,
+        cap_pct=pct,
+        basis="按 id150 公式 1%÷5%=20%，无重估触发。",
+        changed_from="上次=20%。今日不动，参数无变化。",
+        forgone="未触及上限。",
+    )
+
+
+@pytest.mark.asyncio
+async def test_the_caps_arrive_as_numbers_without_the_reasoning_behind_them() -> None:
+    """2026-09-22, the morning after the formula left long-term memory.
+
+    The dream had cleared 「1% ÷ 5% = 20%」 out of every memory that carried
+    it, and a scan of all 69 found it nowhere — except in the one row this run
+    was handed of the table it writes. It read the derivation there and
+    declared 20% again, reporting 参数无变化: it had checked yesterday's
+    arithmetic rather than doing today's.
+
+    So the series travels without its reasons. Not as a hint to ignore them —
+    the field description already said 不要复述以往的结论 and lost to the data,
+    which is the 长飞光纤 lesson.
+    """
+
+    context = _context(market_open=True)
+    context.recent_exposure_caps = (_cap(20260922101), _cap(20260921110))
+    runner = RecordingRunner(AgentStageResult(content="报告"))
+
+    await RunStage().execute(context, runner)
+
+    prompt = runner.prompts[0]
+    assert "recent_exposure_caps" in prompt
+    assert '"cap_pct":20.0' in prompt
+    assert "id150" not in prompt
+    assert "参数无变化" not in prompt
+    assert "未触及上限" not in prompt
+
+
+@pytest.mark.asyncio
+async def test_the_whole_window_travels_so_a_flat_line_is_visible() -> None:
+    """One row cannot say 「这个数已经六天没动了」; a column says it without
+    anyone having to write the sentence."""
+
+    context = _context(market_open=True)
+    context.recent_exposure_caps = tuple(
+        _cap(20260922101 - index) for index in range(5)
+    )
+    runner = RecordingRunner(AgentStageResult(content="报告"))
+
+    await RunStage().execute(context, runner)
+
+    prompt = runner.prompts[0]
+    for index in range(5):
+        assert str(20260922101 - index) in prompt
+
+
+@pytest.mark.asyncio
+async def test_no_cap_declared_yet_sends_no_section() -> None:
+    """The watchlist rule: the first run to declare one starts from today
+    rather than explaining a move from nothing."""
+
+    context = _context(market_open=True)
+    runner = RecordingRunner(AgentStageResult(content="报告"))
+
+    await RunStage().execute(context, runner)
+
+    assert "recent_exposure_caps" not in runner.prompts[0]

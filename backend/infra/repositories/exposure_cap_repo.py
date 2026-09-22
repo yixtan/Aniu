@@ -57,19 +57,6 @@ class ExposureCapRepository:
         await self._session.flush()
         return _to_domain(model)
 
-    async def latest(self) -> ExposureCap | None:
-        model = (
-            await self._session.scalars(
-                select(ExposureCapModel)
-                .order_by(
-                    ExposureCapModel.declared_at.desc(),
-                    ExposureCapModel.id.desc(),
-                )
-                .limit(1)
-            )
-        ).first()
-        return None if model is None else _to_domain(model)
-
     async def for_run(self, run_id: int) -> ExposureCap | None:
         model = (
             await self._session.scalars(

@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from time import perf_counter
 from typing import Protocol, cast
 
-from backend.business.exposure import LatestExposureCapPort
+from backend.business.exposure import ExposureCapHistoryPort
 from backend.business.open_findings import OpenFindingsPort
 from backend.business.order_directives import OrderDirective
 from backend.business.runs import StrategyRun
@@ -40,6 +40,17 @@ MarketSessionOpen = Callable[[datetime], bool]
 CancellationsAccepted = Callable[[datetime], bool]
 NowProvider = Callable[[], datetime]
 MAX_SUMMARY_ATTEMPTS = 2
+
+RUN_EXPOSURE_CAP_HISTORY = 20
+"""How many past declarations a run is shown before it makes its own.
+
+Enough to cover about two trading days, since every analysis declares and
+there are eight or so a day. One day would show a flat line as nothing more
+than this morning agreeing with itself; two makes a cap that never moves
+overnight look like what it is. The reviewer's window is set separately and
+is longer, because it reads the reasoning too and is looking for a pattern
+rather than a starting point.
+"""
 
 WATCH_DEADLINE_SECONDS = 60.0
 """How long a watch may hold the worker before it is given up on.
@@ -139,7 +150,7 @@ class AniuOrchestrator:
         watchlist: FollowedCompaniesPort | None = None,
         order_plan: OrderPlanPort | None = None,
         open_findings: OpenFindingsPort | None = None,
-        latest_exposure_cap: LatestExposureCapPort | None = None,
+        exposure_caps: ExposureCapHistoryPort | None = None,
         watch_deadline_seconds: float = WATCH_DEADLINE_SECONDS,
     ) -> None:
         self._callbacks = state_callbacks
@@ -157,7 +168,7 @@ class AniuOrchestrator:
         self._watchlist = watchlist
         self._order_plan = order_plan
         self._open_findings = open_findings
-        self._latest_exposure_cap = latest_exposure_cap
+        self._exposure_caps = exposure_caps
         self._watch_deadline_seconds = watch_deadline_seconds
 
     async def _followed_companies(self, run_id: int) -> tuple[tuple[str, str], ...]:
@@ -220,7 +231,7 @@ class AniuOrchestrator:
 
         await self._attach_order_plan_for_review(context)
         await self._attach_open_findings(context)
-        await self._attach_previous_exposure_cap(context)
+        await self._attach_recent_exposure_caps(context)
         report = await self._execute_run_stage(context)
         context.run_report = report
         run.set_summary(report.content, render_mode="markdown")
@@ -384,20 +395,23 @@ class AniuOrchestrator:
             )
             return ()
 
-    async def _attach_previous_exposure_cap(
+    async def _attach_recent_exposure_caps(
         self, context: RunExecutionContext
     ) -> None:
-        """The last declared cap, so 「为什么不动」 has something to be against.
+        """The caps already declared, so 「为什么不动」 is answerable — and
+        visible when the answer has been the same for days.
 
-        Same trade as the objections: failing to read it costs context. A run
-        that cannot see the previous number declares one from today alone,
-        which is worse than knowing but not fatal.
+        Same trade as the objections: failing to read them costs context. A run
+        that cannot see the series declares one from today alone, which is
+        worse than knowing but not fatal.
         """
 
-        if self._latest_exposure_cap is None:
+        if self._exposure_caps is None:
             return
         try:
-            context.previous_exposure_cap = await self._latest_exposure_cap.latest()
+            context.recent_exposure_caps = tuple(
+                await self._exposure_caps.recent(limit=RUN_EXPOSURE_CAP_HISTORY)
+            )
         except Exception:
             logger.warning(
                 "failed to read the previous exposure cap",

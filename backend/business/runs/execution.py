@@ -143,12 +143,19 @@ class RunExecutionContext:
     One generation back, not the whole archive: a run needs to see the arc of
     a decision it is about to revisit, not every statement ever made.
     """
-    previous_exposure_cap: ExposureCap | None = None
-    """The last cap any run declared, so this one can say why it moves or not.
+    recent_exposure_caps: tuple[ExposureCap, ...] = ()
+    """The caps already declared, newest first, so this run can place its own.
 
     Read rather than remembered: the number is a state of today, and a state
     kept in long-term memory is what turned 「总敞口约20%封顶」 into a fact
     about the world that six days of rules inherited.
+
+    A series rather than the last row, because the last row is the same trap
+    one table over. On 2026-09-22 the run was handed 9/21's declaration with
+    its reasoning attached — 「按id150公式1%÷5%=20%」 — and answered 「参数无
+    变化」 twice, having checked yesterday's arithmetic instead of doing its
+    own. A column of numbers leaves nothing to check and shows the one thing
+    a single row cannot: how long this has been standing still.
     """
     open_findings: tuple[OpenFinding, ...] = ()
     """Objections a reviewer raised that nobody has closed yet.

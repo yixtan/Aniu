@@ -52,7 +52,7 @@ from backend.infra.integrations.notifications import (
     RoutingNotificationSender,
     TradeNotificationDispatcher,
 )
-from backend.infra.integrations.run_exposure_cap import LatestExposureCapQuery
+from backend.infra.integrations.run_exposure_cap import RecentExposureCapsQuery
 from backend.infra.integrations.run_open_findings import RunOpenFindingsQuery
 from backend.infra.integrations.run_order_plan import RunOrderPlanQuery
 from backend.infra.integrations.run_watchlist import RunWatchlistQuery
@@ -489,8 +489,6 @@ class AppRuntime:
             watchlist=RunWatchlistQuery(self.require_session_factory()),
             order_plan=RunOrderPlanQuery(self.require_session_factory()),
             open_findings=RunOpenFindingsQuery(self.require_session_factory()),
-            latest_exposure_cap=LatestExposureCapQuery(
-                self.require_session_factory()
-            ),
+            exposure_caps=RecentExposureCapsQuery(self.require_session_factory()),
             run_completion_hook=self.optional_away_mode_service(session),
         )

@@ -23,9 +23,6 @@ class ExposureCapService:
             await self._committer.commit()
         return stored
 
-    async def latest(self) -> ExposureCap | None:
-        return await self._repository.latest()
-
     async def for_run(self, run_id: int) -> ExposureCap | None:
         return await self._repository.for_run(run_id)
 
