@@ -4,6 +4,7 @@ import { ScaleIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { RecordId } from "@/components/record-id";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
@@ -68,6 +69,11 @@ export function EvaluationCard({ runId }: { runId: number }) {
         <CardTitle className="flex items-center gap-2 text-sm font-medium">
           <ScaleIcon aria-hidden className="text-muted-foreground size-4" />
           独立评估
+          {/* Only once there is one to name. A review that has not been asked
+              for yet has no id, and a blank badge would be chrome. */}
+          {evaluation ? (
+            <RecordId id={evaluation.evaluation_id} label="评估" className="text-xs" />
+          ) : null}
         </CardTitle>
         <Button size="sm" variant="outline" disabled={busy} onClick={() => request.mutate()}>
           {busy ? "评估中…" : evaluation ? "重新评估" : "开始评估"}

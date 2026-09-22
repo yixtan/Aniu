@@ -120,6 +120,9 @@ describe("StageTimeline", () => {
 
     expect(screen.getByText("执行完成")).toBeInTheDocument();
     expect(screen.getByText("工具3次")).toBeInTheDocument();
+    // The number this run is called by in every report and conversation. It
+    // used to live only in the timetable's `title`, which a phone never shows.
+    expect(screen.getByText("#20260725101")).toBeInTheDocument();
     const heading = screen.getByRole("heading", { name: "执行总结" });
     expect(heading).toBeInTheDocument();
     expect(heading.closest("section")).toHaveClass("report-grid");

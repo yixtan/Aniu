@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckIcon, ScaleIcon } from "lucide-react";
+import { CheckIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { QueryErrorState, QueryLoadingState } from "@/components/query-state";
+import { RecordId } from "@/components/record-id";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -98,9 +99,13 @@ export function FindingsPage() {
       {open.map((item) => (
         <Card key={item.finding_id} className="gap-2 py-4">
           <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-0">
-            <CardTitle className="flex items-start gap-2 text-sm leading-relaxed font-medium">
-              <ScaleIcon aria-hidden className="text-muted-foreground mt-0.5 size-4 shrink-0" />
-              {item.finding}
+            {/* The id on its own line rather than beside the text. Measured at
+                375px: the finding wraps to five lines this way, six with the
+                decorative icon indenting it and seven with an id beside the
+                icon. The text is what gets read; nothing shares its column. */}
+            <CardTitle className="min-w-0 flex-1 space-y-1 text-sm leading-relaxed font-medium">
+              <RecordId id={item.finding_id} label="议题" className="text-xs" />
+              <p>{item.finding}</p>
             </CardTitle>
             <Button
               size="sm"
@@ -241,8 +246,13 @@ export function FindingsPage() {
                     key={`${disposition.run_id}-${disposition.at}`}
                     className="border-border/60 space-y-0.5 border-s ps-2"
                   >
+                    {/* Plain text, not a `RecordId`: this is a reference to
+                        another record rather than this finding's own id, and a
+                        badge on every one of thirteen dispositions reads as
+                        thirteen headings. 「第 20260922106 次操盘」 also said
+                        the wrong thing — that is an id, not a count. */}
                     <p className="text-foreground text-xs font-medium tabular-nums">
-                      第 {disposition.run_id} 次操盘 · {verdictLabel(disposition.verdict)}
+                      运行 #{disposition.run_id} · {verdictLabel(disposition.verdict)}
                     </p>
                     {disposition.note ? (
                       <p className="text-muted-foreground text-xs leading-relaxed">
@@ -261,7 +271,10 @@ export function FindingsPage() {
           <h2 className="text-muted-foreground text-xs font-medium">已关闭</h2>
           {closed.map((item) => (
             <div key={item.finding_id} className="space-y-0.5">
-              <p className="text-muted-foreground text-xs line-through">{item.finding}</p>
+              <p className="text-muted-foreground flex items-start gap-1.5 text-xs">
+                <RecordId id={item.finding_id} label="议题" className="opacity-70" />
+                <span className="line-through">{item.finding}</span>
+              </p>
               {item.closing_note ? (
                 <p className="text-muted-foreground text-xs">
                   <span className="text-foreground font-medium">

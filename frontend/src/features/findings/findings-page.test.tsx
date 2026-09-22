@@ -93,10 +93,12 @@ describe("FindingsPage", () => {
     expect(await screen.findByText("智能体回答过 2 次")).toBeInTheDocument();
     expect(screen.getByText("其中 3 次没有改动")).toBeInTheDocument();
     // Which run said what, then the reasoning below it: these notes run to
-    // three hundred characters without a line break of their own.
-    expect(screen.getByText(/第 20260917101 次操盘 · 不同意/)).toBeInTheDocument();
+    // three hundred characters without a line break of their own. The run is
+    // named by id rather than 「第 N 次操盘」, which read as a count of
+    // twenty billion runs.
+    expect(screen.getByText(/运行 #20260917101 · 不同意/)).toBeInTheDocument();
     expect(screen.getByText("经复核，该顾虑不成立")).toBeInTheDocument();
-    expect(screen.getByText(/第 20260917102 次操盘 · 按这条改了/)).toBeInTheDocument();
+    expect(screen.getByText(/运行 #20260917102 · 按这条改了/)).toBeInTheDocument();
     expect(screen.getByText("已拆到不相关主线")).toBeInTheDocument();
   });
 
@@ -231,6 +233,21 @@ describe("FindingsPage", () => {
 
     expect(await screen.findByText(/浅档三笔分批成交/)).toBeInTheDocument();
     expect(screen.getByText("做到了：")).toBeInTheDocument();
+  });
+
+  it("names each finding by the number everything else calls it", async () => {
+    // Reports, reviews and every conversation about this account say 「议题
+    // #11」. The page showed only the prose, so nothing said about a finding
+    // could be matched to the card in front of you.
+    api.listOpenFindings.mockResolvedValue([
+      finding({ finding_id: 11 }),
+      finding({ finding_id: 8, finding: "已经解决的那条", status: "CLOSED" }),
+    ]);
+
+    renderPage();
+
+    expect(await screen.findByText("#11")).toBeInTheDocument();
+    expect(screen.getByText("#8")).toBeInTheDocument();
   });
 
   it("keeps closed findings out of the list a run answers", async () => {
