@@ -94,8 +94,11 @@ WHERE summary IS NOT NULL GROUP BY 1;
 return "deepseek" in model.lower() if override is None else override
 ```
 
-中转站会给模型改名。v2ex 把 DeepSeek 的模型叫 `coder-ds4`，这个子串匹配于是答 False；而盯盘
+中转站会给模型改名。v2ex 把 DeepSeek 的模型叫 `coder-ds4`，这个子串匹配于是答 False；而当时盯盘
 和梦境用的是 `deepseek-v4-pro`，同一行代码答 True。**两条链路行为不同，纯属名字巧合。**
+
+（现状：2026-09-23 起四个阶段都换成了 DeepSeek 渠道上的 `deepseek-flash`，v2ex 和 DeepSeek
+两个渠道也都显式开着这个开关，名字猜测眼下不起作用。新增或更换渠道时仍要显式设。）
 
 后果是模型知道自己做了什么（工具记录在上下文里），不知道为什么（理由被丢掉了）。所以每个
 工具调用之后的回合都是从第一性原理重新开始，可以推翻上一个回合的结论。2026-09-14 和 09-15
