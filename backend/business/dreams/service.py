@@ -27,6 +27,20 @@ class ExecutionFencedError(RuntimeError):
 
 _MARKET_TIMEZONE = ZoneInfo("Asia/Shanghai")
 DREAM_BACKFILL_DAYS = 3
+
+DREAM_RETURNED_NOTHING = (
+    "模型没有给出整理结果（最后一次回复是空的，常见原因是服务商中途卡住）。"
+    "不算完成，下次触发会自动重试。"
+)
+"""Why a dream that came back empty is failed rather than completed.
+
+On 2026-09-24 the dream read its reports and memories, then waited 605
+seconds on a provider that dribbled out 586 tokens — no tool call, no text —
+and was marked completed with an empty result. Completed is what takes a day
+out of `pending_target_dates`, so that day would never have been dreamed
+again: a stall at the provider quietly became a day of experience skipped for
+good. Failed keeps the day pending, and the next trigger retries it.
+"""
 """How many recent run days one trigger considers.
 
 The lookback window and the per-trigger cap are deliberately the same
@@ -228,12 +242,15 @@ class DreamService:
         if completed is None:
             return None
         if completed.status is DreamStatus.RUNNING:
-            completed.complete(
-                result.content,
-                result.total_tokens,
-                result.channel_id,
-                cached_tokens=result.cached_tokens,
-            )
+            if result.content.strip():
+                completed.complete(
+                    result.content,
+                    result.total_tokens,
+                    result.channel_id,
+                    cached_tokens=result.cached_tokens,
+                )
+            else:
+                completed.fail(DREAM_RETURNED_NOTHING)
             await self._save_and_commit(
                 completed,
                 execution_fence=execution_fence,
