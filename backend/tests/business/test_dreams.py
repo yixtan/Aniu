@@ -9,7 +9,7 @@ import pytest
 
 from backend.business.dreams import DreamStatus, MemoryDream
 from backend.business.dreams.ports import DreamRunResult
-from backend.business.dreams.service import DreamService
+from backend.business.dreams.service import DREAM_RETURNED_NOTHING, DreamService
 
 
 class InMemoryDreamRepository:
@@ -214,3 +214,43 @@ async def test_a_cached_share_can_never_exceed_the_total_it_sits_in() -> None:
 
     assert finished is not None
     assert finished.cached_tokens == 100
+
+
+class SilentAgent:
+    """What the 2026-09-24 dream got back: ten minutes of a stalled provider,
+    586 tokens of it, and not a word of result."""
+
+    async def run(self, dream: MemoryDream) -> DreamRunResult:
+        del dream
+        return DreamRunResult(content="  \n", total_tokens=125_976, cached_tokens=0)
+
+
+@pytest.mark.asyncio
+async def test_a_dream_that_came_back_empty_did_not_complete() -> None:
+    """Completed takes a day out of the pending list for good. A dream with no
+    result is failed instead, so its day stays pending and the next trigger
+    tries it again (see test_a_failed_dream_leaves_its_day_pending)."""
+
+    repository = InMemoryDreamRepository()
+    service = DreamService(repository, SilentAgent(), committer=Committer())
+    dream = await service.create_or_get(date(2026, 9, 24))
+
+    finished = await service.execute(dream.task_id)
+
+    assert finished is not None
+    assert finished.status is DreamStatus.FAILED
+    assert finished.failure_reason == DREAM_RETURNED_NOTHING
+    assert finished.result is None
+
+
+@pytest.mark.asyncio
+async def test_a_dream_with_a_result_still_completes() -> None:
+    repository = InMemoryDreamRepository()
+    service = DreamService(repository, BillingAgent(1_000, 0), committer=Committer())
+    dream = await service.create_or_get(date(2026, 9, 24))
+
+    finished = await service.execute(dream.task_id)
+
+    assert finished is not None
+    assert finished.status is DreamStatus.COMPLETED
+    assert finished.result == "已整理"
