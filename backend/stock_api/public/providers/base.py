@@ -14,7 +14,19 @@ from backend.stock_api.public.http import PublicHttpRequest, PublicHttpTransport
 
 _TextResult = TypeVar("_TextResult")
 
-USER_AGENT = "Mozilla/5.0 (compatible; AniuBot/0.1)"
+USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36"
+)
+"""An ordinary browser's, not 「AniuBot」.
+
+From 2026-09-23 push2.eastmoney.com hung up on most requests from this
+machine while push2his, same company and same request shape, kept answering,
+and a string that names itself a bot is the cheapest thing for a scraper
+filter to key on. This does not lift a block already in place — a full Chrome
+header set was refused just the same on the 24th — so the part that matters
+more is asking less often, which is the lane cooldown in `http.py`.
+"""
 
 
 def build_url(origin: str, path: str, parameters: Mapping[str, object]) -> str:

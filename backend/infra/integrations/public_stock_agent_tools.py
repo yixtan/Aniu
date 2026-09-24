@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import Any, ClassVar, cast
 
 from backend.agent.tools.registry import ToolRegistry
 from backend.infra.integrations.tool_policy import SideEffectLevel
@@ -34,6 +34,7 @@ from backend.stock_api.public import (
     StockRankingRequest,
     StockReportsRequest,
     UnsupportedStockRequest,
+    UpstreamUnavailable,
     ValuationRequest,
     bound_agent_result,
 )
@@ -133,12 +134,33 @@ class _PublicStockTool:
     side_effect_level: SideEffectLevel = SideEffectLevel.READ
     execution_mode: str = "parallel"
 
+    when_unreachable: ClassVar[str] = ""
+    """What to use instead when the host behind this tool will not answer.
+
+    Appended to the error the model reads, because the error is all it reads.
+    On 2026-09-23 and 24 push2 hung up on most calls, the model saw only
+    「公开数据源网络请求失败」, and it asked again — fifty failed calls, while
+    other tools that could have answered sat unused until a run worked that out
+    for itself and wrote it into memory (id168). Named per tool, since only the
+    tool knows which other tool covers what it does.
+    """
+
     async def _execute(
         self,
         request: PublicStockRequest,
         abort_signal: AbortSignal | None,
     ) -> object:
-        result = await self.service.execute(request, abort_signal)
+        try:
+            result = await self.service.execute(request, abort_signal)
+        except UpstreamUnavailable as exc:
+            if not self.when_unreachable or exc.error_category != "network":
+                raise
+            raise UpstreamUnavailable(
+                f"{exc}这个接口此刻连不上，马上重试多半还是连不上。"
+                f"{self.when_unreachable}",
+                retryable=exc.retryable,
+                error_category=exc.error_category,
+            ) from exc
         return bound_agent_result(result, request)
 
 
@@ -254,6 +276,11 @@ class StockIntradayTool(_PublicStockTool):
 class StockRankingTool(_PublicStockTool):
     name: str = "stock_ranking"
 
+    when_unreachable: ClassVar[str] = (
+        "个股排行改用 select_stocks（例如「今日主力净流入前 20 的 A 股」），"
+        "板块排行改用 industry_snapshot。"
+    )
+
     def to_tool_definition(self) -> ToolDefinition:
         return {
             "name": self.name,
@@ -346,6 +373,11 @@ class StockRankingTool(_PublicStockTool):
 @dataclass(slots=True)
 class StockMoneyFlowTool(_PublicStockTool):
     name: str = "stock_money_flow"
+
+    when_unreachable: ClassVar[str] = (
+        "个股资金流改用 query_market_data（例如「600487 今日主力净流入」），"
+        "板块资金流改用 industry_snapshot。"
+    )
 
     def to_tool_definition(self) -> ToolDefinition:
         symbol = _symbol_property()
