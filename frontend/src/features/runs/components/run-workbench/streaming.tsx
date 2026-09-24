@@ -1,6 +1,7 @@
 import { Children, isValidElement, memo, useEffect, useRef, type ReactNode } from "react";
 import rehypeRaw from "rehype-raw";
-import ReactMarkdown from "react-markdown";
+import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from "rehype-sanitize";
+import ReactMarkdown, { type Options as MarkdownOptions } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { cn } from "@/lib/utils";
@@ -10,6 +11,31 @@ const contentClassName =
 
 const processContentClassName =
   "!text-[11px] !leading-[1.55] !text-muted-foreground [&_h1]:!mb-2 [&_h1]:!text-[13px] [&_h1]:!font-medium [&_h1]:!leading-5 [&_h1]:!text-foreground [&_h2]:!mb-1.5 [&_h2]:!mt-3 [&_h2]:!border-border/35 [&_h2]:!ps-2 [&_h2]:!text-[12px] [&_h2]:!font-medium [&_h2]:!text-foreground [&_h3]:!mb-1 [&_h3]:!mt-2.5 [&_h3]:!text-[11px] [&_h3]:!font-medium [&_h3]:!text-foreground [&_p]:!mb-1.5 [&_strong]:!font-medium [&_strong]:!text-foreground";
+
+/**
+ * What a rendered report may keep once its raw HTML has been parsed.
+ *
+ * GitHub's allowlist plus inline `style`, which the Summary stage uses for
+ * every layout. Nothing that runs or embeds — no script, iframe, form or svg,
+ * no event-handler attributes — and no `class`, which here would reach the
+ * app's own stylesheet and let a report dress itself up as the page around it.
+ *
+ * The HTML is written by a model that has read outside news, so it is outside
+ * text. React already leaves a `<script>` element inert, which is why this was
+ * never noticed; an `<iframe srcdoc>` would still run with this page's origin.
+ */
+const REPORT_HTML_SCHEMA: SanitizeSchema = {
+  ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    "*": [...(defaultSchema.attributes?.["*"] ?? []), "style"],
+  },
+};
+
+const HTML_REHYPE_PLUGINS: NonNullable<MarkdownOptions["rehypePlugins"]> = [
+  rehypeRaw,
+  [rehypeSanitize, REPORT_HTML_SCHEMA],
+];
 
 const METADATA_LABELS = [
   "档案编号",
@@ -146,7 +172,7 @@ const ContentDocument = memo(function ContentDocument({
     >
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        rehypePlugins={renderMode === "html" ? [rehypeRaw] : []}
+        rehypePlugins={renderMode === "html" ? HTML_REHYPE_PLUGINS : []}
         components={markdownComponents}
       >
         {content}
