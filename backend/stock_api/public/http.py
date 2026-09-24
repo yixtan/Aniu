@@ -47,6 +47,105 @@ def _public_log_error_message(error: UpstreamUnavailable) -> str:
     return "公开数据源请求失败。"
 
 
+_NETWORK_FAILURE_LABELS = {
+    "RemoteProtocolError": "服务器没有回应就断开了连接",
+    "ConnectError": "连不上服务器",
+    "ReadError": "读取响应时连接断了",
+    "WriteError": "发送请求时连接断了",
+    "ProxyError": "本机代理出错",
+}
+
+
+def _network_failure_message(error: BaseException) -> str:
+    """Say which network failure it was.
+
+    Every one of these used to read 「公开数据源网络请求失败」. On 2026-09-24
+    that cost an hour: push2.eastmoney.com had been hanging up on most
+    requests for two days, and nothing recorded could tell a server that
+    answers with a closed connection from one that cannot be reached, though
+    the two call for different responses. The class name only, never
+    ``str(error)``: an httpx message can carry the request URL.
+    """
+
+    name = type(error).__name__
+    label = _NETWORK_FAILURE_LABELS.get(name)
+    if label is None:
+        return f"公开数据源网络请求失败（{name}）。"
+    return f"公开数据源网络请求失败：{label}（{name}）。"
+
+
+_LANE_LABELS = {
+    "eastmoney": "东方财富",
+    "eastmoney_f10": "东方财富 F10",
+    "eastmoney_push": "东方财富盘中接口（push2）",
+    "tencent": "腾讯财经",
+    "sina": "新浪财经",
+}
+
+LANE_REST_AFTER_FAILURES = 4
+"""Network failures in a row on one lane before it is rested.
+
+Four rather than three because `PublicHttpTransport.request` already sends a
+single-URL request twice, so this is two whole calls that got nowhere, not
+one unlucky one.
+"""
+
+LANE_REST_SECONDS = 300.0
+"""How long a lane is left alone once it has hung up that many times.
+
+From 2026-09-23 push2 hung up on most requests from this machine, and the
+runs went on asking — fifty failed calls in two days, each sent twice. On the
+24th a quick burst of diagnostic requests was followed by push2his refusing
+too. A host that is turning us away is not helped by being asked again, and
+the asking may be part of why it keeps doing so. Five minutes is short enough
+that a recovered host is back within one analysis slot.
+"""
+
+
+@dataclass(slots=True)
+class LaneRest:
+    """Stop asking a host that keeps hanging up, for a while.
+
+    Only a failure with no response at all counts. A host that answers — with
+    data, an error status, anything — is not hanging up, and clears the count.
+    A timeout does neither: it may be a filter dropping us silently or only a
+    slow network, and it is not this rule's place to guess which.
+
+    After a rest the count stays one short of the limit, so the first request
+    back is a probe: one more hang-up rests the lane again, one answer clears it.
+    """
+
+    threshold: int = LANE_REST_AFTER_FAILURES
+    seconds: float = LANE_REST_SECONDS
+    clock: Callable[[], float] = time.monotonic
+    _failures: dict[str, int] = field(default_factory=dict, init=False)
+    _resting_until: dict[str, float] = field(default_factory=dict, init=False)
+
+    def remaining(self, lane: str) -> float:
+        return max(0.0, self._resting_until.get(lane, 0.0) - self.clock())
+
+    def hung_up(self, lane: str) -> None:
+        count = self._failures.get(lane, 0) + 1
+        if count >= self.threshold:
+            self._resting_until[lane] = self.clock() + self.seconds
+            count = self.threshold - 1
+        self._failures[lane] = count
+
+    def answered(self, lane: str) -> None:
+        self._failures[lane] = 0
+
+    def refusal(self, lane: str) -> UpstreamUnavailable:
+        minutes = max(1, round(self.remaining(lane) / 60))
+        label = _LANE_LABELS.get(lane, lane)
+        # Retryable on purpose: the router may still have another provider to
+        # try, and a rested lane must not cost the caller that fallback.
+        return UpstreamUnavailable(
+            f"{label}刚才连续多次没有回应就断开连接，本机暂停向它发请求约 "
+            f"{minutes} 分钟；这一次没有发出请求。",
+            error_category="network",
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class PublicHttpRequest:
     provider: ProviderName
@@ -102,12 +201,14 @@ class PublicHttpTransport:
         transport: httpx.AsyncBaseTransport | None = None,
         call_logger: StockApiCallLogger | None = None,
         max_response_bytes: int = _MAX_RESPONSE_BYTES,
+        lane_rest: LaneRest | None = None,
     ) -> None:
         self._client = http_client
         self._transport = transport
         self._owns_client = http_client is None
         self._call_logger = call_logger
         self._max_response_bytes = max_response_bytes
+        self._lane_rest = lane_rest or LaneRest()
         self._gates = {
             "eastmoney": ProviderRequestGate(10, 0),
             "eastmoney_f10": ProviderRequestGate(10, 0),
@@ -165,8 +266,11 @@ class PublicHttpTransport:
         urls = (request.url, *request.fallback_urls)
         attempts = urls if len(urls) > 1 else (request.url, request.url)
         last_error: UpstreamUnavailable | None = None
+        lane = request.lane or request.provider
         for index, url in enumerate(attempts[:2]):
             try:
+                if self._lane_rest.remaining(lane) > 0:
+                    raise self._lane_rest.refusal(lane)
                 return await self._request_once(
                     request,
                     url=url,
@@ -223,6 +327,7 @@ class PublicHttpTransport:
                     ) from exc
 
             response = await gate.run(send, cancellation_token)
+            self._lane_rest.answered(lane)
             status_code = response.status_code
             body = response.content
             response_size_bytes = len(body)
@@ -273,10 +378,11 @@ class PublicHttpTransport:
             error_message = _public_log_error_message(exc)
             raise
         except (httpx.HTTPError, OSError) as exc:
+            self._lane_rest.hung_up(lane)
             error_category = "network"
-            error_message = "公开数据源网络请求失败。"
+            error_message = _network_failure_message(exc)
             raise UpstreamUnavailable(
-                "公开数据源网络请求失败。", error_category="network"
+                error_message, error_category="network"
             ) from exc
         finally:
             await emit_stock_api_call_log(
@@ -314,4 +420,11 @@ class PublicHttpTransport:
             self._client = None
 
 
-__all__ = ["PublicHttpRequest", "PublicHttpTransport", "ProviderRequestGate"]
+__all__ = [
+    "LANE_REST_AFTER_FAILURES",
+    "LANE_REST_SECONDS",
+    "LaneRest",
+    "ProviderRequestGate",
+    "PublicHttpRequest",
+    "PublicHttpTransport",
+]

@@ -21,6 +21,9 @@ from backend.stock_api.models import (
     json_safe,
 )
 from backend.stock_api.mx.retry import (
+    MX_RATE_LIMIT_BACKOFF,
+    MX_RATE_LIMIT_RETRIES,
+    MX_REQUEST_INTERVAL,
     MxRequestGate,
     is_mx_daily_quota_message,
     is_mx_rate_limit_message,
@@ -41,9 +44,9 @@ class MxHttpTransport:
     http_client: httpx.AsyncClient | None = None
     transport: httpx.AsyncBaseTransport | None = None
     call_logger: StockApiCallLogger | None = None
-    request_interval: float = 0.25
-    rate_limit_retries: int = 2
-    rate_limit_backoff: float = 0.5
+    request_interval: float = MX_REQUEST_INTERVAL
+    rate_limit_retries: int = MX_RATE_LIMIT_RETRIES
+    rate_limit_backoff: float = MX_RATE_LIMIT_BACKOFF
     request_gate: MxRequestGate | None = None
     _client: httpx.AsyncClient | None = field(init=False, default=None)
     _owns_client: bool = field(init=False, default=False)

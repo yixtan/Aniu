@@ -19,7 +19,9 @@ from backend.stock_api.public import (
     PublicStockRequest,
     QuoteSnapshotRequest,
     StockMarketDataService,
+    UpstreamUnavailable,
 )
+from backend.stock_api.public.errors import ErrorCategory
 
 
 @dataclass
@@ -274,3 +276,75 @@ async def test_action_tools_reject_parameters_for_a_different_action() -> None:
         )
 
     assert service.requests == []
+
+
+@dataclass
+class UnreachableService:
+    """Every request fails the way push2 failed on 2026-09-23 and 24."""
+
+    category: str = "network"
+
+    async def execute(
+        self, request: PublicStockRequest, _: object | None = None
+    ) -> dict[str, object]:
+        raise UpstreamUnavailable(
+            "公开数据源网络请求失败：服务器没有回应就断开了连接（RemoteProtocolError）。",
+            error_category=cast(ErrorCategory, self.category),
+        )
+
+
+def _unreachable(category: str = "network") -> ToolRegistry:
+    registry = ToolRegistry()
+    register_public_stock_tools(
+        registry,
+        service=cast(StockMarketDataService, UnreachableService(category)),
+    )
+    return registry
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("tool_name", "arguments", "instead"),
+    [
+        ("stock_money_flow", {"action": "stock_intraday", "symbol": "600487"},
+         "query_market_data"),
+        ("stock_ranking", {"action": "stocks"}, "select_stocks"),
+    ],
+)
+async def test_an_unreachable_host_says_what_to_use_instead(
+    tool_name: str, arguments: dict[str, object], instead: str
+) -> None:
+    """The error is all the model reads. For two days it read only 「公开数据源
+    网络请求失败」 and asked again — fifty failed calls — while tools that could
+    have answered sat unused until one run worked it out on its own."""
+
+    with pytest.raises(UpstreamUnavailable) as caught:
+        await _unreachable().call(tool_name, **arguments)
+
+    message = str(caught.value)
+    assert instead in message
+    assert "industry_snapshot" in message
+    assert "重试" in message
+    # The diagnosis underneath is kept, not replaced.
+    assert "RemoteProtocolError" in message
+    assert caught.value.error_category == "network"
+
+
+@pytest.mark.asyncio
+async def test_only_an_unreachable_host_is_pointed_elsewhere() -> None:
+    """A malformed answer is a different problem; another tool is not the fix."""
+
+    with pytest.raises(UpstreamUnavailable) as caught:
+        await _unreachable("invalid_response").call(
+            "stock_money_flow", action="stock_intraday", symbol="600487"
+        )
+
+    assert "query_market_data" not in str(caught.value)
+
+
+@pytest.mark.asyncio
+async def test_a_tool_with_no_named_substitute_passes_the_error_through() -> None:
+    with pytest.raises(UpstreamUnavailable) as caught:
+        await _unreachable().call("stock_quote", symbols=["600487"])
+
+    assert "改用" not in str(caught.value)
