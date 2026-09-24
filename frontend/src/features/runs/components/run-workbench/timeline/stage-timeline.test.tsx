@@ -125,12 +125,43 @@ describe("StageTimeline", () => {
     expect(screen.getByText("#20260725101")).toBeInTheDocument();
     const heading = screen.getByRole("heading", { name: "执行总结" });
     expect(heading).toBeInTheDocument();
-    expect(heading.closest("section")).toHaveClass("report-grid");
+    // Inline style is how the report lays itself out, so it survives the
+    // filter; a class would reach the app's own stylesheet, so it does not.
+    expect(heading.closest("section")).not.toHaveClass("report-grid");
     expect(heading.closest("section")).toHaveStyle({
       display: "flex",
       color: "rgb(255, 0, 0)",
     });
     expect(screen.getByText("成交 1 笔")).toBeInTheDocument();
+  });
+
+  it("keeps a report's layout but nothing in it that runs or embeds", () => {
+    // The report HTML is written by a model that reads outside news. React
+    // leaves a <script> inert on its own, but an iframe srcdoc would run with
+    // this page's origin, and nothing filtered it before.
+    const { container } = renderTimeline(
+      makeRun({
+        summary:
+          '<div style="display:flex;gap:8px"><p>持仓 3 只</p></div>' +
+          "<details><summary>展开明细</summary><p>亨通 70.20 在挂</p></details>" +
+          '<script>window.__ran = true</script>' +
+          '<iframe srcdoc="&lt;script&gt;parent.__ran = true&lt;/script&gt;"></iframe>' +
+          '<form action="/api/aniu/settings"><input name="x" /></form>' +
+          '<img src="x.png" onerror="window.__ran = true" />' +
+          '<div onclick="window.__ran = true">点我</div>',
+        summary_render_mode: "html",
+      }),
+    );
+
+    expect(screen.getByText("持仓 3 只").closest("div")).toHaveStyle({ display: "flex" });
+    expect(screen.getByText("展开明细").tagName).toBe("SUMMARY");
+    expect(screen.getByText("亨通 70.20 在挂")).toBeInTheDocument();
+    expect(container.querySelector("script")).toBeNull();
+    expect(container.querySelector("iframe")).toBeNull();
+    expect(container.querySelector("form")).toBeNull();
+    expect(container.querySelector("[onerror]")).toBeNull();
+    expect(container.querySelector("[onclick]")).toBeNull();
+    expect(screen.getByText("点我")).toBeInTheDocument();
   });
 
   it("renders Markdown when Summary is degraded", () => {
