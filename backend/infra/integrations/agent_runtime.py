@@ -19,6 +19,10 @@ from backend.infra.integrations.exposure_cap_agent_tools import (
     DeclareExposureCapTool,
 )
 from backend.infra.integrations.kline_agent_tool import QueryKlineTool
+from backend.infra.integrations.market_signal_agent_tools import (
+    MarketSentimentTool,
+    StockSignalsTool,
+)
 from backend.infra.integrations.memory_agent_tools import (
     AUTHORING_OPERATIONS,
     MemoryReadTool,
@@ -77,6 +81,8 @@ class AgentRuntimeFactory:
         if self._public_stock_data is not None:
             register_public_stock_tools(registry, service=self._public_stock_data)
             registry.register(QueryKlineTool(public_service=self._public_stock_data))
+            registry.register(StockSignalsTool(self._public_stock_data))
+            registry.register(MarketSentimentTool(self._public_stock_data))
             register_aggregate_stock_tools(
                 registry,
                 public_data=self._public_stock_data,

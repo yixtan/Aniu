@@ -2697,6 +2697,7 @@
           "eastmoney",
           "tencent",
           "sina",
+          "ths",
           "mx"
         ],
         "type": "string"
@@ -4404,7 +4405,8 @@
               "mx",
               "eastmoney",
               "tencent",
-              "sina"
+              "sina",
+              "ths"
             ],
             "title": "Provider",
             "type": "string"

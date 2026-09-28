@@ -1,0 +1,282 @@
+{
+ "status_code": 0,
+ "status_msg": "success",
+ "data": {
+  "page": {
+   "limit": 200,
+   "total": 33,
+   "count": 1,
+   "page": 1
+  },
+  "info": [
+   {
+    "open_num": 4,
+    "first_limit_up_time": "1790559022",
+    "last_limit_up_time": "1790578800",
+    "code": "601579",
+    "limit_up_type": "换手板",
+    "order_volume": 462700.0,
+    "is_new": 0,
+    "limit_up_suc_rate": 0.8461538461538461,
+    "currency_value": 20060749000.0,
+    "market_id": 17,
+    "is_again_limit": 1,
+    "change_rate": 9.9895,
+    "turnover_rate": 11.245,
+    "reason_type": "高端黄酒+全国化扩张+中高端增长",
+    "order_amount": 19359368.0,
+    "high_days": "首板",
+    "name": "会稽山",
+    "high_days_value": 65537,
+    "change_tag": "LIMIT_BACK",
+    "market_type": "HS",
+    "latest": 41.84,
+    "time_preview": [
+     3.3123,
+     9.9895,
+     9.9895,
+     9.9895
+    ]
+   },
+   {
+    "open_num": null,
+    "first_limit_up_time": "1790578605",
+    "last_limit_up_time": "1790578605",
+    "code": "001368",
+    "limit_up_type": "换手板",
+    "order_volume": 122100.0,
+    "is_new": 0,
+    "limit_up_suc_rate": 0.3333333333333333,
+    "currency_value": 4517769000.0,
+    "market_id": 33,
+    "is_again_limit": 0,
+    "change_rate": 10.0,
+    "turnover_rate": 10.63,
+    "reason_type": "体育户外+AI玩具+海外产能",
+    "order_amount": 5103780.0,
+    "high_days": "首板",
+    "name": "通达创智",
+    "high_days_value": 65537,
+    "change_tag": "FIRST_LIMIT",
+    "market_type": "HS",
+    "latest": 41.8,
+    "time_preview": [
+     -1.1842,
+     2.5,
+     2.0263,
+     3.2895
+    ]
+   },
+   {
+    "open_num": 1,
+    "first_limit_up_time": "1790559002",
+    "last_limit_up_time": "1790578393",
+    "code": "603396",
+    "limit_up_type": "T字板",
+    "order_volume": 1025606.0,
+    "is_new": 0,
+    "limit_up_suc_rate": 0.7272727272727273,
+    "currency_value": 5430277100.0,
+    "market_id": 17,
+    "is_again_limit": 1,
+    "change_rate": 9.9888,
+    "turnover_rate": 16.972,
+    "reason_type": "半导体装备+玻璃基封装+光伏设备",
+    "order_amount": 40203755.0,
+    "high_days": null,
+    "name": "金辰股份",
+    "high_days_value": null,
+    "change_tag": "LIMIT_BACK",
+    "market_type": "HS",
+    "latest": 39.2,
+    "time_preview": [
+     9.9888,
+     9.9888,
+     9.9888,
+     9.9888
+    ]
+   },
+   {
+    "open_num": 1,
+    "first_limit_up_time": "1790562174",
+    "last_limit_up_time": "1790563992",
+    "code": "600418",
+    "limit_up_type": "换手板",
+    "order_volume": 7018800.0,
+    "is_new": 0,
+    "limit_up_suc_rate": 1.0,
+    "currency_value": 56850374000.0,
+    "market_id": 17,
+    "is_again_limit": 1,
+    "change_rate": 9.9869,
+    "turnover_rate": 7.9624,
+    "reason_type": "尊界+华为合作+玛莎拉蒂合作传闻",
+    "order_amount": 177014140.0,
+    "high_days": "4天3板",
+    "name": "江淮汽车",
+    "high_days_value": 196612,
+    "change_tag": "LIMIT_BACK",
+    "market_type": "HS",
+    "latest": 25.22,
+    "time_preview": [
+     -1.4392,
+     4.2303,
+     3.7069,
+     4.1867
+    ]
+   },
+   {
+    "open_num": 1,
+    "first_limit_up_time": "1790559000",
+    "last_limit_up_time": "1790559525",
+    "code": "603949",
+    "limit_up_type": "T字板",
+    "order_volume": 2734933.0,
+    "is_new": 0,
+    "limit_up_suc_rate": 1.0,
+    "currency_value": 3907716000.0,
+    "market_id": 17,
+    "is_again_limit": 1,
+    "change_rate": 10.0,
+    "turnover_rate": 7.7955,
+    "reason_type": "间接投资宇树科技+商用车热管理+新能源风扇",
+    "order_amount": 50842404.0,
+    "high_days": "3天3板",
+    "name": "雪龙集团",
+    "high_days_value": 196611,
+    "change_tag": "LIMIT_BACK",
+    "market_type": "HS",
+    "latest": 18.59,
+    "time_preview": [
+     10.0,
+     10.0,
+     2.6036,
+     10.0
+    ]
+   },
+   {
+    "open_num": 1,
+    "first_limit_up_time": "1790559281",
+    "last_limit_up_time": "1790559365",
+    "code": "600802",
+    "limit_up_type": "换手板",
+    "order_volume": 8391385.0,
+    "is_new": 0,
+    "limit_up_suc_rate": 0.8181818181818182,
+    "currency_value": 3336048400.0,
+    "market_id": 17,
+    "is_again_limit": 1,
+    "change_rate": 9.9698,
+    "turnover_rate": 18.6921,
+    "reason_type": "海峡两岸+福建国资+水泥",
+    "order_amount": 61089283.0,
+    "high_days": "3天3板",
+    "name": "福建水泥",
+    "high_days_value": 196611,
+    "change_tag": "LIMIT_BACK",
+    "market_type": "HS",
+    "latest": 7.28,
+    "time_preview": [
+     0.0,
+     5.4381,
+     9.9698,
+     9.9698
+    ]
+   },
+   {
+    "open_num": null,
+    "first_limit_up_time": "1790559003",
+    "last_limit_up_time": "1790559003",
+    "code": "002912",
+    "limit_up_type": "换手板",
+    "order_volume": 4775338.0,
+    "is_new": 0,
+    "limit_up_suc_rate": 1.0,
+    "currency_value": 4294038500.0,
+    "market_id": 33,
+    "is_again_limit": 0,
+    "change_rate": 10.0166,
+    "turnover_rate": 4.9104,
+    "reason_type": "AI安全+网络安全+数据安全",
+    "order_amount": 126403197.0,
+    "high_days": "4天2板",
+    "name": "中新赛克",
+    "high_days_value": 131076,
+    "change_tag": "FIRST_LIMIT",
+    "market_type": "HS",
+    "latest": 26.47,
+    "time_preview": [
+     5.7772,
+     10.0166,
+     10.0166,
+     10.0166
+    ]
+   },
+   {
+    "open_num": null,
+    "first_limit_up_time": "1790558701",
+    "last_limit_up_time": "1790558701",
+    "code": "600825",
+    "limit_up_type": "一字板",
+    "order_volume": 279082460.0,
+    "is_new": 0,
+    "limit_up_suc_rate": 0.75,
+    "currency_value": 8933791100.0,
+    "market_id": 17,
+    "is_again_limit": 0,
+    "change_rate": 10.0386,
+    "turnover_rate": 0.4812,
+    "reason_type": "拟收购界面财联社+上海国资+“华”字辈",
+    "order_amount": 2386155000.0,
+    "high_days": "5天5板",
+    "name": "新华传媒",
+    "high_days_value": 327685,
+    "change_tag": "FIRST_LIMIT",
+    "market_type": "HS",
+    "latest": 8.55,
+    "time_preview": [
+     10.0386,
+     10.0386,
+     10.0386,
+     10.0386
+    ]
+   }
+  ],
+  "limit_up_count": {
+   "today": {
+    "num": 33,
+    "history_num": 44,
+    "rate": 0.75,
+    "open_num": 11
+   },
+   "yesterday": {
+    "num": 51,
+    "history_num": 61,
+    "rate": 0.8360655737704918,
+    "open_num": 10
+   }
+  },
+  "limit_down_count": {
+   "today": {
+    "num": 56,
+    "history_num": 77,
+    "rate": 0.7272727272727273,
+    "open_num": 21
+   },
+   "yesterday": {
+    "num": 11,
+    "history_num": 16,
+    "rate": 0.6875,
+    "open_num": 5
+   }
+  },
+  "date": "20260928",
+  "msg": null,
+  "trade_status": {
+   "id": "no_open",
+   "name": "未开盘",
+   "start_time": "00:00",
+   "end_time": "09:00"
+  }
+ }
+}

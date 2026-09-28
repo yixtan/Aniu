@@ -192,6 +192,7 @@ function StockApiProviderBadge({ provider }: { provider: StockApiPublicProvider 
     eastmoney: "border-orange-500/25 bg-orange-500/[0.08] text-orange-700 ",
     tencent: "border-cyan-500/25 bg-cyan-500/[0.08] text-cyan-700 ",
     sina: "border-rose-500/25 bg-rose-500/[0.08] text-rose-700 ",
+    ths: "border-emerald-500/25 bg-emerald-500/[0.08] text-emerald-700 ",
     mx: "border-violet-500/25 bg-violet-500/[0.08] text-violet-700 ",
   };
 

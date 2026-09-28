@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { login, updateModelChannel, updateSettings } from "./api";
+import { getRunDetail, login, updateModelChannel, updateSettings } from "./api";
 import { getAuthSession, setAuthSession } from "./auth-session";
 import { isApiConflictError } from "./openapi-client";
 
@@ -115,6 +115,64 @@ describe("OpenAPI API client behavior", () => {
       csrfToken: "next-token",
     });
     expect(await mockedRequest(fetchMock).json()).toEqual({ token: "secret-token" });
+  });
+
+  it("accepts a run whose public-data calls went to 同花顺", async () => {
+    // The trace guard is hand-written, so the compiler cannot say it missed a
+    // provider; missing one made every run that used it unreadable.
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      Response.json({
+        id: 7,
+        trace: {
+          schema_version: 1,
+          event_seq: 3,
+          current_stage_id: null,
+          stages: [
+            {
+              stage_id: "Run",
+              key: "run",
+              started_at: null,
+              ended_at: null,
+              steps: [
+                {
+                  step_id: "tool-1",
+                  type: "tool",
+                  title: "市场情绪",
+                  status: "completed",
+                  summary: null,
+                  content: null,
+                  started_at: null,
+                  ended_at: null,
+                  tool_call: {
+                    call_id: "call-1",
+                    intent_line: "市场情绪",
+                    source: "public",
+                    tool_name: "market_sentiment",
+                    display_name: "市场情绪",
+                    query_parameters: "action=reasons",
+                    stock_api_calls: [
+                      {
+                        call_id: "",
+                        provider: "ths",
+                        interface_name: "公开数据",
+                        interface_identifier: "sentiment.limit_reasons",
+                        operation_id: "sentiment.limit_reasons",
+                        response_characters: 1200,
+                        status: "success",
+                        duration_ms: 90,
+                        error_message: null,
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+
+    await expect(getRunDetail(7)).resolves.toMatchObject({ id: 7 });
   });
 
   it("clears the session on a 401 response", async () => {

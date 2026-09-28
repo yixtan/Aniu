@@ -1876,7 +1876,7 @@ export interface components {
             symbol: string;
         };
         /** @enum {string} */
-        PublicStockProvider: "eastmoney" | "tencent" | "sina" | "mx";
+        PublicStockProvider: "eastmoney" | "tencent" | "sina" | "ths" | "mx";
         /** PublicStockToolResponse */
         PublicStockToolResponse: {
             /** Actions */
@@ -2474,7 +2474,7 @@ export interface components {
              * Provider
              * @enum {string}
              */
-            provider: "mx" | "eastmoney" | "tencent" | "sina";
+            provider: "mx" | "eastmoney" | "tencent" | "sina" | "ths";
             /** Response Characters */
             response_characters: number | null;
             /** Status */

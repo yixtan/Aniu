@@ -1,4 +1,4 @@
-"""Facade for the seven normalized public stock-data domains."""
+"""Facade for the normalized public stock-data domains."""
 
 from __future__ import annotations
 
@@ -23,6 +23,7 @@ from backend.stock_api.public.normalizers.common import sampled
 from backend.stock_api.public.providers.eastmoney import EastMoneyAdapter
 from backend.stock_api.public.providers.sina import SinaAdapter
 from backend.stock_api.public.providers.tencent import TencentAdapter
+from backend.stock_api.public.providers.ths import ThsAdapter
 from backend.stock_api.public.router import PublicProviderAdapters, PublicStockRouter
 
 
@@ -56,6 +57,7 @@ class StockMarketDataService:
                 eastmoney=EastMoneyAdapter(transport),
                 tencent=TencentAdapter(transport),
                 sina=SinaAdapter(transport),
+                ths=ThsAdapter(transport),
             )
         )
         return cls(router, transport=transport)
@@ -68,13 +70,14 @@ class StockMarketDataService:
         """Route automatically and cache the complete normalized result."""
 
         key = _cache_key(request.cache_payload())
+        ttl = _ttl_seconds(request)
         return await self._cache.get_or_load(
             key,
             lambda: self._router.execute(
                 request,
                 cancellation_token=cancellation_token,
             ),
-            _ttl_seconds(request),
+            lambda value: _result_ttl_seconds(ttl, value),
         )
 
     async def execute_diagnostic(
@@ -121,7 +124,38 @@ def _ttl_seconds(request: PublicStockRequest) -> float:
         return 30 * 60
     if operation.startswith("news."):
         return 60.0
+    # Signals and sentiment are named one by one: an operation no rule matches
+    # is not cached at all. 龙虎榜 is published once, around 17:00–18:00, and
+    # 两融 and 解禁 change once a day at most; the pools and the 热榜 move
+    # through the session.
+    if operation in {"signals.dragon_tiger_stock", "signals.dragon_tiger_market"}:
+        return 10 * 60
+    if operation == "signals.lift":
+        return 60 * 60
+    if operation == "signals.margin":
+        return 30 * 60
+    if operation in {
+        "sentiment.limit_pool",
+        "sentiment.limit_summary",
+        "sentiment.hot_list",
+    }:
+        return 60.0
+    if operation == "sentiment.limit_reasons":
+        return 10 * 60
     return 0.0
+
+
+PARTIAL_RESULT_TTL_SECONDS = 30.0
+"""A result that lost part of its answer to a transient failure — 龙虎榜
+listings whose seat request timed out — is kept this long at most, so one
+timeout does not hide the seats for the operation's whole TTL."""
+
+
+def _result_ttl_seconds(ttl: float, value: dict[str, object]) -> float:
+    meta = value.get("meta")
+    if isinstance(meta, dict) and meta.get("partial") is True:
+        return min(ttl, PARTIAL_RESULT_TTL_SECONDS)
+    return ttl
 
 
 _MAX_RESULT_CHARACTERS = 64_000
@@ -194,9 +228,26 @@ def _shrink_list(
     if not isinstance(values, list) or len(values) <= 1:
         return
     original = len(values)
-    while len(values) > 1 and _serialized_length(candidate) > _MAX_RESULT_CHARACTERS:
-        target = max(1, len(values) // 2)
-        values = sampled(values, target)[0] if sample_series else values[:target]
+    if sample_series:
+        while (
+            len(values) > 1 and _serialized_length(candidate) > _MAX_RESULT_CHARACTERS
+        ):
+            values = sampled(values, max(1, len(values) // 2))[0]
+            data[key] = values
+    else:
+        # The longest head that fits. Halving would turn a result just over the
+        # limit into half of it, so asking for 200 rows returned 100 while
+        # asking for 180 returned 180.
+        full = values
+        low, high = 1, len(full)
+        while low < high:
+            middle = (low + high + 1) // 2
+            data[key] = full[:middle]
+            if _serialized_length(candidate) <= _MAX_RESULT_CHARACTERS:
+                low = middle
+            else:
+                high = middle - 1
+        values = full[:low]
         data[key] = values
     meta["original_count"] = original
     meta["returned_count"] = len(values)
@@ -313,4 +364,8 @@ def _serialized_length(value: object) -> int:
     return len(json.dumps(value, ensure_ascii=False, separators=(",", ":")))
 
 
-__all__ = ["StockMarketDataService", "bound_agent_result"]
+__all__ = [
+    "PARTIAL_RESULT_TTL_SECONDS",
+    "StockMarketDataService",
+    "bound_agent_result",
+]

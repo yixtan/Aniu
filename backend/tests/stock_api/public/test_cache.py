@@ -76,3 +76,25 @@ async def test_public_cache_clear_invalidates_an_in_flight_loader() -> None:
     assert await task == {"version": "fresh"}
     assert calls == 2
     assert await cache.get("same") == {"version": "fresh"}
+
+
+@pytest.mark.asyncio
+async def test_public_cache_can_keep_an_answer_for_as_long_as_it_deserves() -> None:
+    """A partial answer is kept briefly; the TTL is read off what was loaded."""
+
+    cache = PublicStockDataCache()
+    answers = iter([{"partial": True}, {"partial": False}])
+    calls = 0
+
+    async def load() -> dict[str, object]:
+        nonlocal calls
+        calls += 1
+        return next(answers)
+
+    def ttl(value: dict[str, object]) -> float:
+        return 0.0 if value["partial"] else 60.0
+
+    assert await cache.get_or_load("same", load, ttl) == {"partial": True}
+    assert await cache.get_or_load("same", load, ttl) == {"partial": False}
+    assert await cache.get_or_load("same", load, ttl) == {"partial": False}
+    assert calls == 2

@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from backend.stock_api.public.budget import operation_deadline
 from backend.stock_api.public.cancellation import (
     CancellationToken as AbortSignal,
 )
@@ -50,7 +49,6 @@ from backend.stock_api.public.errors import (
     UnsupportedStockRequest,
     UpstreamUnavailable,
 )
-from backend.stock_api.public.normalizers.common import NormalizedData
 from backend.stock_api.public.normalizers.content import (
     normalize_announcements,
     normalize_financials,
@@ -83,12 +81,15 @@ from backend.stock_api.public.normalizers.sina_money import (
     normalize_sina_sector_money,
     normalize_sina_stock_money_ranking,
 )
-from backend.stock_api.public.providers.eastmoney import EastMoneyAdapter
-from backend.stock_api.public.providers.sina import SINA_RANKING_MAX_DEPTH, SinaAdapter
-from backend.stock_api.public.providers.tencent import TencentAdapter
+from backend.stock_api.public.providers.sina import SINA_RANKING_MAX_DEPTH
+from backend.stock_api.public.routing import (
+    PublicProviderAdapters,
+    RouteCandidate,
+    route_candidate,
+)
+from backend.stock_api.public.signal_routes import signal_candidates
 
-_Operation = Callable[[float, AbortSignal | None], Awaitable[object]]
-_Normalizer = Callable[[object], NormalizedData]
+_candidate = route_candidate
 _TOTAL_TIMEOUTS = {
     "market": 8.0,
     "quote": 8.0,
@@ -99,6 +100,10 @@ _TOTAL_TIMEOUTS = {
     "index": 12.0,
     "research": 25.0,
     "news": 12.0,
+    # The per-stock 龙虎榜 makes up to three calls; the sentiment summary four
+    # serial push2ex calls 1.5 s apart.
+    "signals": 20.0,
+    "sentiment": 30.0,
 }
 _UPSTREAM_REQUEST_TIMEOUTS = {
     "market": 3.0,
@@ -110,30 +115,35 @@ _UPSTREAM_REQUEST_TIMEOUTS = {
     "index": 4.0,
     "research": 10.0,
     "news": 4.0,
+    "signals": 6.0,
+    "sentiment": 6.0,
 }
 _PROVIDER_LABELS = {
     "eastmoney": "东方财富",
     "tencent": "腾讯财经",
     "sina": "新浪财经",
+    "ths": "同花顺",
 }
+_MINIMUM_CANDIDATE_SECONDS = 1.0
+"""What a candidate still gets when its fallback's reserve would leave less."""
 
 
-@dataclass(frozen=True, slots=True)
-class RouteCandidate:
-    provider: ProviderName
-    endpoint: str
-    execute: _Operation
-    normalize: _Normalizer
-    degraded: bool = False
-    warning: str | None = None
-    fallback_on_empty: bool = False
-
-
-@dataclass(frozen=True, slots=True)
-class PublicProviderAdapters:
-    eastmoney: EastMoneyAdapter
-    tencent: TencentAdapter
-    sina: SinaAdapter
+def _fallback_warning(
+    previous_provider: ProviderName | None,
+    provider: ProviderName,
+    previous_empty: bool,
+) -> str:
+    status = "未返回有效数据" if previous_empty else "暂时不可用"
+    label = _PROVIDER_LABELS[provider]
+    if previous_provider == provider:
+        # Two endpoints of one source, such as 同花顺's 涨停归因 then its
+        # 涨停揭秘: naming the source twice would read 「同花顺暂时不可用，
+        # 已使用同花顺」. The candidate or its normalizer names the endpoints.
+        return f"{label}的首选接口{status}，已改用它的备用接口。"
+    previous = (
+        _PROVIDER_LABELS[previous_provider] if previous_provider else "首选数据源"
+    )
+    return f"{previous}{status}，已使用{label}。"
 
 
 class PublicStockRouter:
@@ -174,7 +184,7 @@ class PublicStockRouter:
         previous_provider: ProviderName | None = None
         previous_empty = False
 
-        for candidate in candidates:
+        for index, candidate in enumerate(candidates):
             throw_if_aborted(cancellation_token)
             if candidate.provider not in attempted:
                 attempted.append(candidate.provider)
@@ -182,12 +192,22 @@ class PublicStockRouter:
             if remaining <= 0:
                 last_error = UpstreamUnavailable("公开数据请求超过总超时。")
                 break
-            request_timeout = min(_UPSTREAM_REQUEST_TIMEOUTS[category], remaining)
+            budget = remaining
+            if candidate.reserve_seconds and index + 1 < len(candidates):
+                # Keep the next source's share. Time this one spends queued
+                # behind parallel calls at a one-at-a-time gate would otherwise
+                # come out of the fallback's, which then never starts.
+                budget = max(
+                    remaining - candidate.reserve_seconds,
+                    min(remaining, _MINIMUM_CANDIDATE_SECONDS),
+                )
+            request_timeout = min(_UPSTREAM_REQUEST_TIMEOUTS[category], budget)
             error: PublicStockDataError
+            deadline_token = operation_deadline.set(time.monotonic() + budget)
             try:
                 # Adapters may retry a primary URL with a fallback URL. Each HTTP
                 # request gets its own timeout; only the operation total is shared.
-                async with asyncio.timeout(remaining):
+                async with asyncio.timeout(budget):
                     raw = await candidate.execute(request_timeout, cancellation_token)
                 normalized = candidate.normalize(raw)
             except asyncio.CancelledError:
@@ -207,30 +227,30 @@ class PublicStockRouter:
                 fallback_used = failures > 0
                 warnings: list[str] = []
                 if fallback_used:
-                    previous = (
-                        _PROVIDER_LABELS[previous_provider]
-                        if previous_provider
-                        else "首选数据源"
-                    )
-                    status = "未返回有效数据" if previous_empty else "暂时不可用"
                     warnings.append(
-                        f"{previous}{status}，已使用{_PROVIDER_LABELS[candidate.provider]}。"
+                        _fallback_warning(
+                            previous_provider, candidate.provider, previous_empty
+                        )
                     )
                 if candidate.warning:
                     warnings.append(candidate.warning)
                 warnings.extend(normalized.warnings)
-                return {
-                    "data": normalized.data,
-                    "meta": {
-                        "operation": request.operation,
-                        "source": candidate.provider,
-                        "attempted_sources": attempted,
-                        "fallback_used": fallback_used,
-                        "degraded": candidate.degraded or normalized.degraded,
-                        "fetched_at": _now_iso(),
-                        "warnings": warnings,
-                    },
+                meta: dict[str, object] = {
+                    "operation": request.operation,
+                    "source": candidate.provider,
+                    "attempted_sources": attempted,
+                    "fallback_used": fallback_used,
+                    "degraded": candidate.degraded or normalized.degraded,
+                    "fetched_at": _now_iso(),
+                    "warnings": warnings,
                 }
+                if normalized.partial:
+                    # Part of the answer failed and a second ask may bring it;
+                    # the service keeps such a result only briefly.
+                    meta["partial"] = True
+                return {"data": normalized.data, "meta": meta}
+            finally:
+                operation_deadline.reset(deadline_token)
 
             last_error = error
             if isinstance(error, NoStockData) and candidate.fallback_on_empty:
@@ -251,6 +271,9 @@ class PublicStockRouter:
         raise last_error
 
     def candidates_for(self, request: PublicStockRequest) -> list[RouteCandidate]:
+        signals = signal_candidates(self._adapters, request)
+        if signals is not None:
+            return signals
         eastmoney = self._adapters.eastmoney
         tencent = self._adapters.tencent
         sina = self._adapters.sina
@@ -805,37 +828,6 @@ class PublicStockRouter:
                 )
             ]
         raise InvalidStockRequest("不支持的公开股票数据请求。")
-
-
-def _candidate(
-    provider: ProviderName,
-    endpoint: str,
-    method: Callable[..., Awaitable[object]],
-    request: PublicStockRequest,
-    normalize: _Normalizer,
-    *,
-    degraded: bool = False,
-    warning: str | None = None,
-    fallback_on_empty: bool = False,
-) -> RouteCandidate:
-    async def execute(
-        timeout_seconds: float, cancellation_token: AbortSignal | None
-    ) -> object:
-        return await method(
-            request,
-            timeout_seconds=timeout_seconds,
-            cancellation_token=cancellation_token,
-        )
-
-    return RouteCandidate(
-        provider=provider,
-        endpoint=endpoint,
-        execute=execute,
-        normalize=normalize,
-        degraded=degraded,
-        warning=warning,
-        fallback_on_empty=fallback_on_empty,
-    )
 
 
 def _now_iso() -> str:

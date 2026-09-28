@@ -9,7 +9,7 @@ from typing import ClassVar, Literal
 
 from backend.stock_api.public.errors import InvalidStockRequest
 
-type ProviderName = Literal["eastmoney", "tencent", "sina"]
+type ProviderName = Literal["eastmoney", "tencent", "sina", "ths"]
 
 _SH_A_SHARE = re.compile(r"^(?:600|601|603|605|688)\d{3}$")
 _SZ_A_SHARE = re.compile(r"^(?:000|001|002|003|300|301)\d{3}$")
@@ -115,6 +115,12 @@ def _date(value: str | None, name: str) -> None:
         date.fromisoformat(value)
     except ValueError as exc:
         raise InvalidStockRequest(f"{name} 不是有效日期。") from exc
+
+
+def _required_date(value: str | None, name: str) -> None:
+    if value is None:
+        raise InvalidStockRequest(f"{name} 必须为 yyyy-MM-dd 日期。")
+    _date(value, name)
 
 
 @dataclass(frozen=True, slots=True)
@@ -580,6 +586,112 @@ class NewsSearchRequest(StockMarketRequest):
         object.__setattr__(self, "keyword", keyword)
 
 
+# Signals and sentiment. Every date here is an explicit yyyy-MM-dd string, so
+# the contracts stay clock-free and one date is one cache key; the Agent tool
+# decides what "today" means with the trading calendar, which stock_api may
+# not import. The whole-market lists run past 100 rows on a busy day (33
+# 涨停 and 56 跌停 on 2026-09-28), so their limits are not _page_limit's 50.
+
+
+@dataclass(frozen=True, slots=True)
+class DragonTigerStockRequest(StockMarketRequest):
+    symbol: str
+    limit: int = 5
+    trade_date: str | None = None
+
+    operation: ClassVar[str] = "signals.dragon_tiger_stock"
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "symbol", normalize_symbol(self.symbol))
+        _integer(self.limit, "limit", 1, 20)
+        _date(self.trade_date, "trade_date")
+
+
+@dataclass(frozen=True, slots=True)
+class DragonTigerMarketRequest(StockMarketRequest):
+    trade_date: str
+    limit: int = 50
+
+    operation: ClassVar[str] = "signals.dragon_tiger_market"
+
+    def __post_init__(self) -> None:
+        _required_date(self.trade_date, "trade_date")
+        _integer(self.limit, "limit", 1, 200)
+
+
+@dataclass(frozen=True, slots=True)
+class LiftScheduleRequest(StockMarketRequest):
+    symbol: str
+    as_of: str
+
+    operation: ClassVar[str] = "signals.lift"
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "symbol", normalize_symbol(self.symbol))
+        _required_date(self.as_of, "as_of")
+
+
+@dataclass(frozen=True, slots=True)
+class MarginDetailRequest(StockMarketRequest):
+    symbol: str
+    limit: int = 10
+
+    operation: ClassVar[str] = "signals.margin"
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "symbol", normalize_symbol(self.symbol))
+        _integer(self.limit, "limit", 1, 60)
+
+
+_LIMIT_POOLS = ("limit_up", "broken", "limit_down", "previous_limit_up")
+
+
+@dataclass(frozen=True, slots=True)
+class LimitPoolRequest(StockMarketRequest):
+    pool: Literal["limit_up", "broken", "limit_down", "previous_limit_up"]
+    trade_date: str
+    limit: int = 50
+
+    operation: ClassVar[str] = "sentiment.limit_pool"
+
+    def __post_init__(self) -> None:
+        _choice(self.pool, "pool", _LIMIT_POOLS)
+        _required_date(self.trade_date, "trade_date")
+        _integer(self.limit, "limit", 1, 200)
+
+
+@dataclass(frozen=True, slots=True)
+class LimitSummaryRequest(StockMarketRequest):
+    trade_date: str
+
+    operation: ClassVar[str] = "sentiment.limit_summary"
+
+    def __post_init__(self) -> None:
+        _required_date(self.trade_date, "trade_date")
+
+
+@dataclass(frozen=True, slots=True)
+class LimitReasonsRequest(StockMarketRequest):
+    trade_date: str
+    limit: int = 50
+
+    operation: ClassVar[str] = "sentiment.limit_reasons"
+
+    def __post_init__(self) -> None:
+        _required_date(self.trade_date, "trade_date")
+        _integer(self.limit, "limit", 1, 200)
+
+
+@dataclass(frozen=True, slots=True)
+class HotListRequest(StockMarketRequest):
+    limit: int = 30
+
+    operation: ClassVar[str] = "sentiment.hot_list"
+
+    def __post_init__(self) -> None:
+        _integer(self.limit, "limit", 1, 100)
+
+
 type PublicStockRequest = (
     IndexQuoteRequest
     | MarketBreadthRequest
@@ -606,19 +718,35 @@ type PublicStockRequest = (
     | StockNewsRequest
     | AnnouncementsRequest
     | NewsSearchRequest
+    | DragonTigerStockRequest
+    | DragonTigerMarketRequest
+    | LiftScheduleRequest
+    | MarginDetailRequest
+    | LimitPoolRequest
+    | LimitSummaryRequest
+    | LimitReasonsRequest
+    | HotListRequest
 )
 
 
 __all__ = [
     "AnnouncementsRequest",
     "ConnectMoneyFlowRequest",
+    "DragonTigerMarketRequest",
+    "DragonTigerStockRequest",
     "FinancialsRequest",
     "ForecastRequest",
+    "HotListRequest",
     "IndustryComparisonRequest",
     "IndexKlineRequest",
     "IndexQuoteRequest",
     "IntradayRequest",
     "KlineRequest",
+    "LiftScheduleRequest",
+    "LimitPoolRequest",
+    "LimitReasonsRequest",
+    "LimitSummaryRequest",
+    "MarginDetailRequest",
     "MarketBreadthRequest",
     "MarketDataRequest",
     "MarketReportsRequest",

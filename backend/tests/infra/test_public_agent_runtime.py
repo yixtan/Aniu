@@ -6,6 +6,14 @@ from typing import cast
 
 import pytest
 
+from backend.business.runs.tool_presentation import (
+    TOOL_STEP_TITLE_BY_NAME,
+    TRACE_TOOL_ARGUMENT_KEYS,
+    tool_source,
+)
+from backend.business.settings.public_stock_interfaces import (
+    AGGREGATE_PUBLIC_STOCK_TOOL_NAMES,
+)
 from backend.infra.integrations.agent_runner import _StageToolRegistry
 from backend.infra.integrations.agent_runtime import AgentRuntimeFactory
 from backend.stock_api.public import StockMarketDataService
@@ -26,6 +34,8 @@ async def test_runtime_factory_registers_public_tools_without_mx_clients() -> No
         "stock_fundamentals",
         "stock_research",
         "stock_news",
+        "stock_signals",
+        "market_sentiment",
         "market_snapshot",
     }
 
@@ -58,9 +68,10 @@ async def test_runtime_stage_tool_counts_stay_stable_after_kline_replacement() -
     run = names("Run")
     summary = names("Summary")
 
-    assert len(run) == 18
+    assert len(run) == 20
     assert summary == set()
     assert "query_kline" in run
+    assert {"stock_signals", "market_sentiment"} <= run
     assert {
         "market_snapshot",
         "portfolio_stock_snapshot",
@@ -69,3 +80,26 @@ async def test_runtime_stage_tool_counts_stay_stable_after_kline_replacement() -
     } <= run
     assert "stock_kline" not in run
     assert {"trade", "cancel"} <= run
+
+
+@pytest.mark.asyncio
+async def test_every_public_tool_has_a_title_argument_keys_and_a_source() -> None:
+    """The trace's presentation maps are kept by hand, and a tool missing from
+    them shows as an untitled 「工具调用」 from source internal with no
+    arguments — with every test still green."""
+
+    registry = await AgentRuntimeFactory(
+        public_stock_data=cast(StockMarketDataService, object())
+    ).build_tool_registry()
+
+    for name in registry.list_tool_names():
+        assert name in TOOL_STEP_TITLE_BY_NAME, name
+        assert name in TRACE_TOOL_ARGUMENT_KEYS, name
+        expected = (
+            "aggregate" if name in AGGREGATE_PUBLIC_STOCK_TOOL_NAMES else "public"
+        )
+        assert tool_source(name) == expected, name
+        properties = (
+            registry.get(name).to_tool_definition()["parameters"].get("properties", {})
+        )
+        assert set(TRACE_TOOL_ARGUMENT_KEYS[name]) <= set(properties), name

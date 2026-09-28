@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-type PublicStockProvider = Literal["eastmoney", "tencent", "sina", "mx"]
+type PublicStockProvider = Literal["eastmoney", "tencent", "sina", "ths", "mx"]
 
 AGGREGATE_PUBLIC_STOCK_TOOL_NAMES = frozenset(
     {
@@ -29,12 +29,14 @@ class PublicStockToolCatalogItem:
 PUBLIC_STOCK_DATA_NAME = "公开数据"
 PUBLIC_STOCK_DATA_SUMMARY = (
     "个股与指数行情无需密钥并自动选择腾讯、新浪和东方财富；"
+    "涨停归因和人气热榜来自同花顺；"
     "聚合研判工具按业务场景组合标准化公开数据。"
 )
 PUBLIC_STOCK_DATA_PROVIDERS: tuple[PublicStockProvider, ...] = (
     "tencent",
     "sina",
     "eastmoney",
+    "ths",
 )
 PUBLIC_STOCK_DATA_FEATURES = (
     "实时行情",
@@ -43,6 +45,8 @@ PUBLIC_STOCK_DATA_FEATURES = (
     "基本数据",
     "研报预测",
     "资讯公告",
+    "个股信号",
+    "市场情绪",
     "聚合研判",
 )
 PUBLIC_STOCK_TOOL_CATALOG = (
@@ -101,6 +105,22 @@ PUBLIC_STOCK_TOOL_CATALOG = (
         summary="查询资讯流、个股新闻、公司公告和新闻搜索。",
         actions=("资讯流", "个股新闻", "公告", "新闻搜索"),
         providers=("eastmoney",),
+    ),
+    PublicStockToolCatalogItem(
+        tool_name="stock_signals",
+        name="个股信号",
+        summary="查询个股龙虎榜席位、限售解禁和融资融券。",
+        actions=("龙虎榜", "限售解禁", "融资融券"),
+        providers=("eastmoney",),
+    ),
+    PublicStockToolCatalogItem(
+        tool_name="market_sentiment",
+        name="市场情绪",
+        summary=(
+            "查询涨停、炸板、跌停池与打板情绪，涨停题材归因，人气热榜和全市场龙虎榜。"
+        ),
+        actions=("情绪概览", "涨跌停池", "涨停归因", "人气热榜", "全市场龙虎榜"),
+        providers=("eastmoney", "ths"),
     ),
     PublicStockToolCatalogItem(
         tool_name="market_snapshot",

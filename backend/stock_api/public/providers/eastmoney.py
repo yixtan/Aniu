@@ -31,6 +31,13 @@ from backend.stock_api.public.providers.base import (
     parse_jsonp,
     public_headers,
 )
+from backend.stock_api.public.providers.eastmoney_capital import EastMoneyCapitalMixin
+from backend.stock_api.public.providers.eastmoney_dragon_tiger import (
+    EastMoneyDragonTigerMixin,
+)
+from backend.stock_api.public.providers.eastmoney_limit_pools import (
+    EastMoneyLimitPoolsMixin,
+)
 from backend.stock_api.public.providers.eastmoney_research import EastMoneyF10Adapter
 
 _UT = "fa5fd1943c7b386f172d6893dbfba10b"
@@ -99,8 +106,17 @@ _PERIODS = {
 _ADJUSTMENTS = {"none": 0, "qfq": 1, "hfq": 2}
 
 
-class EastMoneyAdapter(EastMoneyF10Adapter):
-    """Concrete adapter combining live-market and F10 source actions."""
+class EastMoneyAdapter(
+    EastMoneyF10Adapter,
+    EastMoneyDragonTigerMixin,
+    EastMoneyCapitalMixin,
+    EastMoneyLimitPoolsMixin,
+):
+    """Concrete adapter combining live-market, F10 and signal source actions.
+
+    The signal mixins never set ``provider``; `EastMoneyF10Adapter` comes
+    first in the MRO, so it stays ``"eastmoney"``.
+    """
 
     async def quote_snapshot(
         self,

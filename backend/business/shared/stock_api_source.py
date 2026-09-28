@@ -9,12 +9,13 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 StockApiCallSource = Literal["overview_refresh", "run", "unknown"]
-StockApiProvider = Literal["mx", "eastmoney", "tencent", "sina"]
+StockApiProvider = Literal["mx", "eastmoney", "tencent", "sina", "ths"]
 STOCK_API_PROVIDERS: tuple[StockApiProvider, ...] = (
     "mx",
     "eastmoney",
     "tencent",
     "sina",
+    "ths",
 )
 PUBLIC_STOCK_OPERATION_IDS = frozenset(
     {
@@ -40,6 +41,14 @@ PUBLIC_STOCK_OPERATION_IDS = frozenset(
         "news.stock_news",
         "news.announcements",
         "news.search",
+        "signals.dragon_tiger_stock",
+        "signals.dragon_tiger_market",
+        "signals.lift",
+        "signals.margin",
+        "sentiment.limit_pool",
+        "sentiment.limit_summary",
+        "sentiment.limit_reasons",
+        "sentiment.hot_list",
     }
 )
 PUBLIC_STOCK_UNKNOWN_OPERATION_ID = "public.request"

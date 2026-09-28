@@ -21,6 +21,10 @@ class NormalizedData:
     data: dict[str, object]
     degraded: bool = False
     warnings: tuple[str, ...] = ()
+    partial: bool = False
+    """A transient failure left part of the answer out, not the source's
+    measure: `degraded` also marks a fallback source's different basis, which
+    asking again would not change."""
 
 
 def as_record(value: object) -> JsonRecord | None:

@@ -5,6 +5,7 @@ const stockApiProviderLabels: Record<StockApiProvider, string> = {
   eastmoney: "东方财富",
   tencent: "腾讯财经",
   sina: "新浪财经",
+  ths: "同花顺",
 };
 
 const stockApiToolSourceLabels: Record<StockApiLogToolSource, string> = {
@@ -41,6 +42,9 @@ const parameterKeyLabels: Record<string, string> = {
   end_date: "结束日期",
   date: "日期",
   dates: "日期列表",
+  trade_date: "交易日",
+  trade_date_fallback_from: "原定交易日（无数据）",
+  pool: "池子",
   period: "周期",
   frequency: "频率",
   interval: "间隔",
@@ -87,6 +91,21 @@ const parameterValueLabels: Record<string, Record<string, string>> = {
   data_source: {
     public: "公开数据",
     mx: "妙想接口",
+  },
+  action: {
+    dragon_tiger: "龙虎榜",
+    lift: "限售解禁",
+    margin: "融资融券",
+    summary: "情绪概览",
+    pool: "涨跌停池",
+    reasons: "涨停归因",
+    hot_list: "人气热榜",
+  },
+  pool: {
+    limit_up: "涨停池",
+    broken: "炸板池",
+    limit_down: "跌停池",
+    previous_limit_up: "昨日涨停",
   },
 };
 

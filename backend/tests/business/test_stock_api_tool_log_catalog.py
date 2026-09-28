@@ -8,15 +8,15 @@ from backend.business.stock_api_logs.catalog import (
 )
 
 
-def test_tool_log_catalog_matches_the_eight_plus_four_plus_four_directory_cards() -> (
-    None
-):
-    assert len(STOCK_API_TOOL_CATALOG) == 16
-    assert sum(item.tool_source == "public" for item in STOCK_API_TOOL_CATALOG) == 8
+def test_tool_log_catalog_matches_the_ten_plus_four_plus_four_directory_cards() -> None:
+    assert len(STOCK_API_TOOL_CATALOG) == 18
+    assert sum(item.tool_source == "public" for item in STOCK_API_TOOL_CATALOG) == 10
     assert sum(item.tool_source == "aggregate" for item in STOCK_API_TOOL_CATALOG) == 4
     assert sum(item.tool_source == "mx" for item in STOCK_API_TOOL_CATALOG) == 4
 
     query_kline = stock_api_tool_descriptor("query_kline")
+    signals = stock_api_tool_descriptor("stock_signals")
+    sentiment = stock_api_tool_descriptor("market_sentiment")
     market_snapshot = stock_api_tool_descriptor("market_snapshot")
     portfolio_snapshot = stock_api_tool_descriptor("portfolio_stock_snapshot")
     portfolio = stock_api_tool_descriptor("query_portfolio")
@@ -29,6 +29,10 @@ def test_tool_log_catalog_matches_the_eight_plus_four_plus_four_directory_cards(
         query_kline.tool_id,
         query_kline.tool_name,
     ) == ("public", "query_kline", "K 线走势")
+    assert signals is not None
+    assert (signals.tool_source, signals.tool_name) == ("public", "个股信号")
+    assert sentiment is not None
+    assert (sentiment.tool_source, sentiment.tool_name) == ("public", "市场情绪")
     assert market_snapshot is not None
     assert (
         market_snapshot.tool_source,
