@@ -77,9 +77,14 @@ from backend.stock_api.public.normalizers.market import (
     normalize_sector_money_flow,
     normalize_stock_money_flow,
 )
-from backend.stock_api.public.normalizers.sina_money import normalize_sina_money_history
+from backend.stock_api.public.normalizers.sina_money import (
+    normalize_sina_money_history,
+    normalize_sina_money_today,
+    normalize_sina_sector_money,
+    normalize_sina_stock_money_ranking,
+)
 from backend.stock_api.public.providers.eastmoney import EastMoneyAdapter
-from backend.stock_api.public.providers.sina import SinaAdapter
+from backend.stock_api.public.providers.sina import SINA_RANKING_MAX_DEPTH, SinaAdapter
 from backend.stock_api.public.providers.tencent import TencentAdapter
 
 _Operation = Callable[[float, AbortSignal | None], Awaitable[object]]
@@ -427,6 +432,24 @@ class PublicStockRouter:
             return candidates
         if isinstance(request, StockRankingRequest):
             candidates = []
+            if (
+                request.market == "all_a"
+                and request.sort == "net_inflow"
+                and request.page * request.limit <= SINA_RANKING_MAX_DEPTH
+            ):
+                # Sina first even though East Money's 主力 is the richer figure:
+                # push2 dropped half of these from 2026-09-23, and one basis
+                # all day beats two that trade places call by call.
+                candidates.append(
+                    _candidate(
+                        "sina",
+                        "sina_stock_money_flow_ranking",
+                        sina.stock_money_flow_ranking,
+                        request,
+                        lambda raw: normalize_sina_stock_money_ranking(raw, request),
+                        fallback_on_empty=True,
+                    )
+                )
             if request.market == "all_a" and request.sort in {
                 "price",
                 "volume",
@@ -503,6 +526,19 @@ class PublicStockRouter:
                         fallback_on_empty=True,
                     )
                 )
+            if request.sort == "net_inflow" or (
+                request.sector_type == "concept" and request.sort == "change_percent"
+            ):
+                candidates.append(
+                    _candidate(
+                        "sina",
+                        "sina_sector_money_flow",
+                        sina.sector_money_flow,
+                        request,
+                        lambda raw: normalize_sina_sector_money(raw, request),
+                        fallback_on_empty=True,
+                    )
+                )
             candidates.append(
                 _candidate(
                     "eastmoney",
@@ -536,6 +572,8 @@ class PublicStockRouter:
                 ),
             ]
         if isinstance(request, StockMoneyFlowIntradayRequest):
+            # East Money first: only it has the minute series. Sina's day total
+            # still answers "in or out so far today" when push2 will not.
             return [
                 _candidate(
                     "eastmoney",
@@ -543,17 +581,33 @@ class PublicStockRouter:
                     eastmoney.stock_money_flow_intraday,
                     request,
                     lambda raw: normalize_stock_money_flow(raw, request),
-                )
+                    fallback_on_empty=True,
+                ),
+                _candidate(
+                    "sina",
+                    "sina_stock_money_flow_today",
+                    sina.stock_money_flow_today,
+                    request,
+                    lambda raw: normalize_sina_money_today(raw, request),
+                ),
             ]
         if isinstance(request, SectorMoneyFlowRequest):
             return [
+                _candidate(
+                    "sina",
+                    "sina_sector_money_flow",
+                    sina.sector_money_flow,
+                    request,
+                    lambda raw: normalize_sina_sector_money(raw, request),
+                    fallback_on_empty=True,
+                ),
                 _candidate(
                     "eastmoney",
                     "em_market_snapshot",
                     eastmoney.sector_money_flow,
                     request,
                     lambda raw: normalize_sector_money_flow(raw, request),
-                )
+                ),
             ]
         if isinstance(request, ConnectMoneyFlowRequest):
             return [

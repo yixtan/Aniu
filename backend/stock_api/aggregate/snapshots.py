@@ -101,6 +101,12 @@ def _public_data(result: object) -> dict[str, object]:
     return dict(data) if isinstance(data, dict) else {}
 
 
+def _public_notes(result: object) -> list[str]:
+    meta = result.get("meta") if isinstance(result, dict) else None
+    warnings = meta.get("warnings") if isinstance(meta, dict) else None
+    return [str(item) for item in warnings] if isinstance(warnings, list) else []
+
+
 def _quote_for_symbol(data: dict[str, object], symbol: str) -> dict[str, object]:
     quotes = data.get("quotes")
     if not isinstance(quotes, list):
@@ -140,6 +146,18 @@ def _list_value(data: object, key: str) -> list[object]:
 def _bounded_list(data: object, key: str, limit: int) -> tuple[list[object], bool]:
     items = _list_value(data, key)
     return items[:limit], len(items) > limit
+
+
+def _money_flow_section(flow: object) -> dict[str, object]:
+    money_flow, truncated = _bounded_list(flow, "items", INDUSTRY_MONEY_FLOW_LIMIT)
+    section: dict[str, object] = {
+        "money_flow": money_flow,
+        "money_flow_limit": INDUSTRY_MONEY_FLOW_LIMIT,
+        "money_flow_truncated": truncated,
+    }
+    if notes := _list_value(flow, "notes"):
+        section["money_flow_notes"] = notes
+    return section
 
 
 def _serialized_length(value: object) -> int:
@@ -266,6 +284,26 @@ class _AggregateReader:
     ) -> dict[str, object]:
         throw_if_aborted(abort_signal)
         return _public_data(await self.public_data.execute(request, abort_signal))
+
+    async def _execute_public_noted(
+        self,
+        request: PublicStockRequest,
+        abort_signal: AbortSignal | None,
+    ) -> dict[str, object]:
+        """The data plus the answering source's caveats, under ``notes``.
+
+        For sections whose numbers mean different things depending on the
+        source: board net inflow is 主力 at East Money and every order class at
+        Sina, and the caveat that says so lives in ``meta``, which
+        ``_execute_public`` drops.
+        """
+
+        throw_if_aborted(abort_signal)
+        result = await self.public_data.execute(request, abort_signal)
+        data = _public_data(result)
+        if notes := _public_notes(result):
+            data["notes"] = notes
+        return data
 
 
 @dataclass(slots=True)
@@ -675,7 +713,7 @@ class IndustrySnapshotAggregator(_AggregateReader):
             {
                 "industry_money_flow": _with_concurrency(
                     semaphore,
-                    self._execute_public(
+                    self._execute_public_noted(
                         SectorMoneyFlowRequest(
                             sector_type="industry",
                             page=1,
@@ -686,7 +724,7 @@ class IndustrySnapshotAggregator(_AggregateReader):
                 ),
                 "concept_money_flow": _with_concurrency(
                     semaphore,
-                    self._execute_public(
+                    self._execute_public_noted(
                         SectorMoneyFlowRequest(
                             sector_type="concept",
                             page=1,
@@ -709,31 +747,11 @@ class IndustrySnapshotAggregator(_AggregateReader):
             },
             abort_signal=abort_signal,
         )
-        industry_flow = sections.get("industry_money_flow", {})
-        concept_flow = sections.get("concept_money_flow", {})
         news = sections.get("top_news", {})
-        industry_money_flow, industry_money_flow_truncated = _bounded_list(
-            industry_flow,
-            "items",
-            INDUSTRY_MONEY_FLOW_LIMIT,
-        )
-        concept_money_flow, concept_money_flow_truncated = _bounded_list(
-            concept_flow,
-            "items",
-            INDUSTRY_MONEY_FLOW_LIMIT,
-        )
         top_news, top_news_truncated = _bounded_list(news, "items", TOP_NEWS_LIMIT)
         result: dict[str, object] = {
-            "industries": {
-                "money_flow": industry_money_flow,
-                "money_flow_limit": INDUSTRY_MONEY_FLOW_LIMIT,
-                "money_flow_truncated": industry_money_flow_truncated,
-            },
-            "concepts": {
-                "money_flow": concept_money_flow,
-                "money_flow_limit": INDUSTRY_MONEY_FLOW_LIMIT,
-                "money_flow_truncated": concept_money_flow_truncated,
-            },
+            "industries": _money_flow_section(sections.get("industry_money_flow", {})),
+            "concepts": _money_flow_section(sections.get("concept_money_flow", {})),
             "top_news": top_news,
             "top_news_limit": TOP_NEWS_LIMIT,
             "top_news_truncated": top_news_truncated,

@@ -17,3 +17,6 @@
 - `tencent_ranking.json`: 腾讯排行真实字段。
 - `sina_ranking.json`: 新浪排行响应。
 - `sina_money_history.json`: 新浪 `MoneyFlow.ssl_qsfx_zjlrqs`，按日期倒序的个股资金流（600487，09-23、09-24、09-28 三个交易日）。
+- `sina_money_today.json`: 新浪 `MoneyFlow.ssi_ssfx_flzjtj`，个股当天按单子大小分档的累计流入流出（600487，2026-09-28）。
+- `sina_money_ranking.json`: 新浪 `MoneyFlow.ssl_bkzj_ssggzj`，全部 A 股按主力（r0）净流入排行（2026-09-28，前三行里两只是 ETF）。
+- `sina_sector_money.json`: 新浪 `MoneyFlow.ssl_bkzj_bk`，新浪行业板块按净流入排行（2026-09-28）。

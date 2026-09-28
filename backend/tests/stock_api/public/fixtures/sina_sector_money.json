@@ -1,0 +1,53 @@
+[
+ {
+  "cate_type": "0",
+  "category": "new_qczz",
+  "name": "汽车制造",
+  "avg_price": "14.2676",
+  "avg_changeratio": "-0.00872789",
+  "turnover": "155.848",
+  "inamount": "17219590428.9100",
+  "outamount": "15780506642.1900",
+  "netamount": "1439083786.7200",
+  "ratioamount": "0.0417313",
+  "ts_symbol": "sh600418",
+  "ts_name": "江淮汽车",
+  "ts_trade": "25.2200",
+  "ts_changeratio": "0.0998692",
+  "ts_ratioamount": "0.343847"
+ },
+ {
+  "cate_type": "0",
+  "category": "new_ljhy",
+  "name": "酿酒行业",
+  "avg_price": "78.9114",
+  "avg_changeratio": "0.00102709",
+  "turnover": "48.2225",
+  "inamount": "5962898978.2000",
+  "outamount": "4832392155.4300",
+  "netamount": "1130506822.7700",
+  "ratioamount": "0.0971257",
+  "ts_symbol": "sh601579",
+  "ts_name": "会稽山",
+  "ts_trade": "41.8400",
+  "ts_changeratio": "0.0998948",
+  "ts_ratioamount": "0.300299"
+ },
+ {
+  "cate_type": "0",
+  "category": "new_fjzz",
+  "name": "飞机制造",
+  "avg_price": "21.8288",
+  "avg_changeratio": "-0.00263743",
+  "turnover": "157.787",
+  "inamount": "3538566841.5400",
+  "outamount": "3237849464.4600",
+  "netamount": "300717377.0800",
+  "ratioamount": "0.0421719",
+  "ts_symbol": "sz000768",
+  "ts_name": "中航西飞",
+  "ts_trade": "22.9200",
+  "ts_changeratio": "0.0371041",
+  "ts_ratioamount": "0.23163"
+ }
+]
