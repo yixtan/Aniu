@@ -467,3 +467,36 @@ async def test_industry_snapshot_returns_current_sections() -> None:
     assert [request.operation for request in public.requests].count(
         "money_flow.sector"
     ) == 2
+
+
+@dataclass
+class SinaBoardService:
+    async def execute(
+        self,
+        request: PublicStockRequest,
+        cancellation_token: RunAbortSignal | None = None,
+    ) -> dict[str, object]:
+        del cancellation_token
+        if request.operation != "money_flow.sector":
+            return {"data": {"items": []}}
+        return {
+            "data": {"items": [{"name": "汽车制造", "net_inflow": 1_439_083_786}]},
+            "meta": {
+                "source": "sina",
+                "warnings": ["新浪口径：净流入是全部单子的净额"],
+            },
+        }
+
+
+@pytest.mark.asyncio
+async def test_industry_snapshot_keeps_the_caveat_on_whose_board_flow_it_is() -> None:
+    """Board net inflow is 主力 at East Money and every order class at Sina.
+    The caveat saying which rides in meta, which the other sections drop."""
+
+    result = await IndustrySnapshotAggregator(
+        public_data=cast(StockMarketDataService, SinaBoardService())
+    ).snapshot()
+
+    for section in ("industries", "concepts"):
+        board = cast(dict[str, object], result[section])
+        assert board["money_flow_notes"] == ["新浪口径：净流入是全部单子的净额"]

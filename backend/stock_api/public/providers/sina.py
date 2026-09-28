@@ -14,8 +14,10 @@ from backend.stock_api.public.contracts import (
     KlineRequest,
     NewsFeedRequest,
     QuoteSnapshotRequest,
+    SectorMoneyFlowRequest,
     SectorRankingRequest,
     StockMoneyFlowHistoryRequest,
+    StockMoneyFlowIntradayRequest,
     StockNewsRequest,
     StockRankingRequest,
     market_symbol_code,
@@ -194,6 +196,96 @@ class SinaAdapter(FixedPublicAdapter):
             cancellation_token=cancellation_token,
         )
 
+    async def stock_money_flow_today(
+        self,
+        request: StockMoneyFlowIntradayRequest,
+        *,
+        timeout_seconds: float,
+        cancellation_token: AbortSignal | None,
+    ) -> object:
+        """Today's totals by order class. Sina has no minute series."""
+
+        params = {"daima": _sina_symbol(request.symbol)}
+        return await self._money_flow(
+            request.operation,
+            "sina_stock_money_flow_today",
+            "MoneyFlow.ssi_ssfx_flzjtj",
+            params,
+            timeout_seconds=timeout_seconds,
+            cancellation_token=cancellation_token,
+        )
+
+    async def stock_money_flow_ranking(
+        self,
+        request: StockRankingRequest,
+        *,
+        timeout_seconds: float,
+        cancellation_token: AbortSignal | None,
+    ) -> object:
+        """All A-shares ranked by Sina's 主力 (r0) net inflow.
+
+        Sina's list mixes in ETFs, a sixth of the top 60 on 2026-09-28, and no
+        parameter filters them out. So this fetches the first page deep enough
+        to survive dropping them, and the normalizer cuts the requested page.
+        """
+
+        if request.sort != "net_inflow" or request.market != "all_a":
+            raise UpstreamUnavailable(
+                "新浪资金流排行只支持全部 A 股按净流入排序。", retryable=False
+            )
+        params = {
+            "page": 1,
+            "num": sina_ranking_rows(request),
+            "sort": "r0_net",
+            "asc": 1 if request.order == "asc" else 0,
+            "bankuai": "",
+            "shichang": "",
+        }
+        return await self._money_flow(
+            request.operation,
+            "sina_stock_money_flow_ranking",
+            "MoneyFlow.ssl_bkzj_ssggzj",
+            params,
+            timeout_seconds=timeout_seconds,
+            cancellation_token=cancellation_token,
+        )
+
+    async def sector_money_flow(
+        self,
+        request: SectorRankingRequest | SectorMoneyFlowRequest,
+        *,
+        timeout_seconds: float,
+        cancellation_token: AbortSignal | None,
+    ) -> object:
+        """Sina's own industry or concept boards, with each board's net inflow."""
+
+        if isinstance(request, SectorMoneyFlowRequest):
+            sort, order = "netamount", "desc"
+        else:
+            sort = {"net_inflow": "netamount", "change_percent": "avg_changeratio"}.get(
+                request.sort, ""
+            )
+            order = request.order
+            if not sort:
+                raise UpstreamUnavailable(
+                    "新浪板块资金流不支持该排序指标。", retryable=False
+                )
+        params = {
+            "page": request.page,
+            "num": request.limit,
+            "sort": sort,
+            "asc": 1 if order == "asc" else 0,
+            "fenlei": {"industry": 0, "concept": 1}[request.sector_type],
+        }
+        return await self._money_flow(
+            request.operation,
+            "sina_sector_money_flow",
+            "MoneyFlow.ssl_bkzj_bk",
+            params,
+            timeout_seconds=timeout_seconds,
+            cancellation_token=cancellation_token,
+        )
+
     async def _money_flow(
         self,
         operation: str,
@@ -272,6 +364,17 @@ class SinaAdapter(FixedPublicAdapter):
         }
 
 
+SINA_RANKING_MAX_DEPTH = 100
+"""Deepest page × limit the Sina net-inflow ranking serves; deeper goes to
+East Money, since over-fetching past this grows without bound."""
+
+
+def sina_ranking_rows(request: StockRankingRequest) -> int:
+    """Rows to ask Sina for so the page still fills after ETFs are dropped."""
+
+    return min(request.page * request.limit * 2 + 20, 2 * SINA_RANKING_MAX_DEPTH + 20)
+
+
 def _sina_symbol(symbol: str) -> str:
     return f"{market_symbol_market(symbol).lower()}{market_symbol_code(symbol)}"
 
@@ -316,4 +419,4 @@ def _number_field(values: list[str], index: int) -> float | None:
         return None
 
 
-__all__ = ["SinaAdapter"]
+__all__ = ["SINA_RANKING_MAX_DEPTH", "SinaAdapter", "sina_ranking_rows"]
