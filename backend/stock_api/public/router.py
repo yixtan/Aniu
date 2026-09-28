@@ -77,6 +77,7 @@ from backend.stock_api.public.normalizers.market import (
     normalize_sector_money_flow,
     normalize_stock_money_flow,
 )
+from backend.stock_api.public.normalizers.sina_money import normalize_sina_money_history
 from backend.stock_api.public.providers.eastmoney import EastMoneyAdapter
 from backend.stock_api.public.providers.sina import SinaAdapter
 from backend.stock_api.public.providers.tencent import TencentAdapter
@@ -522,7 +523,7 @@ class PublicStockRouter:
                     "sina_stock_money_flow",
                     sina.stock_money_flow_history,
                     request,
-                    lambda raw: normalize_stock_money_flow("sina", raw, request),
+                    lambda raw: normalize_sina_money_history(raw, request),
                     fallback_on_empty=True,
                 ),
                 _candidate(
@@ -530,7 +531,7 @@ class PublicStockRouter:
                     "em_money_flow_history",
                     eastmoney.stock_money_flow_history,
                     request,
-                    lambda raw: normalize_stock_money_flow("eastmoney", raw, request),
+                    lambda raw: normalize_stock_money_flow(raw, request),
                     fallback_on_empty=True,
                 ),
             ]
@@ -541,7 +542,7 @@ class PublicStockRouter:
                     "em_money_flow_intraday",
                     eastmoney.stock_money_flow_intraday,
                     request,
-                    lambda raw: normalize_stock_money_flow("eastmoney", raw, request),
+                    lambda raw: normalize_stock_money_flow(raw, request),
                 )
             ]
         if isinstance(request, SectorMoneyFlowRequest):

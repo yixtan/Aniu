@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Mapping
 from typing import cast
 
 from backend.stock_api.public.cancellation import CancellationToken as AbortSignal
@@ -174,19 +175,41 @@ class SinaAdapter(FixedPublicAdapter):
         timeout_seconds: float,
         cancellation_token: AbortSignal | None,
     ) -> object:
+        # Newest day first. It used to be sort=netamount, which answered "the
+        # N days with the biggest inflow on record" — for 600487 on 09-28 that
+        # was May, June and August, while the caller asked for the last N days.
         params = {
             "page": request.page,
             "num": request.limit,
-            "sort": "netamount",
+            "sort": "opendate",
             "asc": 0,
             "daima": _sina_symbol(request.symbol),
         }
+        return await self._money_flow(
+            request.operation,
+            "sina_stock_money_flow",
+            "MoneyFlow.ssl_qsfx_zjlrqs",
+            params,
+            timeout_seconds=timeout_seconds,
+            cancellation_token=cancellation_token,
+        )
+
+    async def _money_flow(
+        self,
+        operation: str,
+        endpoint: str,
+        method: str,
+        params: Mapping[str, object],
+        *,
+        timeout_seconds: float,
+        cancellation_token: AbortSignal | None,
+    ) -> object:
         return await self._json(
-            operation=request.operation,
-            endpoint="sina_stock_money_flow",
+            operation=operation,
+            endpoint=endpoint,
             url=build_url(
                 "https://vip.stock.finance.sina.com.cn",
-                "/quotes_service/api/json_v2.php/MoneyFlow.ssl_qsfx_zjlrqs",
+                f"/quotes_service/api/json_v2.php/{method}",
                 params,
             ),
             parameters=params,

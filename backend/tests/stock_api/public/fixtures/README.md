@@ -16,3 +16,4 @@
 - `tencent_intraday.json`: 腾讯分时响应。
 - `tencent_ranking.json`: 腾讯排行真实字段。
 - `sina_ranking.json`: 新浪排行响应。
+- `sina_money_history.json`: 新浪 `MoneyFlow.ssl_qsfx_zjlrqs`，按日期倒序的个股资金流（600487，09-23、09-24、09-28 三个交易日）。

@@ -348,40 +348,28 @@ def normalize_ranking(
 
 
 def normalize_stock_money_flow(
-    provider: Literal["eastmoney", "sina"],
     raw: object,
     request: StockMoneyFlowHistoryRequest | StockMoneyFlowIntradayRequest,
 ) -> NormalizedData:
+    """East Money's per-stock money flow; Sina's is in ``sina_money``."""
+
     root = as_record(raw) or {}
     data = as_record(root.get("data"))
-    kline_rows: list[object] | None = None
-    if provider == "eastmoney":
-        if data is None:
-            raise UpstreamUnavailable("资金流响应缺少 data。")
-        candidate_rows = data.get("klines")
-        if not isinstance(candidate_rows, list):
-            raise UpstreamUnavailable("资金流响应缺少 klines。")
-        kline_rows = candidate_rows
-    elif data is not None:
-        candidate_rows = data.get("klines")
-        if isinstance(candidate_rows, list):
-            kline_rows = candidate_rows
-    items: list[dict[str, object]]
+    if data is None:
+        raise UpstreamUnavailable("资金流响应缺少 data。")
+    kline_rows = data.get("klines")
+    if not isinstance(kline_rows, list):
+        raise UpstreamUnavailable("资金流响应缺少 klines。")
+    items = [item for line in kline_rows if (item := _money_line(line))]
     was_sampled = False
-    if kline_rows is not None:
-        items = [item for line in kline_rows if (item := _money_line(line))]
-        if isinstance(request, StockMoneyFlowHistoryRequest):
-            start = (request.page - 1) * request.limit
-            items = items[start : start + request.limit]
-        else:
-            values, was_sampled = sampled(items, request.limit)
-            items = values
+    if isinstance(request, StockMoneyFlowHistoryRequest):
+        # The request asked for the last page × limit days, oldest first, so
+        # this page is the oldest `limit` of them. Slicing from the front
+        # instead made page 2 the same latest days as page 1.
+        end = len(items) - (request.page - 1) * request.limit
+        items = items[max(0, end - request.limit) : max(0, end)]
     else:
-        rows = find_rows(raw) or []
-        sina_items = [_sina_money_item(row) for row in rows]
-        items = [item for item in sina_items if item is not None]
-        if isinstance(request, StockMoneyFlowHistoryRequest):
-            items = items[: request.limit]
+        items, was_sampled = sampled(items, request.limit)
     require_items(items, "资金流")
     data_out: dict[str, object] = {
         "symbol": request.symbol,
@@ -391,13 +379,7 @@ def normalize_stock_money_flow(
         data_out.update({"page": request.page, "limit": request.limit})
     else:
         data_out.update({"sampled": was_sampled})
-    return NormalizedData(
-        data_out,
-        degraded=provider == "sina",
-        warnings=(
-            ("新浪资金流分类口径可能与东方财富不同。",) if provider == "sina" else ()
-        ),
-    )
+    return NormalizedData(data_out)
 
 
 def normalize_sector_money_flow(
@@ -712,21 +694,6 @@ def _money_line(value: object) -> dict[str, object] | None:
         "super_large_net_ratio": number(fields[10]) if len(fields) > 10 else None,
         "close": number(fields[11]) if len(fields) > 11 else None,
         "change_percent": number(fields[12]) if len(fields) > 12 else None,
-    }
-
-
-def _sina_money_item(row: JsonRecord) -> dict[str, object] | None:
-    time = first_text(row, "date", "day", "opendate", "ticktime")
-    if not time:
-        return None
-    return {
-        "time": time,
-        "main_net_inflow": first_number(row, "main_net_inflow", "netamount", "r0_net"),
-        "large_net_inflow": first_number(row, "large_net_inflow", "r1_net"),
-        "medium_net_inflow": first_number(row, "medium_net_inflow", "r2_net"),
-        "small_net_inflow": first_number(row, "small_net_inflow", "r3_net"),
-        "close": first_number(row, "close", "trade"),
-        "change_percent": first_number(row, "change_percent", "changeratio"),
     }
 
 
