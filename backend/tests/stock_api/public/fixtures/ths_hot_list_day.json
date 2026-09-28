@@ -1,0 +1,108 @@
+{
+ "status_code": 0,
+ "status_msg": "success",
+ "data": {
+  "stock_list": [
+   {
+    "market": 17,
+    "code": "601091",
+    "rate": "6191304",
+    "rise_and_fall": 2.6296,
+    "name": "沈鼓集团",
+    "hot_rank_chg": 0,
+    "topic": null,
+    "tag": {
+     "concept_tag": [
+      "注册制次新股",
+      "煤化工概念"
+     ],
+     "popularity_tag": "持续上榜"
+    },
+    "order": 1
+   },
+   {
+    "market": 33,
+    "code": "000592",
+    "rate": "5572119",
+    "rise_and_fall": 3.5308,
+    "name": "平潭发展",
+    "hot_rank_chg": 0,
+    "topic": null,
+    "tag": {
+     "concept_tag": [
+      "福建自贸区",
+      "海峡两岸"
+     ],
+     "popularity_tag": "2天1板"
+    },
+    "order": 2
+   },
+   {
+    "market": 33,
+    "code": "300308",
+    "rate": "3277406",
+    "rise_and_fall": -9.026,
+    "name": "中际旭创",
+    "hot_rank_chg": 0,
+    "topic": null,
+    "tag": {
+     "concept_tag": [
+      "共封装光学(CPO)",
+      "F5G概念"
+     ]
+    },
+    "order": 3
+   },
+   {
+    "market": 17,
+    "code": "600825",
+    "rate": "3038238",
+    "rise_and_fall": 10.0386,
+    "name": "新华传媒",
+    "hot_rank_chg": 0,
+    "topic": null,
+    "tag": {
+     "concept_tag": [
+      "无人零售",
+      "文化传媒概念"
+     ],
+     "popularity_tag": "5天5板"
+    },
+    "order": 4
+   },
+   {
+    "market": 17,
+    "code": "600487",
+    "rate": "2906315",
+    "rise_and_fall": -10.003,
+    "name": "亨通光电",
+    "hot_rank_chg": 0,
+    "topic": null,
+    "tag": {
+     "concept_tag": [
+      "光纤概念",
+      "共封装光学(CPO)"
+     ]
+    },
+    "order": 5
+   },
+   {
+    "market": 33,
+    "code": "002342",
+    "rate": "1512105",
+    "rise_and_fall": 10.0127,
+    "name": "巨力索具",
+    "hot_rank_chg": 0,
+    "topic": null,
+    "tag": {
+     "concept_tag": [
+      "商业航天",
+      "军工"
+     ],
+     "popularity_tag": "首板涨停"
+    },
+    "order": 33
+   }
+  ]
+ }
+}

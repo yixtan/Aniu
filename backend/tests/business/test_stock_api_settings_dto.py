@@ -28,6 +28,8 @@ def test_settings_dtos_expose_mx_configuration_and_data_catalog() -> None:
         "stock_fundamentals",
         "stock_research",
         "stock_news",
+        "stock_signals",
+        "market_sentiment",
         "market_snapshot",
         "portfolio_stock_snapshot",
         "stock_analysis",
@@ -37,6 +39,7 @@ def test_settings_dtos_expose_mx_configuration_and_data_catalog() -> None:
         "tencent",
         "sina",
         "eastmoney",
+        "ths",
     )
     assert stock_api_dto.public_stock.features == (
         "实时行情",
@@ -45,6 +48,8 @@ def test_settings_dtos_expose_mx_configuration_and_data_catalog() -> None:
         "基本数据",
         "研报预测",
         "资讯公告",
+        "个股信号",
+        "市场情绪",
         "聚合研判",
     )
     names_by_tool_name = {
@@ -53,6 +58,8 @@ def test_settings_dtos_expose_mx_configuration_and_data_catalog() -> None:
     assert names_by_tool_name["stock_fundamentals"] == "基本数据"
     assert names_by_tool_name["stock_research"] == "研报预测"
     assert names_by_tool_name["stock_news"] == "资讯公告"
+    assert names_by_tool_name["stock_signals"] == "个股信号"
+    assert names_by_tool_name["market_sentiment"] == "市场情绪"
     assert names_by_tool_name["market_snapshot"] == "行情查询"
     assert names_by_tool_name["portfolio_stock_snapshot"] == "持仓查询"
     assert names_by_tool_name["stock_analysis"] == "个股查询"

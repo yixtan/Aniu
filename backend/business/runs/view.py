@@ -12,11 +12,16 @@ from backend.business.runs.tool_presentation import (
 )
 from backend.business.shared.json_utils import json_safe
 from backend.business.shared.serialization import serialize_context
-from backend.business.shared.stock_api_source import normalize_public_stock_operation_id
+from backend.business.shared.stock_api_source import (
+    STOCK_API_PROVIDERS,
+    normalize_public_stock_operation_id,
+)
 
 PUBLIC_STEP_TYPES = frozenset({"thinking", "tool", "result", "status"})
 TOOL_TARGET_MAX_CHARS = 120
-TRACE_STOCK_API_PROVIDERS = frozenset({"mx", "eastmoney", "tencent", "sina"})
+# Derived, not listed again: a provider missing here drops every one of its
+# calls from the trace without a word.
+TRACE_STOCK_API_PROVIDERS = frozenset(STOCK_API_PROVIDERS)
 _MODEL_TOOL_CONTENT_DROP_KEYS = frozenset(
     {
         "command",
@@ -160,6 +165,7 @@ def _public_tool_target(arguments: object) -> str | None:
         "stock_code",
         "stock_codes",
         "index_code",
+        "trade_date",
     ):
         value = _tool_target_text(record.get(key))
         if value is not None:

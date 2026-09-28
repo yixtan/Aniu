@@ -99,8 +99,7 @@ def _unauthorized_order_refusal(
         return None
     if order_id not in authorized:
         return (
-            f"委托 {order_id} 不在本次挂单处置计划内，已阻止；"
-            "计划未提到的委托不得动。"
+            f"委托 {order_id} 不在本次挂单处置计划内，已阻止；计划未提到的委托不得动。"
         )
     return None
 
@@ -260,6 +259,18 @@ class _StageToolRegistry:
                         **kwargs,
                     )
                 response_characters = len(serialize_context(json_safe(result)))
+                # Some parameters are only known from the answer: a date the
+                # tool chose itself, and the day it fell back to.
+                result_parameters = getattr(
+                    tool, "stock_api_log_result_parameters", None
+                )
+                if callable(result_parameters):
+                    try:
+                        enriched = result_parameters(parameters, result)
+                        if isinstance(enriched, dict):
+                            parameters = enriched
+                    except Exception:
+                        pass
                 if (
                     isinstance(result, dict)
                     and str(result.get("status") or "") == "error"

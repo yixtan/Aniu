@@ -76,7 +76,7 @@ async def test_stock_api_settings_expose_catalog_and_tool_invocation_logs(
     assert settings_response.status_code == 200
     catalog = settings_response.json()["public_stock"]
     assert catalog["name"] == "公开数据"
-    assert catalog["providers"] == ["tencent", "sina", "eastmoney"]
+    assert catalog["providers"] == ["tencent", "sina", "eastmoney", "ths"]
     assert [item["tool_name"] for item in catalog["tools"]] == [
         "stock_quote",
         "query_kline",
@@ -86,6 +86,8 @@ async def test_stock_api_settings_expose_catalog_and_tool_invocation_logs(
         "stock_fundamentals",
         "stock_research",
         "stock_news",
+        "stock_signals",
+        "market_sentiment",
         "market_snapshot",
         "portfolio_stock_snapshot",
         "stock_analysis",

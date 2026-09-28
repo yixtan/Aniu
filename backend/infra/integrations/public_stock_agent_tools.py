@@ -145,6 +145,15 @@ class _PublicStockTool:
     tool knows which other tool covers what it does.
     """
 
+    unreachable_categories: ClassVar[frozenset[str | None]] = frozenset({"network"})
+    """The failures that get `when_unreachable` appended.
+
+    Only a host that cannot be reached, by default: for these tools any other
+    failure is usually about the request. A tool whose sources are expected to
+    refuse — an anti-bot filter answering 403, an HTML page, a business
+    refusal — widens it, since asking again does not help there either.
+    """
+
     async def _execute(
         self,
         request: PublicStockRequest,
@@ -153,11 +162,19 @@ class _PublicStockTool:
         try:
             result = await self.service.execute(request, abort_signal)
         except UpstreamUnavailable as exc:
-            if not self.when_unreachable or exc.error_category != "network":
+            if (
+                not self.when_unreachable
+                or exc.error_category not in self.unreachable_categories
+            ):
                 raise
+            lead = (
+                "这个接口此刻连不上，马上重试多半还是连不上。"
+                if exc.error_category in {"network", "timeout"}
+                else "这个来源此刻没有给出可用数据（被拒绝或返回了读不懂的内容），"
+                "同样的参数马上重试多半还是一样。"
+            )
             raise UpstreamUnavailable(
-                f"{exc}这个接口此刻连不上，马上重试多半还是连不上。"
-                f"{self.when_unreachable}",
+                f"{exc}{lead}{self.when_unreachable}",
                 retryable=exc.retryable,
                 error_category=exc.error_category,
             ) from exc

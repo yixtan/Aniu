@@ -16,7 +16,9 @@ from backend.stock_api.public.contracts import (
 )
 from backend.stock_api.public.router import PublicStockRouter
 from backend.stock_api.public.service import (
+    PARTIAL_RESULT_TTL_SECONDS,
     StockMarketDataService,
+    _result_ttl_seconds,
     _ttl_seconds,
     bound_agent_result,
 )
@@ -196,3 +198,49 @@ def test_agent_bound_result_shrinks_full_report_without_mutating_source() -> Non
         )
         == 70_000
     )
+
+
+def test_a_partial_result_is_kept_only_briefly() -> None:
+    partial = {"data": {}, "meta": {"partial": True, "degraded": True}}
+    # Degraded alone is a fallback source's own basis: kept as long as any.
+    fallback = {"data": {}, "meta": {"degraded": True}}
+
+    assert _result_ttl_seconds(600.0, partial) == PARTIAL_RESULT_TTL_SECONDS
+    assert _result_ttl_seconds(10.0, partial) == 10.0
+    assert _result_ttl_seconds(600.0, fallback) == 600.0
+
+
+def _rows_result(count: int, width: int = 330) -> dict[str, object]:
+    return {
+        "data": {
+            "count": count,
+            "items": [
+                {"code": f"{index:06d}", "pad": "x" * width} for index in range(count)
+            ],
+        },
+        "meta": {"warnings": []},
+    }
+
+
+@pytest.mark.parametrize("asked", [150, 180, 185, 190, 200])
+def test_asking_for_more_rows_never_returns_fewer(asked: int) -> None:
+    """Halving turned a result just over the limit into half of it: 200 rows
+    asked for came back as 100 while 180 came back whole."""
+
+    request = QuoteSnapshotRequest(("600519.SH",))
+    smaller = bound_agent_result(_rows_result(180), request)
+    bounded = bound_agent_result(_rows_result(asked), request)
+
+    returned = len(
+        cast(list[object], cast(dict[str, object], bounded["data"])["items"])
+    )
+    kept_at_180 = len(
+        cast(list[object], cast(dict[str, object], smaller["data"])["items"])
+    )
+    assert returned >= min(asked, kept_at_180)
+    assert serialized(bounded) <= 64_000
+    meta = cast(dict[str, object], bounded["meta"])
+    if returned < asked:
+        # The longest head that fits: one more row would not.
+        assert meta["returned_count"] == returned
+        assert serialized(_rows_result(returned + 1)) > 64_000 - 200

@@ -6,7 +6,8 @@ import json
 from datetime import UTC, datetime
 
 from backend.business.runs import RunTrace, TraceStage, TraceStep
-from backend.business.runs.view import project_run_trace
+from backend.business.runs.view import TRACE_STOCK_API_PROVIDERS, project_run_trace
+from backend.business.shared.stock_api_source import STOCK_API_PROVIDERS
 
 
 def _trace_with_steps(steps: list[TraceStep], *, status: str = "running") -> RunTrace:
@@ -222,6 +223,67 @@ def test_projection_hides_public_provider_routing_details() -> None:
     assert stock_call["interface_name"] == "公开数据"
     assert stock_call["parameters"] == {}
     assert "private.example.com" not in json.dumps(tool_call)
+
+
+def test_projection_keeps_tonghuashun_calls_of_the_sentiment_tool() -> None:
+    """A provider or tool missing from the hand-kept registries is dropped or
+    shown as an untitled internal step, silently."""
+
+    trace = _trace_with_steps(
+        [
+            TraceStep(
+                step_id="tool:sentiment",
+                type="tool",
+                title="市场情绪",
+                status="completed",
+                data={
+                    "tool_call_id": "sentiment-call",
+                    "tool_name": "market_sentiment",
+                    "arguments": {
+                        "action": "pool",
+                        "pool": "limit_up",
+                        "trade_date": "2026-09-28",
+                        "limit": 20,
+                    },
+                    "stock_api_calls": [
+                        {
+                            "call_id": "ths-call",
+                            "provider": "ths",
+                            "interface_name": "https://data.10jqka.com.cn/private",
+                            "interface_identifier": "ths_limit_up_pool",
+                            "operation_id": "sentiment.limit_pool",
+                            "parameters": {"date": "20260928"},
+                            "status": "success",
+                            "duration_ms": 31,
+                            "response_characters": 512,
+                        }
+                    ],
+                    "model_content_characters": 4_096,
+                },
+            )
+        ]
+    )
+
+    tool_call = project_run_trace(trace)["stages"][0]["steps"][0][  # type: ignore[index]
+        "tool_call"
+    ]
+    assert tool_call["source"] == "public"
+    assert tool_call["display_name"] == "市场情绪"
+    assert tool_call["intent_line"] == "市场情绪 · 2026-09-28"
+    assert tool_call["query_parameters"] == (
+        "action=pool · pool=limit_up · trade_date=2026-09-28 · limit=20"
+    )
+    assert tool_call["model_content_characters"] == 4_096
+    [stock_call] = tool_call["stock_api_calls"]  # type: ignore[misc]
+    assert (stock_call["provider"], stock_call["operation_id"]) == (
+        "ths",
+        "sentiment.limit_pool",
+    )
+    assert "10jqka" not in json.dumps(tool_call)
+
+
+def test_every_stock_api_provider_reaches_the_trace() -> None:
+    assert frozenset(STOCK_API_PROVIDERS) == TRACE_STOCK_API_PROVIDERS
 
 
 def test_projection_preserves_degraded_summary_status() -> None:

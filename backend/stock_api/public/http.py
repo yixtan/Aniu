@@ -78,8 +78,10 @@ _LANE_LABELS = {
     "eastmoney": "东方财富",
     "eastmoney_f10": "东方财富 F10",
     "eastmoney_push": "东方财富盘中接口（push2）",
+    "eastmoney_push2ex": "东方财富涨跌停池（push2ex）",
     "tencent": "腾讯财经",
     "sina": "新浪财经",
+    "ths": "同花顺",
 }
 
 LANE_REST_AFTER_FAILURES = 4
@@ -213,8 +215,17 @@ class PublicHttpTransport:
             "eastmoney": ProviderRequestGate(10, 0),
             "eastmoney_f10": ProviderRequestGate(10, 0),
             "eastmoney_push": ProviderRequestGate(2, 0.5),
+            # Its own lane so a push2 rest does not rest it: on 2026-09-29
+            # push2ex answered 4 of 4 while push2 had been hanging up on this
+            # machine since the 23rd. One at a time, 1.5 s apart, is
+            # a-stock-data's East Money pacing; the sentiment summary is four
+            # serial pools and has the time budget for it.
+            "eastmoney_push2ex": ProviderRequestGate(1, 1.5),
             "tencent": ProviderRequestGate(4, 0.1),
             "sina": ProviderRequestGate(2, 0.3),
+            # 同花顺 documents no limits and answered without cookies or a
+            # Referer on 2026-09-29; one request a second stays polite.
+            "ths": ProviderRequestGate(1, 1.0),
         }
 
     async def request_text(
@@ -381,9 +392,7 @@ class PublicHttpTransport:
             self._lane_rest.hung_up(lane)
             error_category = "network"
             error_message = _network_failure_message(exc)
-            raise UpstreamUnavailable(
-                error_message, error_category="network"
-            ) from exc
+            raise UpstreamUnavailable(error_message, error_category="network") from exc
         finally:
             await emit_stock_api_call_log(
                 self._call_logger,

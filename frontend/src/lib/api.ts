@@ -50,7 +50,13 @@ function isTraceToolSource(value: unknown): value is "aggregate" | "mx" | "publi
 }
 
 function isStockApiProvider(value: unknown): value is StockApiProvider {
-  return value === "mx" || value === "eastmoney" || value === "tencent" || value === "sina";
+  return (
+    value === "mx" ||
+    value === "eastmoney" ||
+    value === "tencent" ||
+    value === "sina" ||
+    value === "ths"
+  );
 }
 
 function isTraceStockApiCall(value: unknown) {

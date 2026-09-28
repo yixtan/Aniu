@@ -433,7 +433,7 @@ async def test_settings_expose_mx_configuration_and_public_catalog(
         "features",
         "tools",
     }
-    assert len(body["public_stock"]["tools"]) == 12
+    assert len(body["public_stock"]["tools"]) == 14
 
 
 @pytest.mark.asyncio
@@ -605,7 +605,12 @@ async def test_schedule_custom_times_create_update_and_fallback(
     # The fixed sixty-minute row: the grid plus one last run ten minutes
     # before each bell, which the old open-stepped grid never reached.
     assert fallback.json()["schedule_times"] == [
-        "09:30", "10:30", "11:20", "13:00", "14:00", "14:50"
+        "09:30",
+        "10:30",
+        "11:20",
+        "13:00",
+        "14:00",
+        "14:50",
     ]
 
 
@@ -690,9 +695,7 @@ async def test_the_watchlist_instruction_survives_a_save(
         item for item in reloaded["stage_settings"] if item["stage_id"] == "Run"
     )
     assert stored["watchlist_prompt"] == "先批量筛查关注清单，再决定深入哪几只。"
-    others = [
-        item for item in reloaded["stage_settings"] if item["stage_id"] != "Run"
-    ]
+    others = [item for item in reloaded["stage_settings"] if item["stage_id"] != "Run"]
     assert all(item["watchlist_prompt"] == "" for item in others)
 
 

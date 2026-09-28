@@ -38,8 +38,14 @@ class PublicStockDataCache:
         self,
         key: str,
         loader: Callable[[], Awaitable[dict[str, object]]],
-        ttl_seconds: float,
+        ttl_seconds: float | Callable[[dict[str, object]], float],
     ) -> dict[str, object]:
+        """Load once per key while the entry lives.
+
+        ``ttl_seconds`` may depend on what was loaded: a partial answer is
+        kept only briefly, so the next call asks again.
+        """
+
         cached = await self.get(key)
         if cached is not None:
             return cached
@@ -50,10 +56,11 @@ class PublicStockDataCache:
                     return cached
                 generation = await self._current_generation()
                 value = await loader()
+                ttl = ttl_seconds(value) if callable(ttl_seconds) else ttl_seconds
                 if await self._put_if_generation(
                     key,
                     value,
-                    ttl_seconds,
+                    ttl,
                     generation=generation,
                 ):
                     return copy.deepcopy(value)
