@@ -32,7 +32,7 @@ SUMMARY = PipelineStage(
     stage_id="Summary",
     trace_key="summary",
     title="展示总结",
-    description="根据运行报告与执行证据生成 HTML 总结",
+    description="把 Markdown 运行报告排成 HTML 版面",
 )
 
 WATCH = PipelineStage(
