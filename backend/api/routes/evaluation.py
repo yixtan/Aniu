@@ -21,7 +21,12 @@ router = APIRouter(
 )
 
 
-@router.post("", response_model=EvaluationResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=EvaluationResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses=error_responses(400),
+)
 async def request_evaluation(
     run_id: int,
     service: Annotated[EvaluationService, Depends(get_evaluation_service)],

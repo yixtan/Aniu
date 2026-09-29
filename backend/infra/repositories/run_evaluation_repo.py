@@ -14,7 +14,7 @@ from backend.business.evaluations.models import (
     EvaluationStatus,
     FindingCandidate,
 )
-from backend.infra.db.models import RunEvaluationModel
+from backend.infra.db.models import RunEvaluationModel, StrategyRunModel
 
 
 def _parse(value: str | None) -> datetime | None:
@@ -110,6 +110,13 @@ class RunEvaluationRepository:
         self._session.add(model)
         await self._session.flush()
         return _to_domain(model)
+
+    async def run_status(self, run_id: int) -> str | None:
+        return (
+            await self._session.scalars(
+                select(StrategyRunModel.status).where(StrategyRunModel.id == run_id)
+            )
+        ).first()
 
     async def get_by_id(self, evaluation_id: int) -> Evaluation | None:
         model = await self._session.get(RunEvaluationModel, evaluation_id)
