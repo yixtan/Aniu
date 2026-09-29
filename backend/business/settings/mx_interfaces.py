@@ -50,8 +50,8 @@ MX_INTERFACE_CATALOG: tuple[MxInterfaceDescriptor, ...] = (
         interface_id="portfolio",
         name="模拟交易",
         summary=(
-            "查询模拟组合并提交交易或撤单；委托、订单与成交默认返回最后 50 条，"
-            "full 可返回全量。"
+            "查询模拟组合并提交交易或撤单；委托默认返回最新的 20 条（从新到旧），"
+            "full 可返回全部历史。"
         ),
         features=(
             "资金与资产",
