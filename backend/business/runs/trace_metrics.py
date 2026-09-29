@@ -9,6 +9,9 @@ _TRACE_STAGE_STATUSES = frozenset(
     {"pending", "running", "completed", "degraded", "failed", "skipped"}
 )
 
+_MODEL_STEP_TYPES = frozenset({"prompt", "thinking", "tool"})
+"""Steps that only exist when a stage talked to a model."""
+
 
 def _token_text(value: object) -> str:
     if value is None:
@@ -90,8 +93,9 @@ def _reported_tokens(stage: dict[str, Any]) -> tuple[int, int]:
 
     Recorded on the stage's own `result` step, the same place `trade_count`
     lives. Zero means no endpoint reported anything and the caller should keep
-    estimating, which is why this cannot simply return `int | None` — a stage
-    that genuinely cost nothing never happens.
+    estimating. It does not mean the stage was free: the one stage that is
+    free, a watch with nothing it could act on, calls no model at all, and
+    the caller recognises it by its steps rather than by this number.
 
     Both numbers come off the same step, never two: the cached share is part
     of the total the provider reported, so pairing one stage's total with
@@ -144,6 +148,8 @@ def metrics_from_trace_payload(
         steps = stage.get("steps")
         if not isinstance(steps, list):
             continue
+        stage_characters = 0
+        called_a_model = False
         for step in steps:
             if not isinstance(step, dict):
                 continue
@@ -154,7 +160,13 @@ def metrics_from_trace_payload(
             )
             tool_calls_count += tool
             thinking_count += thinking
-            token_characters += characters
+            stage_characters += characters
+            called_a_model = called_a_model or step.get("type") in _MODEL_STEP_TYPES
+        # A stage that never called a model spent nothing, however long its
+        # report. Since #110 a watch with nothing it could act on writes its
+        # report in code; counting that text made it look like ~100 tokens.
+        if called_a_model:
+            token_characters += stage_characters
     # The provider's own count when any stage reported one, because the
     # estimate below is wrong by two to three times: it reads each piece of
     # text once, while a tool loop re-sends the whole conversation every turn
