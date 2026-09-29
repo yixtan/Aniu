@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from unittest.mock import ANY
 
 import pytest
@@ -78,6 +79,8 @@ class RecordingTradingClient:
 
 
 def _portfolio_order(index: int) -> PortfolioOrderSnapshot:
+    """The higher the index, the later the order was submitted."""
+
     return PortfolioOrderSnapshot(
         order_id=f"order-{index}",
         symbol="600519",
@@ -87,6 +90,7 @@ def _portfolio_order(index: int) -> PortfolioOrderSnapshot:
         status="FILLED",
         filled_quantity=100,
         filled_price=1700,
+        submitted_at=datetime(2026, 9, 1, 1, 30, tzinfo=UTC) + timedelta(hours=index),
     )
 
 
@@ -154,13 +158,13 @@ def test_mx_registration_exposes_all_direct_tools_with_closed_schemas() -> None:
     assert portfolio_parameters["properties"]["limit"] == {
         "type": "integer",
         "minimum": 1,
-        "default": 50,
-        "description": "委托、订单与成交返回最后 X 条；full=true 时忽略。",
+        "default": 20,
+        "description": "委托返回最新的 X 条（从新到旧）；full=true 时忽略。",
     }
     assert portfolio_parameters["properties"]["full"] == {
         "type": "boolean",
         "default": False,
-        "description": "true 时委托、订单与成交返回全量。",
+        "description": "true 时返回全部历史委托。",
     }
 
 
@@ -212,9 +216,13 @@ async def test_query_portfolio_returns_requested_balance() -> None:
 
 
 @pytest.mark.asyncio
-async def test_query_portfolio_limits_recent_orders_or_returns_full_history() -> None:
+async def test_query_portfolio_shows_the_newest_orders_or_the_full_history() -> None:
+    """MX sends its orders newest first. Taking the list's last 50 showed the
+    oldest ones, so on 2026-09-29 no default query had ever shown the day's
+    orders, and the model had taken to asking for the whole history."""
+
     portfolio = RecordingPortfolioClient(
-        orders=[_portfolio_order(index) for index in range(55)]
+        orders=[_portfolio_order(index) for index in reversed(range(55))]
     )
     tool = QueryPortfolioTool(portfolio)
 
@@ -222,11 +230,11 @@ async def test_query_portfolio_limits_recent_orders_or_returns_full_history() ->
     default_orders = default_result["result"]
     assert isinstance(default_orders, list)
     assert [item["order_id"] for item in default_orders] == [
-        f"order-{index}" for index in range(5, 55)
+        f"order-{index}" for index in range(54, 34, -1)
     ]
     assert default_result["truncation"] == {
         "orders": {
-            "returned_count": 50,
+            "returned_count": 20,
             "total_count": 55,
             "truncated": True,
         }
@@ -235,22 +243,43 @@ async def test_query_portfolio_limits_recent_orders_or_returns_full_history() ->
     limited_result = await tool.run("查询成交", limit=2)
     limited_orders = limited_result["result"]
     assert isinstance(limited_orders, list)
-    assert [item["order_id"] for item in limited_orders] == ["order-53", "order-54"]
-    assert limited_result["truncation"] == {
-        "orders": {
-            "returned_count": 2,
-            "total_count": 55,
-            "truncated": True,
-        }
-    }
+    assert [item["order_id"] for item in limited_orders] == ["order-54", "order-53"]
 
     full_result = await tool.run("查询订单", limit=2, full=True)
     full_orders = full_result["result"]
     assert isinstance(full_orders, list)
     assert [item["order_id"] for item in full_orders] == [
-        f"order-{index}" for index in range(55)
+        f"order-{index}" for index in range(54, -1, -1)
     ]
     assert "truncation" not in full_result
+
+
+@pytest.mark.asyncio
+async def test_the_newest_orders_come_first_in_whatever_order_they_arrive() -> None:
+    """The view sorts by submission time rather than trusting the provider's
+    order. An order with no time goes last."""
+
+    undated = PortfolioOrderSnapshot(
+        order_id="order-undated",
+        symbol="600519",
+        stock_name="贵州茅台",
+        direction="BUY",
+        quantity=100,
+        status="PENDING",
+        filled_quantity=0,
+        filled_price=None,
+    )
+    oldest_first = [_portfolio_order(index) for index in range(3)]
+    tool = QueryPortfolioTool(RecordingPortfolioClient(orders=[undated, *oldest_first]))
+
+    result = await tool.run("查询委托", full=True)
+
+    assert [item["order_id"] for item in result["result"]] == [
+        "order-2",
+        "order-1",
+        "order-0",
+        "order-undated",
+    ]
 
 
 @pytest.mark.asyncio

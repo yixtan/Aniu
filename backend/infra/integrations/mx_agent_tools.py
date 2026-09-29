@@ -31,7 +31,13 @@ WATCH_READ_STAGES = ("Run", "Watch")
 # do it. Placing is making one, so it may not — a re-price reaches `trade`
 # only through an authorization the run wrote down.
 WATCH_TRADE_STAGES = ("Run", "Watch")
-_DEFAULT_PORTFOLIO_ORDER_RESULT_LIMIT = 50
+_DEFAULT_PORTFOLIO_ORDER_RESULT_LIMIT = 20
+"""The newest orders a query shows unless the model asks for more.
+
+A day's orders fit with room to spare. On 2026-09-29 the whole history was
+131 orders, about 21,000 characters. That text was re-sent on every later turn
+of a run, and fetched again by every watch.
+"""
 _PORTFOLIO_INTENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("positions", ("持仓", "positions", "position")),
     (
@@ -52,6 +58,27 @@ _PORTFOLIO_INTENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ),
     ("balance", ("资金", "余额", "资产", "balance", "cash", "账户", "bal")),
 )
+
+
+def _newest_first(
+    orders: list[PortfolioOrderSnapshot],
+) -> list[PortfolioOrderSnapshot]:
+    """Sort orders newest first, whatever order the provider sent them in.
+
+    MX sends its list newest first, and the view used to take the list's
+    *last* 50. By late September those were the oldest orders, 08-31 to 09-03,
+    so no default query ever showed the day's orders. The model learned to ask
+    for the full history every time (long-term memory id153⑤), and all of it
+    went into every turn. An order without a time sorts last.
+    """
+
+    return sorted(
+        orders,
+        key=lambda order: (
+            order.submitted_at.timestamp() if order.submitted_at else float("-inf")
+        ),
+        reverse=True,
+    )
 
 
 def _validated_order_result_options(limit: object, full: object) -> tuple[int, bool]:
@@ -150,8 +177,9 @@ class QueryPortfolioTool:
             "name": self.name,
             "description": (
                 "查询已绑定模拟组合的资金、持仓、委托、订单或成交。"
-                "委托、订单与成交默认返回最后 50 条；limit 可指定最后 X 条；"
-                "full=true 返回全量。"
+                "委托默认返回最新的 20 条，从新到旧，当天的委托都在最前面；"
+                "limit 可指定条数；full=true 返回全部历史，很长，"
+                "只在要翻更早的记录时用。"
             ),
             "parameters": {
                 "type": "object",
@@ -162,13 +190,13 @@ class QueryPortfolioTool:
                         "minimum": 1,
                         "default": _DEFAULT_PORTFOLIO_ORDER_RESULT_LIMIT,
                         "description": (
-                            "委托、订单与成交返回最后 X 条；full=true 时忽略。"
+                            "委托返回最新的 X 条（从新到旧）；full=true 时忽略。"
                         ),
                     },
                     "full": {
                         "type": "boolean",
                         "default": False,
-                        "description": "true 时委托、订单与成交返回全量。",
+                        "description": "true 时返回全部历史委托。",
                     },
                 },
                 "required": ["instruction"],
@@ -203,7 +231,8 @@ class QueryPortfolioTool:
         order_truncation: dict[str, int | bool] | None = None
         if isinstance(orders, list):
             total_orders = len(orders)
-            selected_orders = orders if include_all_orders else orders[-order_limit:]
+            newest = _newest_first(orders)
+            selected_orders = newest if include_all_orders else newest[:order_limit]
             results["orders"] = [json_safe(asdict(item)) for item in selected_orders]
             if len(selected_orders) < total_orders:
                 order_truncation = {
