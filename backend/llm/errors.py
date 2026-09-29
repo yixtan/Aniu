@@ -62,6 +62,21 @@ def is_error_retryable(error: LLMIntegrationError) -> bool:
     return is_retryable(error.error_code, error.status_code)
 
 
+def is_error_retryable_unshown(error: LLMIntegrationError) -> bool:
+    """Whether to retry, for a caller that showed nothing of the failed reply.
+
+    A stream that breaks after the reply has begun is marked not retryable,
+    because whatever streamed may already be on someone's screen. A caller
+    that holds each attempt back until it completes, and drops it on failure,
+    has shown nothing. For it the failure is only what it looks like, a
+    dropped connection or a 5xx, and the usual rules decide.
+    """
+
+    if error.interrupted_after_output:
+        return is_retryable(error.error_code, error.status_code)
+    return is_error_retryable(error)
+
+
 def _headers_from_exception(exc: BaseException) -> Any:
     response = getattr(exc, "response", None)
     headers = getattr(response, "headers", None)
@@ -132,6 +147,8 @@ class LLMIntegrationError(Exception):
         )
         self.retry_after = retry_after
         self.retryable_override = retryable_override
+        self.interrupted_after_output = False
+        """The stream broke after the reply began; see is_error_retryable_unshown."""
 
 
 class LLMConfigurationError(LLMIntegrationError):
@@ -284,6 +301,7 @@ __all__ = [
     "empty_response",
     "invalid_response",
     "is_error_retryable",
+    "is_error_retryable_unshown",
     "is_retryable",
     "provider_error",
 ]

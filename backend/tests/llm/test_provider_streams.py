@@ -22,6 +22,7 @@ from backend.llm import (
     TextStarted,
     ThinkingContent,
     is_error_retryable,
+    is_error_retryable_unshown,
 )
 
 
@@ -253,6 +254,9 @@ async def test_anthropic_stream_error_becomes_typed_failed_event() -> None:
     assert events.index(TextEnded("partial", 0)) < len(events) - 1
     assert getattr(terminal.error, "error_code") is LLMErrorCode.PROVIDER_5XX
     assert is_error_retryable(terminal.error) is False
+    # Cut off after the reply began: a caller that showed none of it may retry.
+    assert getattr(terminal.error, "interrupted_after_output") is True
+    assert is_error_retryable_unshown(terminal.error) is True
     await client.aclose()
 
 

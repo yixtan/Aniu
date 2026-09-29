@@ -37,6 +37,7 @@ from backend.llm import (
     ToolDefinition,
     Usage,
     estimate_provider_request_tokens,
+    is_error_retryable_unshown,
     normalize_chat_response,
 )
 from backend.llm import (
@@ -153,6 +154,37 @@ def llm_error_code(exc: ModelCallError) -> str:
 
 def _retryable_llm_error_code(exc: ModelCallError) -> str | None:
     return llm_error_code(exc) if is_retryable_llm_error(exc) else None
+
+
+_CUT_OFF_NOTE = (
+    "\n\n（连接在回复中途断开，已重新请求；上面这段思考来自被丢弃的那次回复。）\n\n"
+)
+"""Written into the thinking stream before a cut-off reply is asked again.
+
+Without it the trace shows reasoning that restarts from scratch halfway, which
+is also what a model that lost its own earlier reasoning looks like.
+"""
+
+
+def _cut_off_midway(exc: ModelCallError) -> bool:
+    return isinstance(exc, LLMIntegrationError) and exc.interrupted_after_output
+
+
+def _retryable_tool_loop_error_code(exc: ModelCallError) -> str | None:
+    """Like `_retryable_llm_error_code`, but a reply cut off midway may retry.
+
+    The provider refuses to retry a stream that broke after the reply began,
+    since what streamed may already be on screen. A tool-loop turn has shown
+    nothing: its text is held back until the turn completes, and no tool runs
+    before that. Asking again is as safe as for a reply that never started.
+
+    On 2026-09-29 DeepSeek dropped the connection 45 seconds into a reply and
+    the 14:15 run failed on its first attempt, with two attempts unused.
+    """
+
+    if isinstance(exc, LLMIntegrationError) and exc.interrupted_after_output:
+        return llm_error_code(exc) if is_error_retryable_unshown(exc) else None
+    return _retryable_llm_error_code(exc)
 
 
 async def _sleep_before_retry(abort_signal: AbortSignal | None, attempt: int) -> None:
@@ -683,6 +715,7 @@ async def generate_tool_loop_response(
     result: object = None
     successful_attempt = 0
     successful_duration_ms = 0
+    on_reasoning_delta = _reasoning_delta_handler(context, label)
 
     for attempt in range(MAX_LLM_ATTEMPTS):
         throw_if_aborted(abort_signal)
@@ -703,7 +736,7 @@ async def generate_tool_loop_response(
                 thinking_effort=runtime.thinking_effort,
                 provider_config=runtime.provider_config,
                 on_text_delta=_buffering_text_delta_handler(text_buffer),
-                on_reasoning_delta=_reasoning_delta_handler(context, label),
+                on_reasoning_delta=on_reasoning_delta,
                 abort_signal=abort_signal,
             )
             successful_duration_ms = _duration_ms(started_at)
@@ -726,8 +759,9 @@ async def generate_tool_loop_response(
             raise
         except (AgentIntegrationError, LLMIntegrationError) as exc:
             duration_ms = _duration_ms(started_at)
-            retryable_code = _retryable_llm_error_code(exc)
+            retryable_code = _retryable_tool_loop_error_code(exc)
             error_code = llm_error_code(exc)
+            cut_off_midway = _cut_off_midway(exc)
             final_attempt = attempt >= MAX_LLM_ATTEMPTS - 1
             if retryable_code is None or final_attempt:
                 logger.warning(
@@ -739,6 +773,7 @@ async def generate_tool_loop_response(
                         "retry_count": attempt,
                         "duration_ms": duration_ms,
                         "error_code": error_code,
+                        "cut_off_midway": cut_off_midway,
                         "status": "failed",
                     },
                 )
@@ -754,9 +789,12 @@ async def generate_tool_loop_response(
                     "retry_count": attempt + 1,
                     "duration_ms": duration_ms,
                     "error_code": error_code,
+                    "cut_off_midway": cut_off_midway,
                     "status": "retrying",
                 },
             )
+            if cut_off_midway and on_reasoning_delta is not None:
+                await on_reasoning_delta(_CUT_OFF_NOTE)
             try:
                 await _sleep_before_retry(abort_signal, attempt)
             except BaseException:

@@ -147,6 +147,7 @@ class ClaudeMessagesDriver:
             error = exc if aborted else provider_error(exc)
             if isinstance(error, LLMIntegrationError) and accumulator.has_output:
                 error.retryable_override = False
+                error.interrupted_after_output = True
             message = await accumulator.failure_message(
                 emit,
                 stop_reason=StopReason.ABORTED if aborted else StopReason.ERROR,
