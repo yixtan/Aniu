@@ -133,6 +133,53 @@ def test_the_estimate_still_applies_where_no_provider_reported_usage() -> None:
     assert metrics_from_trace_payload(trace)[2] == 100
 
 
+def test_a_stage_that_never_called_a_model_costs_nothing() -> None:
+    """A watch with nothing it could act on writes its report in code.
+
+    Its trace has a status step and a result, and no prompt, thinking or tool
+    step. On 2026-09-29 the estimate still read the 428-character report and
+    recorded 107 tokens for a watch that called no model at all.
+    """
+
+    trace = {
+        "stages": [
+            {
+                "key": "watch",
+                "status": "completed",
+                "steps": [
+                    {"type": "status", "content": "completed"},
+                    {
+                        "type": "result",
+                        "content": "本轮不需要盯盘：" + "持有。" * 140,
+                        "data": {"total_tokens": 0, "tool_calls_count": 0},
+                    },
+                ],
+            }
+        ]
+    }
+
+    assert metrics_from_trace_payload(trace) == (0, 0, 0, 0, 0)
+
+
+def test_the_result_still_counts_when_the_stage_called_a_model() -> None:
+    """The report text is the model's output there, and it was billed."""
+
+    trace = {
+        "stages": [
+            {
+                "key": "watch",
+                "status": "completed",
+                "steps": [
+                    {"type": "prompt", "data": {"user_message": "x" * 200}},
+                    {"type": "result", "content": "y" * 200},
+                ],
+            }
+        ]
+    }
+
+    assert metrics_from_trace_payload(trace)[2] == 100
+
+
 def test_the_cached_share_is_summed_beside_the_total_it_sits_in() -> None:
     """Prompt-cache hits are inside the provider's total, not beside it.
 
