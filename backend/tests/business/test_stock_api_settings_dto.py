@@ -79,7 +79,7 @@ def test_settings_dtos_expose_mx_configuration_and_data_catalog() -> None:
         "tencent",
         "eastmoney",
     )
-    assert stock_api_dto.public_stock.tools[-1].providers == ("eastmoney",)
+    assert stock_api_dto.public_stock.tools[-1].providers == ("sina", "eastmoney")
     assert stock_api_dto.public_stock.tools[-2].providers == (
         "tencent",
         "sina",

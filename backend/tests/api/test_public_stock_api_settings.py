@@ -100,7 +100,7 @@ async def test_stock_api_settings_expose_catalog_and_tool_invocation_logs(
         "eastmoney",
     ]
     assert catalog["tools"][2]["providers"] == ["tencent", "eastmoney"]
-    assert catalog["tools"][-1]["providers"] == ["eastmoney"]
+    assert catalog["tools"][-1]["providers"] == ["sina", "eastmoney"]
 
     response = await api_client.get("/api/aniu/settings/stock-api/logs")
     assert response.status_code == 200

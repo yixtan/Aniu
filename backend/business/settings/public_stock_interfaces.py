@@ -104,7 +104,7 @@ PUBLIC_STOCK_TOOL_CATALOG = (
         name="资讯公告",
         summary="查询资讯流、个股新闻、公司公告和新闻搜索。",
         actions=("资讯流", "个股新闻", "公告", "新闻搜索"),
-        providers=("eastmoney",),
+        providers=("tencent", "sina", "eastmoney"),
     ),
     PublicStockToolCatalogItem(
         tool_name="stock_signals",
@@ -148,7 +148,7 @@ PUBLIC_STOCK_TOOL_CATALOG = (
         name="热度板块",
         summary="聚合行业和概念板块当日资金流前 10 名与市场要闻前 20 条。",
         actions=("行业资金流", "概念资金流", "市场要闻"),
-        providers=("eastmoney",),
+        providers=("sina", "eastmoney"),
     ),
 )
 
