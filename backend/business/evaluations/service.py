@@ -9,9 +9,32 @@ from backend.business.evaluations.ports import (
     EvaluationRepositoryPort,
     EvaluatorPort,
 )
-from backend.business.shared import CommitterPort
+from backend.business.runs.numbering import is_order_watch_task
+from backend.business.shared import CommitterPort, DomainError
 
 logger = logging.getLogger(__name__)
+
+
+class EvaluationNotApplicableError(DomainError):
+    """A review was asked of a run it cannot say anything about.
+
+    An order watch is the one such run. The review asks about investment
+    judgement, and a watch forms none: it checks whether conditions an
+    analysis wrote have triggered and carries out what was written. It also
+    leaves nothing to review from. The reviewer reads the Run stage's report,
+    which a watch does not have, and this run's own orders, which counts
+    placing and not cancelling, the one thing a watch does. What a review
+    drafts becomes an open finding that every analysis must answer, so a
+    review of a watch would hand the analyses a question about work they did
+    not do. None of the eleven reviews made by 2026-09-29 was of a watch.
+    """
+
+    def __init__(self, run_id: int) -> None:
+        super().__init__(
+            "盯盘记录不做独立评估：盯盘只按操盘写好的清单核对执行，"
+            "没有投资判断可审。请对操盘记录发起评估。"
+        )
+        self.run_id = run_id
 
 
 class EvaluationService:
@@ -37,6 +60,8 @@ class EvaluationService:
     async def request(
         self, run_id: int, *, operator_question: str = ""
     ) -> Evaluation:
+        if is_order_watch_task(run_id):
+            raise EvaluationNotApplicableError(run_id)
         evaluation = await self._repository.create(
             run_id, operator_question=operator_question
         )
@@ -106,4 +131,4 @@ class EvaluationService:
             await self._committer.commit()
 
 
-__all__ = ["EvaluationService"]
+__all__ = ["EvaluationNotApplicableError", "EvaluationService"]

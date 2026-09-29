@@ -15,7 +15,10 @@ from backend.business.evaluations.ports import (
     EvaluationResult,
     EvaluatorPort,
 )
-from backend.business.evaluations.service import EvaluationService
+from backend.business.evaluations.service import (
+    EvaluationNotApplicableError,
+    EvaluationService,
+)
 
 __all__ = [
     "MAX_CANDIDATES",
@@ -24,6 +27,7 @@ __all__ = [
     "MAX_OPERATOR_QUESTION_LENGTH",
     "TERMINAL_STATUSES",
     "Evaluation",
+    "EvaluationNotApplicableError",
     "EvaluationRepositoryPort",
     "EvaluationResult",
     "EvaluationService",

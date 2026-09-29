@@ -189,3 +189,39 @@ async def test_the_button_alone_still_works(
 
     assert response.status_code == 201
     assert response.json()["operator_question"] == ""
+
+
+@pytest.mark.asyncio
+async def test_a_watch_record_is_refused_with_a_reason(
+    api_client: AsyncClient, session
+) -> None:
+    """A watch forms no view to review, and leaves no report to review from.
+
+    What a review drafts becomes an open finding every analysis must answer,
+    so a review of a watch would hand the analyses a question about work they
+    did not do. The page offers no button there; this refuses the request
+    even if one is sent.
+    """
+
+    watch_id = 20260929337
+    session.add(
+        StrategyRunModel(
+            id=watch_id,
+            trigger_source="SCHEDULED",
+            status="COMPLETED",
+            current_state="Completed",
+            snapshot_json={},
+            trace_json={},
+            summary_render_mode="markdown",
+            started_at="2026-09-29T06:08:10+00:00",
+            completed_at="2026-09-29T06:08:10+00:00",
+        )
+    )
+    await session.commit()
+
+    response = await api_client.post(f"/api/aniu/runs/{watch_id}/evaluation")
+
+    assert response.status_code == 400
+    assert "盯盘记录不做独立评估" in response.text
+    rows = (await session.execute(RunEvaluationModel.__table__.select())).all()
+    assert rows == []

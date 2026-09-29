@@ -549,7 +549,7 @@ describe("StageTimeline for an order watch", () => {
     ],
   };
 
-  function watchRun(): RunDetail {
+  function watchRun(overrides: Partial<RunDetail> = {}): RunDetail {
     return makeRun({
       run_id: 20260914301,
       task_id: 20260914301,
@@ -563,6 +563,7 @@ describe("StageTimeline for an order watch", () => {
         // One stage, and no Summary: a watch records what it did and stops.
         stages: [watchStage],
       },
+      ...overrides,
     });
   }
 
@@ -574,6 +575,35 @@ describe("StageTimeline for an order watch", () => {
 
     expect(screen.getByRole("heading", { name: "最终运行报告" })).toBeInTheDocument();
     expect(screen.getAllByText(/条件未触发，保留挂单/).length).toBeGreaterThan(0);
+  });
+
+  it("offers no independent review of a watch", () => {
+    // A watch forms no view to review. What a review drafts becomes an open
+    // finding every analysis must answer, about work the analysis did not do.
+    renderTimeline(watchRun());
+
+    expect(screen.getByRole("button", { name: /发送到邮箱/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /独立评估/ })).toBeNull();
+  });
+
+  it("offers no independent review of a watch that failed", () => {
+    renderTimeline(
+      watchRun({
+        status: "FAILED",
+        current_state: "Failed",
+        summary: null,
+        failure_reason: "盯盘超时",
+        trace: {
+          schema_version: 3,
+          event_seq: 2,
+          current_stage_id: null,
+          stages: [{ ...watchStage, status: "failed" }],
+        },
+      }),
+    );
+
+    expect(screen.getByRole("heading", { name: "最终运行报告" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /独立评估/ })).toBeNull();
   });
 
   it("does not print the record twice once the stages are opened", () => {

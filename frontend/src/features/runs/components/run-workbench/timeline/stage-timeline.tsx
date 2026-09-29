@@ -168,6 +168,10 @@ export function StageTimeline({
       .filter(Boolean)
       .join("\n\n") || (run.summary_render_mode === "html" ? "" : finalReportContent);
   const failureReason = recordedFailureReason || "任务执行失败，但没有记录具体失败原因。";
+  // Only an analysis is reviewed. A watch forms no view of its own; it carries
+  // out conditions an analysis wrote, and it has no Run stage whose report the
+  // review would read. The server refuses a watch as well.
+  const reviewable = runStage !== undefined;
 
   return (
     <>
@@ -235,9 +239,9 @@ export function StageTimeline({
             <h2 className="text-foreground shrink-0 font-sans text-base font-semibold tracking-[-0.01em]">
               最终运行报告
             </h2>
-            {/* A failed run can be reviewed too; the review reads the account's
-                orders and fills, not the report. */}
-            <EvaluationButton runId={run.run_id} />
+            {/* A failed analysis can be reviewed too; the review reads the
+                account's orders and fills as well as the report. */}
+            {reviewable ? <EvaluationButton runId={run.run_id} /> : null}
           </div>
           <div
             role="alert"
@@ -267,7 +271,7 @@ export function StageTimeline({
                 <CopyReportButton markdown={markdownReport} />
               ) : null}
               <EmailReportButton runId={run.run_id} />
-              <EvaluationButton runId={run.run_id} />
+              {reviewable ? <EvaluationButton runId={run.run_id} /> : null}
             </div>
           </div>
           <StreamingContent
