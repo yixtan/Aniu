@@ -101,6 +101,28 @@ class OrderDirective:
             return 0
         return max(0, self.reprice.max_times - self.repriced_times)
 
+    @property
+    def needs_watching(self) -> bool:
+        """Whether a watch could ever act on this entry.
+
+        CANCEL always can, and REPRICE can while it has attempts left. HOLD can
+        only through one of its cancel conditions. A bare HOLD gives a watch
+        nothing to do, because the order dies at the close by itself.
+        """
+
+        if self.action is DirectiveAction.CANCEL:
+            return True
+        if self.action is DirectiveAction.REPRICE:
+            return self.reprices_left > 0
+        return any(
+            condition is not None
+            for condition in (
+                self.cancel_if_price_above,
+                self.cancel_if_price_below,
+                self.cancel_if_unfilled_after,
+            )
+        )
+
     def cancels_at(self, *, price: float | None, moment: time) -> bool:
         """Whether the stated conditions call for withdrawing this order now.
 

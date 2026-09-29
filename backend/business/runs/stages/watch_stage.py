@@ -8,6 +8,11 @@ that is already known before the stage starts.
 Nothing here decides what may be touched. That is settled in the authorizer,
 which refuses a write against an order the plan does not name — a refusal the
 model cannot reason past, unlike a sentence asking it to behave.
+
+When nothing in the plan could be acted on — there is no plan, or it holds
+only bare holds — no model is called, and the record says why. None of the 384
+watches from 2026-09-16 13:00 to 09-29 had anything in its plan it could act
+on. Each one still spent about 30,000 tokens confirming that.
 """
 
 from __future__ import annotations
@@ -33,15 +38,6 @@ _WATCH_PROTOCOL = "\n".join(
     )
 )
 
-_NOTHING_TO_DO = "\n".join(
-    (
-        "<watch-protocol>",
-        "本次没有挂单处置计划，因此不得进行任何撤单或下单操作。",
-        "只需查询当前委托并说明现状，指出有哪些委托无人认领。",
-        "</watch-protocol>",
-    )
-)
-
 
 class WatchStage:
     async def execute(
@@ -51,6 +47,8 @@ class WatchStage:
         *,
         directives: tuple[OrderDirective, ...] = (),
     ) -> RunReport:
+        if not any(item.needs_watching for item in directives):
+            return _nothing_to_watch(directives)
         require_llm_runtime(context, stage_name="Watch")
         stage_settings = context.snapshot.settings_for_stage("Watch")
         market_open = (
@@ -59,12 +57,8 @@ class WatchStage:
             else False
         )
         runtime_payload: dict[str, object] = {"market_session_open": market_open}
-        protocol = _WATCH_PROTOCOL if directives else _NOTHING_TO_DO
-        if directives:
-            runtime_payload["order_plan"] = [
-                directive_payload(item) for item in directives
-            ]
-        agent_prompt = "\n\n".join((stage_settings.prompt, protocol))
+        runtime_payload["order_plan"] = [directive_payload(item) for item in directives]
+        agent_prompt = "\n\n".join((stage_settings.prompt, _WATCH_PROTOCOL))
         user_prompt = "\n\n".join(
             (
                 agent_prompt,
@@ -76,11 +70,7 @@ class WatchStage:
             stage_name="Watch",
             phase="watch_input",
             title="盯盘提示词",
-            summary=(
-                f"已发送 {len(directives)} 笔委托的处置计划"
-                if directives
-                else "本次没有挂单处置计划，只能查看"
-            ),
+            summary=f"已发送 {len(directives)} 笔委托的处置计划",
             display_prompt=agent_prompt,
             payload=runtime_payload,
             user_message=user_prompt,
@@ -99,6 +89,32 @@ class WatchStage:
             total_tokens=result.total_tokens,
             cached_tokens=result.cached_tokens,
         )
+
+
+def _nothing_to_watch(directives: tuple[OrderDirective, ...]) -> RunReport:
+    """The record of a watch that had nothing it could act on."""
+
+    if not directives:
+        return RunReport(
+            content=(
+                "本轮不需要盯盘：当前没有挂单处置计划，盯盘不能撤单或下单，"
+                "所以没有调用模型。"
+            )
+        )
+    lines = [
+        f"本轮不需要盯盘：计划里的 {len(directives)} 笔委托都是无条件持有，"
+        "没有撤单、改价或触发条件，盯盘没有可执行的动作，所以没有调用模型。"
+        "持有的委托收盘时自动作废。",
+        "",
+    ]
+    for item in directives:
+        line = f"- {item.stock_name}（{item.symbol}）委托 {item.order_id}：持有。"
+        if item.note:
+            line += item.note
+        if item.rejected_reason:
+            line += f"（这条计划的格式不对，已按持有处理：{item.rejected_reason}）"
+        lines.append(line)
+    return RunReport(content="\n".join(lines))
 
 
 __all__ = ["WatchStage"]
