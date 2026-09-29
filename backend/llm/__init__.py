@@ -43,6 +43,7 @@ from backend.llm.errors import (
     LLMErrorCode,
     LLMIntegrationError,
     is_error_retryable,
+    is_error_retryable_unshown,
 )
 from backend.llm.events import (
     AssistantMessageEventStream,
@@ -143,6 +144,7 @@ __all__ = [
     "estimate_provider_request_tokens",
     "estimate_tokens",
     "is_error_retryable",
+    "is_error_retryable_unshown",
     "normalize_chat_response",
     "normalize_thinking_efforts",
     "thinking_budget_tokens",
