@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { EvaluationCard } from "./evaluation-card";
+import { EvaluationButton } from "./evaluation-sheet";
 
 const api = vi.hoisted(() => ({
   getRunEvaluation: vi.fn(),
@@ -15,15 +15,21 @@ vi.mock("@/lib/api", () => api);
 
 const RUN_ID = 20260917101;
 
-function renderCard() {
+function renderButton() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <EvaluationCard runId={RUN_ID} />
+      <EvaluationButton runId={RUN_ID} />
     </QueryClientProvider>,
   );
+}
+
+/** The review lives in a drawer; every test below reads it opened. */
+async function renderCard() {
+  renderButton();
+  await userEvent.click(await screen.findByRole("button", { name: /^独立评估/ }));
 }
 
 function evaluation(overrides: Record<string, unknown> = {}) {
@@ -46,7 +52,42 @@ function evaluation(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe("EvaluationCard", () => {
+describe("EvaluationButton", () => {
+  it("keeps the review out of sight until the button is pressed", async () => {
+    // It is seldom used. It was a card under every run and took the space
+    // the report needed.
+    api.getRunEvaluation.mockResolvedValue(null);
+
+    renderButton();
+
+    const button = await screen.findByRole("button", { name: "独立评估" });
+    expect(screen.queryByRole("button", { name: "开始评估" })).not.toBeInTheDocument();
+
+    await userEvent.click(button);
+
+    expect(await screen.findByRole("dialog", { name: /独立评估/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "开始评估" })).toBeEnabled();
+    // Opening is mostly to read. A focused box would raise a phone's keyboard
+    // over the result.
+    expect(screen.getByLabelText("你有想问的吗？（可以空着）")).not.toHaveFocus();
+  });
+
+  it.each([
+    ["RUNNING", "独立评估（评估中）"],
+    ["PENDING", "独立评估（评估中）"],
+    ["COMPLETED", "独立评估（已完成）"],
+    ["FAILED", "独立评估（失败）"],
+  ])("says on the button, closed, that a review is %s", async (status, name) => {
+    // The drawer is closed most of the time, and a review runs for a minute
+    // or two after it is closed. The button is the only place left to say so.
+    api.getRunEvaluation.mockResolvedValue(evaluation({ status }));
+
+    renderButton();
+
+    expect(await screen.findByRole("button", { name })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
   it("opens with the lead, and keeps the argument one click away", async () => {
     // Five thousand characters of adversarial reasoning is the evidence, not
     // the thing you open the card to find out.
@@ -56,7 +97,7 @@ describe("EvaluationCard", () => {
       }),
     );
 
-    renderCard();
+    await renderCard();
 
     expect(await screen.findByText(/挂着的单子如果全成交/)).toBeInTheDocument();
     expect(screen.queryByText(/证伪条件是什么/)).not.toBeInTheDocument();
@@ -71,7 +112,7 @@ describe("EvaluationCard", () => {
     // read; it does not stand in for reading it.
     api.getRunEvaluation.mockResolvedValue(evaluation({ digest: "第 3 问最要紧。" }));
 
-    renderCard();
+    await renderCard();
 
     expect(await screen.findByText(/这段只是指路/)).toBeInTheDocument();
   });
@@ -84,7 +125,7 @@ describe("EvaluationCard", () => {
       evaluation({ status: "PENDING", questions: null, answers: null }),
     );
 
-    renderCard();
+    await renderCard();
     await userEvent.type(
       await screen.findByLabelText("你有想问的吗？（可以空着）"),
       "今天行情已经变了，为什么仓位还保持 20%？",
@@ -108,7 +149,7 @@ describe("EvaluationCard", () => {
       }),
     );
 
-    renderCard();
+    await renderCard();
 
     const lead = (await screen.findByText("先看这段")).closest("section");
     expect(lead).not.toBeNull();
@@ -124,7 +165,7 @@ describe("EvaluationCard", () => {
       evaluation({ operator_question: "为什么仓位还保持 20%？" }),
     );
 
-    renderCard();
+    await renderCard();
 
     expect(await screen.findByLabelText("想再问一个？（可以空着）")).toBeInTheDocument();
   });
@@ -132,7 +173,7 @@ describe("EvaluationCard", () => {
   it("offers to start one when the run has never been reviewed", async () => {
     api.getRunEvaluation.mockResolvedValue(null);
 
-    renderCard();
+    await renderCard();
 
     expect(await screen.findByRole("button", { name: "开始评估" })).toBeEnabled();
     expect(screen.queryByText("提问")).not.toBeInTheDocument();
@@ -141,7 +182,7 @@ describe("EvaluationCard", () => {
   it("shows the questions and the answers, and what they cost", async () => {
     api.getRunEvaluation.mockResolvedValue(evaluation());
 
-    renderCard();
+    await renderCard();
 
     // The argument is the evidence and it stays, one click away.
     await userEvent.click(await screen.findByRole("button", { name: "看完整问答" }));
@@ -162,7 +203,7 @@ describe("EvaluationCard", () => {
       }),
     );
 
-    renderCard();
+    await renderCard();
     await userEvent.click(await screen.findByRole("button", { name: "看完整问答" }));
 
     const heading = screen.getByRole("heading", { name: "一、成交率断崖" });
@@ -175,11 +216,9 @@ describe("EvaluationCard", () => {
     // A review takes a minute or two; a second press would spend it twice.
     api.getRunEvaluation.mockResolvedValue(evaluation({ status: "RUNNING" }));
 
-    renderCard();
+    await renderCard();
 
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "评估中…" })).toBeDisabled(),
-    );
+    await waitFor(() => expect(screen.getByRole("button", { name: "评估中…" })).toBeDisabled());
   });
 
   it("says why a review failed rather than looking like it never ran", async () => {
@@ -192,7 +231,7 @@ describe("EvaluationCard", () => {
       }),
     );
 
-    renderCard();
+    await renderCard();
 
     expect(await screen.findByText("provider refused the request")).toBeInTheDocument();
   });
@@ -209,7 +248,7 @@ describe("EvaluationCard", () => {
       }),
     );
 
-    renderCard();
+    await renderCard();
 
     const draft = await screen.findByRole("button", {
       name: /五笔买入单全属 AI 硬件链/,
@@ -223,9 +262,7 @@ describe("EvaluationCard", () => {
     expect(await screen.findByLabelText("发现")).toHaveValue(
       "五笔买入单全属 AI 硬件链，会在同一天一起成交。",
     );
-    expect(screen.getByLabelText("了结条件")).toHaveValue(
-      "把敞口拆到与 AI 硬件链不相关的主线上。",
-    );
+    expect(screen.getByLabelText("了结条件")).toHaveValue("把敞口拆到与 AI 硬件链不相关的主线上。");
     expect(screen.getByRole("button", { name: "立项" })).toBeEnabled();
   });
 
@@ -239,7 +276,7 @@ describe("EvaluationCard", () => {
     );
     api.raiseOpenFinding.mockResolvedValue({});
 
-    renderCard();
+    await renderCard();
     await userEvent.click(await screen.findByRole("button", { name: /起草的说法/ }));
 
     const finding = screen.getByLabelText("发现");
@@ -261,7 +298,7 @@ describe("EvaluationCard", () => {
     // reviewer's questions; a person read them and wrote a sixth.
     api.getRunEvaluation.mockResolvedValue(evaluation());
 
-    renderCard();
+    await renderCard();
 
     expect(await screen.findByText(/这次评估没有起草候选/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "自己写一条" }));
@@ -276,12 +313,10 @@ describe("EvaluationCard", () => {
       evaluation({ status: "PENDING", questions: null, answers: null }),
     );
 
-    renderCard();
+    await renderCard();
     await userEvent.click(await screen.findByRole("button", { name: "开始评估" }));
 
     expect(api.requestRunEvaluation).toHaveBeenCalledWith(RUN_ID, "");
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "评估中…" })).toBeDisabled(),
-    );
+    await waitFor(() => expect(screen.getByRole("button", { name: "评估中…" })).toBeDisabled());
   });
 });

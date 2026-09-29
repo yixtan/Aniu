@@ -5,7 +5,6 @@ import { getRunDetail } from "@/lib/api";
 import { getErrorMessage } from "@/lib/format";
 import { useRunSnapshotStream } from "@/features/runs/hooks/use-run-snapshot-stream";
 import type { RunDetail } from "@/lib/api-types";
-import { EvaluationCard } from "@/features/runs/components/run-workbench/evaluation-card";
 import { StageTimeline } from "@/features/runs/components/run-workbench/timeline/stage-timeline";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
@@ -153,14 +152,12 @@ function RunWorkbenchContent({
 
   return (
     /* `min-h-full`, not `h-full`: the column has to be allowed to outgrow the
-       panel. With a fixed height the two cards fight over it, and the report
-       loses — it is the only one that may shrink below its content, so a
-       finished evaluation (questions, answers, three drafts) squeezed it to
-       the 2px of its own borders and the report read as blank. */
+       panel. The independent review used to sit here as a second card and,
+       finished, squeezed the report to the 2px of its own borders. It now
+       opens in a drawer from a button beside the report. */
     <div className="flex min-h-full flex-col gap-4">
       {/* A floor rather than a share, for the same reason the panel itself has
-          one. `flex-1` still hands it the whole panel when the evaluation card
-          is small or absent. */}
+          one. */}
       <Card className="border-border/75 bg-card/90 flex min-h-[24rem] flex-1 flex-col overflow-hidden shadow-sm">
         <CardContent className="min-h-0 flex-1 px-4 py-3">
           <div ref={scrollerRef} className="h-full min-h-0 overflow-y-auto">
@@ -173,7 +170,6 @@ function RunWorkbenchContent({
           </div>
         </CardContent>
       </Card>
-      {isLiveRun ? null : <EvaluationCard runId={snapshot.run_id} />}
     </div>
   );
 }

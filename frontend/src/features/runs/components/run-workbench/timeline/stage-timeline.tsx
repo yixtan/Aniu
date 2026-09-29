@@ -11,6 +11,7 @@ import { formatRunDuration, getErrorMessage } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { RunDetail } from "@/lib/api-types";
 
+import { EvaluationButton } from "../evaluation-sheet";
 import { StreamingContent } from "../streaming";
 import { StageNode } from "./stage-node";
 
@@ -230,9 +231,14 @@ export function StageTimeline({
 
       {isFailed ? (
         <section className="px-2 pt-4 pb-3">
-          <h2 className="text-foreground mb-3 font-sans text-base font-semibold tracking-[-0.01em]">
-            最终运行报告
-          </h2>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-foreground shrink-0 font-sans text-base font-semibold tracking-[-0.01em]">
+              最终运行报告
+            </h2>
+            {/* A failed run can be reviewed too; the review reads the account's
+                orders and fills, not the report. */}
+            <EvaluationButton runId={run.run_id} />
+          </div>
           <div
             role="alert"
             aria-label="失败原因"
@@ -249,15 +255,19 @@ export function StageTimeline({
         </section>
       ) : showFinalReport ? (
         <section className="px-2 pt-4 pb-3">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <h2 className="text-foreground font-sans text-base font-semibold tracking-[-0.01em]">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-foreground shrink-0 font-sans text-base font-semibold tracking-[-0.01em]">
               最终运行报告
             </h2>
-            <div className="flex shrink-0 items-center gap-2">
+            {/* Wraps under the title on a phone. Three buttons do not fit
+                beside it at 375px, and without wrapping the title was squeezed
+                into a column one character wide. */}
+            <div className="flex flex-wrap items-center gap-2">
               {markdownReport && clipboardAvailable() ? (
                 <CopyReportButton markdown={markdownReport} />
               ) : null}
               <EmailReportButton runId={run.run_id} />
+              <EvaluationButton runId={run.run_id} />
             </div>
           </div>
           <StreamingContent
