@@ -40,7 +40,10 @@ MX_INTERFACE_CATALOG: tuple[MxInterfaceDescriptor, ...] = (
     MxInterfaceDescriptor(
         interface_id="screening",
         name="智能选股",
-        summary="按自然语言条件筛选 A 股或板块成分股，输出符合条件的候选标的列表。",
+        summary=(
+            "按自然语言条件筛选 A 股或板块成分股，"
+            "返回符合条件的只数和排在最前的 10 只。"
+        ),
         features=("条件选股", "板块成分筛选"),
         examples=("市盈率低于 15 的消费股", "最近三日主力资金净流入的股票"),
         access_modes=("read",),
