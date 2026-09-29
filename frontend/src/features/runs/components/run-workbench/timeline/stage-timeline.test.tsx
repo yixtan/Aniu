@@ -10,7 +10,11 @@ import { StageTimeline } from "./stage-timeline";
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
-const api = vi.hoisted(() => ({ emailRunReport: vi.fn() }));
+const api = vi.hoisted(() => ({
+  emailRunReport: vi.fn(),
+  // The review button asks whether this run has been reviewed; none has.
+  getRunEvaluation: vi.fn(() => Promise.resolve(null)),
+}));
 vi.mock("@/lib/api", () => api);
 
 const MARKDOWN_REPORT = "## 运行报告\n\n- 买入 600519";
@@ -144,7 +148,7 @@ describe("StageTimeline", () => {
         summary:
           '<div style="display:flex;gap:8px"><p>持仓 3 只</p></div>' +
           "<details><summary>展开明细</summary><p>亨通 70.20 在挂</p></details>" +
-          '<script>window.__ran = true</script>' +
+          "<script>window.__ran = true</script>" +
           '<iframe srcdoc="&lt;script&gt;parent.__ran = true&lt;/script&gt;"></iframe>' +
           '<form action="/api/aniu/settings"><input name="x" /></form>' +
           '<img src="x.png" onerror="window.__ran = true" />' +
@@ -274,6 +278,55 @@ describe("StageTimeline", () => {
         .getAllByText("深度思考")
         .some((element) => element.classList.contains("border-zinc-500/25")),
     ).toBe(true);
+  });
+
+  it("offers the independent review as a button beside the report", async () => {
+    // It was a card under every run, seldom used, taking the report's room.
+    renderTimeline(makeRun({ summary: MARKDOWN_REPORT, summary_render_mode: "markdown" }));
+
+    expect(await screen.findByRole("button", { name: "独立评估" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "开始评估" })).toBeNull();
+    await waitFor(() => expect(api.getRunEvaluation).toHaveBeenCalledWith(20260725101));
+  });
+
+  it("offers the review on a failed run as well", async () => {
+    // The review reads the account's orders and fills, so a run that failed
+    // halfway, perhaps after placing an order, is worth reviewing too.
+    renderTimeline(
+      makeRun({
+        status: "FAILED",
+        current_state: "Failed",
+        summary: null,
+        failure_reason: "运行模型不可用",
+        trace: {
+          schema_version: 3,
+          event_seq: 2,
+          current_stage_id: null,
+          stages: [{ ...runStage, status: "failed" }],
+        },
+      }),
+    );
+
+    expect(await screen.findByRole("button", { name: "独立评估" })).toBeInTheDocument();
+  });
+
+  it("offers no review while the run is still going", () => {
+    renderTimeline(
+      makeRun({
+        status: "RUNNING",
+        current_state: "Run",
+        completed_at: null,
+        summary: null,
+        trace: {
+          schema_version: 3,
+          event_seq: 1,
+          current_stage_id: runStage.stage_id,
+          stages: [{ ...runStage, status: "running", ended_at: null }],
+        },
+      }),
+    );
+
+    expect(screen.queryByRole("button", { name: /独立评估/ })).toBeNull();
   });
 
   it("shows the recorded failure reason when Run fails", () => {
