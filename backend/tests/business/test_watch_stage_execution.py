@@ -1,4 +1,4 @@
-"""What the watch stage sends, and what it does when there is no plan."""
+"""What the watch stage sends, and when it does not call a model at all."""
 
 from __future__ import annotations
 
@@ -106,29 +106,98 @@ async def test_a_reprice_shows_what_is_left_of_its_budget() -> None:
 async def test_a_downgraded_entry_is_surfaced_rather_than_hidden() -> None:
     """The run tried to speak about this order and got the shape wrong.
 
-    Worth knowing apart from the run never having mentioned it, because the
-    failure this whole mechanism exists for is the silent kind.
+    That is worth telling apart from the run never mentioning the order,
+    because the failure this whole mechanism exists for is the silent kind.
+    A downgraded entry is a bare hold, so no model is asked; the record says
+    it instead.
     """
 
     runner = RecordingRunner()
     directive = _directive(rejected_reason="cancel_if_price_above 不是数字")
 
-    await WatchStage().execute(_context(), runner, directives=(directive,))
+    report = await WatchStage().execute(_context(), runner, directives=(directive,))
 
-    assert "rejected_reason" in runner.prompts[0]
+    assert runner.prompts == []
+    assert "格式不对" in report.content
+    assert "cancel_if_price_above 不是数字" in report.content
 
 
 @pytest.mark.asyncio
-async def test_with_no_plan_the_stage_says_so_and_sends_no_order_plan() -> None:
-    """Look but do not touch. The authorizer enforces it; this explains it."""
+async def test_with_no_plan_no_model_is_called_and_the_record_says_why() -> None:
+    """With no plan a watch may not touch anything, so asking a model is waste."""
 
     runner = RecordingRunner()
 
-    await WatchStage().execute(_context(), runner, directives=())
+    report = await WatchStage().execute(_context(), runner, directives=())
 
-    sent = runner.prompts[0]
-    assert "order_plan" not in sent
-    assert "不得进行任何撤单或下单操作" in sent
+    assert runner.prompts == []
+    assert "没有挂单处置计划" in report.content
+    assert report.total_tokens == 0
+
+
+@pytest.mark.asyncio
+async def test_bare_holds_call_no_model_and_the_record_lists_each_order() -> None:
+    """None of the 384 watches from 2026-09-16 13:00 to 09-29 had anything to
+    act on. Each spent about 30,000 tokens saying so."""
+
+    runner = RecordingRunner()
+    first = _directive()
+    second = _directive(
+        order_id="262704700000040391", symbol="600150", stock_name="中国船舶", note=""
+    )
+
+    report = await WatchStage().execute(_context(), runner, directives=(first, second))
+
+    assert runner.prompts == []
+    assert "2 笔委托都是无条件持有" in report.content
+    assert "长飞光纤（601869）委托 262534700000036039：持有。筹码分散" in report.content
+    assert "中国船舶（600150）委托 262704700000040391：持有。" in report.content
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"action": DirectiveAction.CANCEL},
+        {"cancel_if_price_above": 445.0},
+        {"cancel_if_price_below": 420.0},
+        {"cancel_if_unfilled_after": time(14, 30)},
+        {
+            "action": DirectiveAction.REPRICE,
+            "reprice": RepricePlan(
+                new_price=445.0, max_times=2, when_price_above=442.0
+            ),
+            "repriced_times": 1,
+        },
+    ],
+    ids=["cancel", "price-above", "price-below", "time", "reprice-left"],
+)
+@pytest.mark.asyncio
+async def test_anything_the_watch_could_act_on_is_sent_to_the_model(
+    overrides: dict[str, object],
+) -> None:
+    runner = RecordingRunner()
+    bare = _directive(order_id="1")
+
+    await WatchStage().execute(
+        _context(), runner, directives=(bare, _directive(**overrides))
+    )
+
+    assert len(runner.prompts) == 1
+    assert "order_plan" in runner.prompts[0]
+
+
+@pytest.mark.asyncio
+async def test_a_reprice_with_no_attempts_left_needs_no_watching() -> None:
+    runner = RecordingRunner()
+    spent = _directive(
+        action=DirectiveAction.REPRICE,
+        reprice=RepricePlan(new_price=445.0, max_times=1, when_price_above=442.0),
+        repriced_times=1,
+    )
+
+    await WatchStage().execute(_context(), runner, directives=(spent,))
+
+    assert runner.prompts == []
 
 
 @pytest.mark.asyncio
@@ -138,4 +207,8 @@ async def test_an_empty_record_is_refused() -> None:
     runner = RecordingRunner(content="   ")
 
     with pytest.raises(ValueError, match="watch record"):
-        await WatchStage().execute(_context(), runner, directives=(_directive(),))
+        await WatchStage().execute(
+            _context(),
+            runner,
+            directives=(_directive(cancel_if_unfilled_after=time(14, 30)),),
+        )
