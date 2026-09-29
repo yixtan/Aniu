@@ -55,7 +55,7 @@ def _context(report: RunReport | None = None) -> RunExecutionContext:
 
 
 @pytest.mark.asyncio
-async def test_summary_stage_uses_report_reasoning_and_tool_evidence() -> None:
+async def test_summary_stage_sends_the_report_without_reasoning_or_tools() -> None:
     report = RunReport(
         content="# Complete report",
         transcript=({"role": "assistant", "reasoning": "checked risk"},),
@@ -75,8 +75,10 @@ async def test_summary_stage_uses_report_reasoning_and_tool_evidence() -> None:
     assert result.summary == '<section class="report"><h2>Done</h2></section>'
     assert len(runner.prompts) == 1
     assert "# Complete report" in runner.prompts[0]
-    assert "checked risk" in runner.prompts[0]
-    assert "trade-1" in runner.prompts[0]
+    # It only lays the report out, so the Run's reasoning and tool results
+    # would be text it is told not to use.
+    assert "checked risk" not in runner.prompts[0]
+    assert "trade-1" not in runner.prompts[0]
 
 
 @pytest.mark.parametrize(

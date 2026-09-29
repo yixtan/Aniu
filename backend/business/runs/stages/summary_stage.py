@@ -1,4 +1,4 @@
-"""Summary stage: turn one completed Run report and its evidence into HTML."""
+"""Summary stage: lay one completed Run report out as HTML."""
 
 from __future__ import annotations
 
@@ -69,7 +69,7 @@ class SummaryStage:
             stage_name="Summary",
             phase="summary_input",
             title="HTML 总结提示词",
-            summary="已载入 Markdown 报告、思考和工具执行证据",
+            summary="已载入 Markdown 运行报告",
             display_prompt=stage_prompt,
             payload=payload,
             user_message=user_prompt,
