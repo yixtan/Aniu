@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass, field
 
 from backend.agent.tools.registry import ToolRegistry
 from backend.business.account import PortfolioOrderSnapshot
+from backend.infra.integrations.mx_screen import compact_screen_result
 from backend.infra.integrations.tool_policy import SideEffectLevel
 from backend.llm import ToolDefinition
 from backend.stock_api import (
@@ -151,7 +152,11 @@ class SelectStocksTool:
     def to_tool_definition(self) -> ToolDefinition:
         return {
             "name": self.name,
-            "description": "按自然语言条件筛选 A 股或板块成分股。",
+            "description": (
+                "按自然语言条件筛选 A 股或板块成分股。返回符合条件的只数，"
+                "以及按查询顺序排在最前的 10 只及其行情、估值；"
+                "要看别的，把条件收窄或换个排序再筛。"
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {"keyword": {"type": "string", "minLength": 1}},
@@ -161,7 +166,7 @@ class SelectStocksTool:
         }
 
     async def run(self, keyword: str) -> object:
-        return await self.client.select_stocks(keyword)
+        return compact_screen_result(await self.client.select_stocks(keyword))
 
 
 @dataclass(slots=True)
