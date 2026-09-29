@@ -10,30 +10,44 @@ from backend.business.evaluations.ports import (
     EvaluatorPort,
 )
 from backend.business.runs.numbering import is_order_watch_task
-from backend.business.shared import CommitterPort, DomainError
+from backend.business.shared import CommitterPort, DomainError, RunNotFoundError
+from backend.business.shared.enums import RunStatus
 
 logger = logging.getLogger(__name__)
 
 
+WATCH_NOT_REVIEWED = (
+    "盯盘记录不做独立评估：盯盘只按操盘写好的清单核对执行，"
+    "没有投资判断可审。请对操盘记录发起评估。"
+)
+"""An order watch forms no view of its own, and leaves nothing to review from.
+
+The review asks about investment judgement, and a watch forms none: it checks
+whether conditions an analysis wrote have triggered and carries out what was
+written. The reviewer reads the Run stage's report, which a watch does not
+have, and this run's own orders, which counts placing and not cancelling, the
+one thing a watch does. What a review drafts becomes an open finding that
+every analysis must answer, so a review of a watch would hand the analyses a
+question about work they did not do. None of the eleven reviews made by
+2026-09-29 was of a watch.
+"""
+
+UNFINISHED_NOT_REVIEWED = (
+    "只有正常完成的操盘才做独立评估：这次运行没有正常完成，没有留下完整的运行报告可审。"
+)
+"""A run that failed or was stopped has no report to review.
+
+The reviewer reads the report the Run stage writes at its end. The 14:15
+analysis on 2026-09-29 was cut off two minutes in, with no report written, so
+a reviewer would be told there is none and asked to judge the run anyway.
+"""
+
+
 class EvaluationNotApplicableError(DomainError):
-    """A review was asked of a run it cannot say anything about.
+    """A review was asked of a run it cannot say anything about."""
 
-    An order watch is the one such run. The review asks about investment
-    judgement, and a watch forms none: it checks whether conditions an
-    analysis wrote have triggered and carries out what was written. It also
-    leaves nothing to review from. The reviewer reads the Run stage's report,
-    which a watch does not have, and this run's own orders, which counts
-    placing and not cancelling, the one thing a watch does. What a review
-    drafts becomes an open finding that every analysis must answer, so a
-    review of a watch would hand the analyses a question about work they did
-    not do. None of the eleven reviews made by 2026-09-29 was of a watch.
-    """
-
-    def __init__(self, run_id: int) -> None:
-        super().__init__(
-            "盯盘记录不做独立评估：盯盘只按操盘写好的清单核对执行，"
-            "没有投资判断可审。请对操盘记录发起评估。"
-        )
+    def __init__(self, run_id: int, reason: str) -> None:
+        super().__init__(reason)
         self.run_id = run_id
 
 
@@ -61,7 +75,12 @@ class EvaluationService:
         self, run_id: int, *, operator_question: str = ""
     ) -> Evaluation:
         if is_order_watch_task(run_id):
-            raise EvaluationNotApplicableError(run_id)
+            raise EvaluationNotApplicableError(run_id, WATCH_NOT_REVIEWED)
+        status = await self._repository.run_status(run_id)
+        if status is None:
+            raise RunNotFoundError(run_id)
+        if status != RunStatus.COMPLETED:
+            raise EvaluationNotApplicableError(run_id, UNFINISHED_NOT_REVIEWED)
         evaluation = await self._repository.create(
             run_id, operator_question=operator_question
         )

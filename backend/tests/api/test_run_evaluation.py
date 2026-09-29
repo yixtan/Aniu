@@ -225,3 +225,45 @@ async def test_a_watch_record_is_refused_with_a_reason(
     assert "盯盘记录不做独立评估" in response.text
     rows = (await session.execute(RunEvaluationModel.__table__.select())).all()
     assert rows == []
+
+
+@pytest.mark.asyncio
+async def test_an_analysis_that_did_not_finish_is_refused(
+    api_client: AsyncClient, session
+) -> None:
+    """The review reads the report a run writes at its end.
+
+    The 14:15 analysis on 2026-09-29 was cut off two minutes in and wrote
+    none, yet the page offered to review it.
+    """
+
+    failed_id = 20260929109
+    session.add(
+        StrategyRunModel(
+            id=failed_id,
+            trigger_source="SCHEDULED",
+            status="FAILED",
+            current_state="Run",
+            snapshot_json={},
+            trace_json={},
+            summary_render_mode="markdown",
+            failure_reason="peer closed connection (incomplete chunked read)",
+            started_at="2026-09-29T06:15:00+00:00",
+            completed_at="2026-09-29T06:17:24+00:00",
+        )
+    )
+    await session.commit()
+
+    response = await api_client.post(f"/api/aniu/runs/{failed_id}/evaluation")
+
+    assert response.status_code == 400
+    assert "只有正常完成的操盘才做独立评估" in response.text
+    rows = (await session.execute(RunEvaluationModel.__table__.select())).all()
+    assert rows == []
+
+
+@pytest.mark.asyncio
+async def test_a_run_that_does_not_exist_is_not_found(api_client: AsyncClient) -> None:
+    response = await api_client.post("/api/aniu/runs/20260929199/evaluation")
+
+    assert response.status_code == 404

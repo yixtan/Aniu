@@ -33,6 +33,10 @@ class EvaluationRepositoryPort(Protocol):
 
     async def save(self, evaluation: Evaluation) -> Evaluation: ...
 
+    async def run_status(self, run_id: int) -> str | None:
+        """The reviewed run's status, or None when there is no such run."""
+        ...
+
 
 class EvaluatorPort(Protocol):
     async def evaluate(

@@ -168,10 +168,12 @@ export function StageTimeline({
       .filter(Boolean)
       .join("\n\n") || (run.summary_render_mode === "html" ? "" : finalReportContent);
   const failureReason = recordedFailureReason || "任务执行失败，但没有记录具体失败原因。";
-  // Only an analysis is reviewed. A watch forms no view of its own; it carries
-  // out conditions an analysis wrote, and it has no Run stage whose report the
-  // review would read. The server refuses a watch as well.
-  const reviewable = runStage !== undefined;
+  // Only an analysis that finished is reviewed; the server refuses the rest.
+  // A watch forms no view of its own: it carries out conditions an analysis
+  // wrote, and has no Run stage whose report the review reads. An analysis
+  // that failed or was stopped wrote no report — the 14:15 run on 2026-09-29
+  // was cut off two minutes in and was still offered a review.
+  const reviewable = runStage !== undefined && run.status === "COMPLETED";
 
   return (
     <>
@@ -235,14 +237,9 @@ export function StageTimeline({
 
       {isFailed ? (
         <section className="px-2 pt-4 pb-3">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-foreground shrink-0 font-sans text-base font-semibold tracking-[-0.01em]">
-              最终运行报告
-            </h2>
-            {/* A failed analysis can be reviewed too; the review reads the
-                account's orders and fills as well as the report. */}
-            {reviewable ? <EvaluationButton runId={run.run_id} /> : null}
-          </div>
+          <h2 className="text-foreground mb-3 font-sans text-base font-semibold tracking-[-0.01em]">
+            最终运行报告
+          </h2>
           <div
             role="alert"
             aria-label="失败原因"
