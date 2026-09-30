@@ -15,6 +15,7 @@ the way httpx reports it.
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import AsyncIterator
 
 import httpx
@@ -24,6 +25,11 @@ from backend.agent.errors import AgentIntegrationError
 from backend.agent.kernel.context import AgentContext
 from backend.agent.kernel.llm_runtime import generate_tool_loop_response
 from backend.agent.kernel.runtime_config import LlmRuntimeConfig
+from backend.infra.observability.log_config import (
+    LOG_RECORD_BUILTINS,
+    STRUCTURED_FIELDS,
+    StructuredJsonFormatter,
+)
 from backend.llm import (
     Failed,
     LLMClient,
@@ -162,4 +168,43 @@ async def test_a_reply_cut_off_every_time_still_fails_after_three_attempts() -> 
         )
 
     assert len(calls) == 3
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_every_field_a_model_call_logs_reaches_the_log(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The log keeps only the fields it lists and drops the rest silently.
+
+    `cut_off_midway` was added to the retry log without being listed, so on
+    2026-09-30, the first time a reply was cut off and retried, the log could
+    not say that it had been cut off.
+    """
+
+    client, _ = _deepseek(cut_offs=1)
+    context, _ = _context(client)
+
+    with caplog.at_level(logging.INFO, logger="backend.agent.kernel.llm_runtime"):
+        await generate_tool_loop_response(
+            context,
+            label="Run",
+            messages=[{"role": "user", "content": "请分析"}],
+            tools=[],
+            llm_client=client,
+        )
+
+    records = [
+        r for r in caplog.records if r.name == "backend.agent.kernel.llm_runtime"
+    ]
+    assert records
+    for record in records:
+        extra = set(record.__dict__) - LOG_RECORD_BUILTINS - {"message", "asctime"}
+        assert extra <= set(STRUCTURED_FIELDS), (
+            record.getMessage(),
+            sorted(extra - set(STRUCTURED_FIELDS)),
+        )
+    retry = next(r for r in records if r.getMessage() == "llm_call_retry")
+    logged = json.loads(StructuredJsonFormatter().format(retry))
+    assert logged["cut_off_midway"] is True
     await client.aclose()
