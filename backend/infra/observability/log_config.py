@@ -70,11 +70,20 @@ STRUCTURED_FIELDS = (
     "model",
     "protocol",
     "llm_mode",
+    # Which agent made a model call (Run, Watch, Evaluate, Draft…). Logged by
+    # the runtime from the start and dropped here until 2026-09-30, so a line
+    # could not say which stage it belonged to.
+    "agent_label",
     "duration_ms",
     "error_code",
     "attempt",
     "max_attempts",
     "retry_count",
+    # Whether a failed model call broke off after its reply had begun. Such a
+    # call is retried only by the tool loop; without this field in the log,
+    # a mid-reply retry reads the same as one for a connection that never
+    # opened. It was missing on 2026-09-30, the day #112 first fired.
+    "cut_off_midway",
     "input_bytes",
     "output_bytes",
     "system_prompt_bytes",
@@ -83,6 +92,10 @@ STRUCTURED_FIELDS = (
     "tool_definition_count",
     "tool_call_count",
     "max_output_tokens",
+    # The estimate taken before the call and the output cap asked for before
+    # clamping, beside what the provider billed and the cap actually sent.
+    "estimated_input_tokens",
+    "requested_max_output_tokens",
     # What the provider billed, as opposed to what we guessed. Absent when the
     # endpoint reports no usage, which is itself the thing worth seeing.
     "usage_input_tokens",
