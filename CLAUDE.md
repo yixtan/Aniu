@@ -165,7 +165,7 @@ API 请求模型 → 域模型（含 as_dict / from_mapping）→ DTO → API �
 
 **切分支前先停掉前后端。** 带 `--reload` 的服务会跟着分支切换加载/丢失文件，切到不含某模块的分支时后端会因为 import 失败而起不来。同步上游的完整顺序是：停服务 → `git checkout main` → 同步 → 切回功能分支 → 重启。
 
-**后端日志在 `.aniu/local/backend.log`。** 如果用的是自己写的前台启动脚本，注意它是用 `>` 还是 `>>` 重定向——用 `>` 的话每次重启都会清空日志，排查历史问题前先确认日志还在。
+**后端日志在 `.aniu/local/backend.log`。** 用 `./start.sh` 启动时这个文件由后端自己写：满 10 MB 轮转、保留 5 份，重启不清空。`start.sh` 不带 `--reload`（`--reload` 下崩溃的是子进程，launchd 看不见），所以**拉代码后要 `./start.sh restart` 才生效**。自己写前台启动脚本的话，别用 `>` 重定向，那样每次重启都会清空日志。
 
 **日志脱敏有边界**（[`infra/observability/log_config.py`](backend/infra/observability/log_config.py)）：
 

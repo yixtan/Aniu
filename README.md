@@ -180,6 +180,35 @@ ANIU_ENABLE_SCHEDULER=1 ./install.sh
 
 > 首次设置身份只允许来自本机回环地址。局域网部署请在启动前通过 <code>ANIU_AUTH_TOKEN</code> 预先设置 Token。
 
+### macOS 后台运行
+
+<code>./install.sh</code> 在前台运行，关掉终端服务就停了。在 macOS 上装好之后，可以改用 <code>./start.sh</code>：它把 Aniu 交给系统自带的 launchd 在后台运行，启动完成后就可以关闭终端。
+
+```bash
+# 第一次：安装依赖并构建前端，看到 Aniu is running 后按 Ctrl+C
+./install.sh
+
+# 之后：后台启动，打印访问地址后自动返回
+./start.sh
+```
+
+| 命令 | 作用 |
+| --- | --- |
+| <code>./start.sh</code> | 后台启动，确认就绪后打印访问地址并退出，之后可以关闭终端 |
+| <code>./start.sh stop</code> | 停止 |
+| <code>./start.sh restart</code> | 重启（更新代码后用） |
+| <code>./start.sh status</code> | 查看是否在运行、运行了多久、日志在哪 |
+| <code>./start.sh logs</code> | 实时查看日志（北京时间），<code>Ctrl+C</code> 只退出查看，不会停止服务 |
+| <code>./start.sh dev</code> | 临时启动前端开发服务器 <http://localhost:5173>，<code>Ctrl+C</code> 结束 |
+
+- 访问地址是 <http://localhost:8000>，后端同时提供已构建的前端页面。
+- 默认开启定时任务。临时关闭：<code>ANIU_ENABLE_SCHEDULER=0 ./start.sh restart</code>。
+- 进程意外退出时，launchd 会在几秒内自动重新启动它。
+- 不会开机自启：重启电脑或注销后，需要再运行一次 <code>./start.sh</code>。
+- 不带 <code>--reload</code>：拉取新代码后要 <code>./start.sh restart</code> 才生效；前端有改动时，先运行 <code>npm --prefix frontend run build</code>。
+- 日志写在 <code>.aniu/local/backend.log</code>，满 10 MB 自动换新文件，最多保留 5 份旧日志，重启不会清空；启动阶段的报错单独记在 <code>.aniu/local/backend-crash.log</code>。
+- 本机装了 Tailscale 时，会自动把本机的 tailnet 域名加入 Host 白名单，手机可以经 <code>tailscale serve</code> 访问；也可以用 <code>ANIU_ALLOWED_HOSTS</code> 自己指定。端口和监听地址可用 <code>ANIU_PORT</code>、<code>ANIU_HOST</code> 覆盖。
+
 ## 本地开发
 
 后端和前端分别运行，适合边改边调试：
@@ -406,6 +435,7 @@ Aniu/
 ├── Dockerfile
 ├── compose.yaml
 ├── install.sh
+├── start.sh          # macOS 后台运行（launchd）
 ├── pyproject.toml
 └── requirements.lock
 ```
