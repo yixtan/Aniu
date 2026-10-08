@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from backend.business.runs.agent_runner import AgentRunnerPort
 from backend.business.runs.execution import RunExecutionContext, RunReport
+from backend.business.runs.memory_ledger import with_memory_ledger
 from backend.business.runs.stages.stage_helpers import (
     directive_payload,
     emit_stage_prompt_prepared,
@@ -136,7 +137,7 @@ class RunStage:
         if not content:
             raise ValueError("run report must not be empty")
         return RunReport(
-            content=content,
+            content=with_memory_ledger(content, result.tool_activity),
             tool_activity=result.tool_activity,
             transcript=result.transcript,
             total_tokens=result.total_tokens,
