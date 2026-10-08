@@ -262,7 +262,7 @@ completed 梦境的那些」，最新的优先。所以：
 **下单 ≠ 成交。** `trade` 工具返回 `orderId` 只代表委托被受理，限价单可能永远不成交。成交只能从 `account_orders_cache` 的 `filled_quantity` 观测，所以：
 
 - 下单/撤单 → 工具调用回调里实时发现
-- 成交 → 账户刷新时 diff（交易时段内每 30 分钟，见 `ACCOUNT_REFRESH_MINUTES`）
+- 成交 → 账户刷新时 diff（交易时段内每 3 分钟，见 `ACCOUNT_REFRESH_MINUTES`）
 
 委托缓存每次刷新删表重建，所以任何「已处理过某笔委托」的状态都不能存那儿，否则每次刷新都会重来一遍。
 
