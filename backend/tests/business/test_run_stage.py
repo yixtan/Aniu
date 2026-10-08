@@ -80,12 +80,40 @@ async def test_run_stage_uses_one_prompt_and_preserves_raw_execution_evidence() 
 
     result = await RunStage().execute(_context(market_open=False), runner)
 
-    assert result.content == "# Final report\n\nNo trade."
+    assert result.content.startswith("# Final report\n\nNo trade.\n\n---\n")
     assert result.tool_activity == activity
     assert result.transcript == transcript
     assert len(runner.prompts) == 1
     assert '"market_session_open":false' in runner.prompts[0]
     assert "最终只输出 Markdown 报告正文" in runner.prompts[0]
+
+
+@pytest.mark.asyncio
+async def test_the_report_ends_with_the_writes_made_not_the_ones_claimed() -> None:
+    # 2026-10-08 13:00: the report said a rule had been folded into id186, and
+    # the run never called memory_write. Its own words stay — they are what the
+    # dream restored the rule from — and the ledger says what really happened.
+    claim = "- **记忆**：检索后仅一处补写——将正催化口径并入 id186。"
+    runner = RecordingRunner(
+        AgentStageResult(
+            content=f"# Report\n\n{claim}",
+            tool_activity=(
+                {
+                    "tool_name": "memory_read",
+                    "arguments": {"query": "正催化"},
+                    "status": "ok",
+                    "content": {"status": "ok", "items": []},
+                },
+            ),
+        )
+    )
+
+    result = await RunStage().execute(_context(market_open=True), runner)
+
+    assert claim in result.content
+    assert result.content.endswith(
+        "---\n**本次记忆写入**（系统按实际工具调用生成）\n- 本次没有写入记忆。"
+    )
 
 
 @pytest.mark.asyncio

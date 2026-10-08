@@ -235,6 +235,11 @@ README 里「研究、决策、交易、总结等阶段」是旧描述，这四�
 [`memory_agent_tools.py`](backend/infra/integrations/memory_agent_tools.py)）。判断一条经验是重复的还是「尚未复现」，
 需要跨天的视角，而一次运行只看得见自己。工具描述会随权限变化，schema 和运行时双重拦截。
 
+**报告末尾的「本次记忆写入」不是模型写的。** 它由 Run 阶段按这次运行实际的 `memory_write`
+调用生成（[`memory_ledger.py`](backend/business/runs/memory_ledger.py)），接在模型的报告后面，
+Summary、梦境、独立评估读到的都是带它的版本。模型自己那段记忆说明照留：2026-10-08 13:00 的报告
+写着「并入 id186」，却从没调过工具，梦境就是照那段话把规则补回来的。两段对不上时以系统那段为准。
+
 **梦境整理哪一天，看运行记录，不看时钟。** 每次触发挑「最近 3 个有运行的交易日里还没
 completed 梦境的那些」，最新的优先。所以：
 
