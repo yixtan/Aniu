@@ -2886,6 +2886,166 @@
         "title": "RequestEvaluationBody",
         "type": "object"
       },
+      "ReturnCurveDayResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "benchmark_close": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Benchmark Close"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "fills": {
+            "items": {
+              "$ref": "#/components/schemas/ReturnCurveFillResponse"
+            },
+            "title": "Fills",
+            "type": "array"
+          },
+          "is_close": {
+            "title": "Is Close",
+            "type": "boolean"
+          },
+          "market_value": {
+            "title": "Market Value",
+            "type": "number"
+          },
+          "source": {
+            "enum": [
+              "recorded",
+              "reconstructed"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "total_asset": {
+            "title": "Total Asset",
+            "type": "number"
+          }
+        },
+        "required": [
+          "date",
+          "total_asset",
+          "market_value",
+          "source",
+          "is_close",
+          "fills"
+        ],
+        "title": "ReturnCurveDayResponse",
+        "type": "object"
+      },
+      "ReturnCurveFillResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "direction": {
+            "title": "Direction",
+            "type": "string"
+          },
+          "price": {
+            "title": "Price",
+            "type": "number"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "stock_name": {
+            "title": "Stock Name",
+            "type": "string"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "stock_name",
+          "direction",
+          "quantity",
+          "price"
+        ],
+        "title": "ReturnCurveFillResponse",
+        "type": "object"
+      },
+      "ReturnCurveResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "base_benchmark_close": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Benchmark Close"
+          },
+          "base_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Date"
+          },
+          "benchmark_name": {
+            "title": "Benchmark Name",
+            "type": "string"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/ReturnCurveDayResponse"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "initial_capital": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Initial Capital"
+          },
+          "open_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Date"
+          }
+        },
+        "required": [
+          "benchmark_name",
+          "days"
+        ],
+        "title": "ReturnCurveResponse",
+        "type": "object"
+      },
       "RunDayResponse": {
         "additionalProperties": false,
         "description": "One day that produced runs, counted by task.",
@@ -7032,6 +7192,52 @@
         "summary": "Close Finding",
         "tags": [
           "OpenFindings"
+        ]
+      }
+    },
+    "/api/aniu/performance/return-curve": {
+      "get": {
+        "operationId": "get_return_curve_api_aniu_performance_return_curve_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnCurveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request forbidden"
+          }
+        },
+        "security": [
+          {
+            "AniuSessionCookie": []
+          }
+        ],
+        "summary": "Get Return Curve",
+        "tags": [
+          "Performance"
         ]
       }
     },

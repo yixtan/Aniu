@@ -1,7 +1,9 @@
 """Repository exports."""
 
 from backend.infra.repositories.account_cache_repo import AccountCacheRepository
+from backend.infra.repositories.account_facts_repo import AccountFactsRepository
 from backend.infra.repositories.audit_log_repo import AuditLogRepository, AuditRecord
+from backend.infra.repositories.benchmark_close_repo import BenchmarkCloseRepository
 from backend.infra.repositories.daily_equity_repo import DailyEquityRepository
 from backend.infra.repositories.fill_record_repo import (
     FillRecordRepository,
@@ -32,8 +34,10 @@ from backend.infra.repositories.watchlist_repo import WatchlistRepository
 
 __all__ = [
     "AccountCacheRepository",
+    "AccountFactsRepository",
     "AuditLogRepository",
     "AuditRecord",
+    "BenchmarkCloseRepository",
     "DailyEquityRepository",
     "FillRecordRepository",
     "MemoryDreamRepository",

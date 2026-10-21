@@ -32,6 +32,7 @@ from backend.api.routes import (
     memory_dreams,
     notifications,
     open_findings,
+    performance,
     report_email,
     runs,
     schedules,
@@ -503,6 +504,7 @@ def create_app(config: RuntimeConfig | None = None) -> FastAPI:
     application.include_router(evaluation.router)
     application.include_router(open_findings.router)
     application.include_router(account.router)
+    application.include_router(performance.router)
     application.include_router(schedules.router)
     application.include_router(settings.router)
     application.include_router(memories.router)

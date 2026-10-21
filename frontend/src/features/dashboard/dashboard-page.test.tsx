@@ -15,6 +15,8 @@ const api = vi.hoisted(() => ({
   // The header carries the away-mode switch, which reads its own state.
   getAwayMode: vi.fn(),
   setAwayMode: vi.fn(),
+  // The account tab carries the return curve, which reads its own data.
+  getReturnCurve: vi.fn(),
 }));
 
 vi.mock("@/lib/api", () => api);
@@ -134,6 +136,14 @@ function LocationDisplay() {
 }
 
 function renderPage({ mxApiKeyConfigured = true } = {}) {
+  api.getReturnCurve.mockResolvedValue({
+    benchmark_name: "沪深300",
+    initial_capital: 100000,
+    open_date: "2026-07-01",
+    base_date: "2026-06-30",
+    base_benchmark_close: 4000,
+    days: [],
+  });
   api.getAwayMode.mockResolvedValue({
     enabled: false,
     active_date: null,
