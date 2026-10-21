@@ -24,7 +24,11 @@ class EquityRecordingStatusPort(Protocol):
     async def recording_status(self) -> EquityRecordingStatus | None: ...
 
 
-class DailyEquityRepositoryPort(DailyEquityRecorderPort, Protocol):
+class DailyEquityRepositoryPort(Protocol):
+    """Transaction-scoped repository; its caller owns commit or rollback."""
+
+    async def record_day(self, equity: DailyEquity) -> None: ...
+
     async def list_days(self) -> list[DailyEquity]: ...
 
 
