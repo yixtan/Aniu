@@ -265,6 +265,31 @@ class AccountOrderCacheModel(Base):
     updated_at: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class AccountDailyEquityModel(Base):
+    """The account's value at one trading day's close, one row per day.
+
+    Every other account table holds only the latest refresh and is rebuilt by
+    the next one, so without this nothing remembers what the account was worth
+    yesterday — and a return curve is nothing but that, day after day.
+    """
+
+    __tablename__ = "account_daily_equity"
+    __table_args__ = (
+        CheckConstraint(
+            "source IN ('recorded', 'reconstructed')",
+            name="ck_account_daily_equity_source",
+        ),
+    )
+
+    trade_date: Mapped[str] = mapped_column(Text, primary_key=True)
+    total_asset: Mapped[float] = mapped_column(Float, nullable=False)
+    available_cash: Mapped[float] = mapped_column(Float, nullable=False)
+    frozen_cash: Mapped[float] = mapped_column(Float, nullable=False)
+    market_value: Mapped[float] = mapped_column(Float, nullable=False)
+    captured_at: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[str] = mapped_column(Text, nullable=False)
+
+
 class StrategyRunModel(Base):
     """Strategy run header row."""
 
