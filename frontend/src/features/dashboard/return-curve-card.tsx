@@ -87,17 +87,39 @@ export function ReturnCurveCard() {
       <CardContent>
         {query.isPending ? (
           <p className="text-muted-foreground py-10 text-center text-sm">正在加载收益曲线…</p>
-        ) : query.isError ? (
+        ) : query.isError && query.data === undefined ? (
           <div className="flex flex-col items-center gap-2 py-8 text-sm">
             <p className="text-muted-foreground">
               收益曲线加载失败：{getErrorMessage(query.error)}
             </p>
+            {query.error && "status" in query.error && query.error.status === 404 ? (
+              <p className="text-muted-foreground text-center text-xs">
+                当前后端未提供收益曲线接口，请确认前后端已更新到同一版本并重启后端。
+              </p>
+            ) : null}
             <Button type="button" size="xs" variant="outline" onClick={() => void query.refetch()}>
               重试
             </Button>
           </div>
         ) : (
-          <ReturnCurveBody data={query.data} range={range} />
+          <>
+            {query.isError ? (
+              <div role="alert" className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+                <p className="text-muted-foreground">
+                  正在显示上次成功加载的收益曲线；刷新失败：{getErrorMessage(query.error)}
+                </p>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="outline"
+                  onClick={() => void query.refetch()}
+                >
+                  重试
+                </Button>
+              </div>
+            ) : null}
+            <ReturnCurveBody data={query.data} range={range} />
+          </>
         )}
       </CardContent>
     </Card>
@@ -121,6 +143,8 @@ function ReturnCurveBody({ data, range }: { data: ReturnCurveData; range: CurveR
   const averagePosition =
     points.reduce((total, point) => total + point.positionRatio, 0) / points.length;
   const hasReconstructed = points.some((point) => point.reconstructed);
+  const hasBenchmark = points.some((point) => point.benchmarkReturn !== null);
+  const hasBenchmarkGaps = points.some((point) => point.benchmarkReturn === null);
 
   return (
     <div className="flex flex-col gap-4">
@@ -129,18 +153,22 @@ function ReturnCurveBody({ data, range }: { data: ReturnCurveData; range: CurveR
           label="累计收益"
           value={formatPercent(summary.accountReturn)}
           valueClassName={changeTone(summary.accountReturn)}
-          hint={`${shortDate(first.date)} 起`}
+          hint={`${shortDate(summary.startDate ?? first.date)} 起`}
         />
         <Stat
           label={`同期${data.benchmark_name}`}
           value={formatPercent(summary.benchmarkReturn)}
           valueClassName={changeTone(summary.benchmarkReturn)}
-          hint="同一段时间的指数涨跌"
+          hint={
+            summary.benchmarkDate
+              ? `截至 ${shortDate(summary.benchmarkDate)} 收盘`
+              : "暂无可对齐的指数数据"
+          }
         />
         <Stat
           label="最大回撤"
           value={formatPercent(summary.maxDrawdown)}
-          hint="从最高点往下跌得最多的一次"
+          hint={points.length < 2 ? "至少需要两个交易日的记录" : "仅按已有净值记录计算"}
         />
         <Stat
           label="当前仓位"
@@ -150,6 +178,9 @@ function ReturnCurveBody({ data, range }: { data: ReturnCurveData; range: CurveR
       </div>
       <CurveChart points={points} benchmarkName={data.benchmark_name} />
       <div className="text-muted-foreground space-y-1 text-xs">
+        {data.open_date && data.days[0] && data.days[0].date > data.open_date ? (
+          <p>首条净值记录晚于开户日期，累计收益仍从开户资金计算；此前的变化无法逐日展示。</p>
+        ) : null}
         {averagePosition < LOW_POSITION ? (
           <p>
             这段时间平均仓位约 {plainPercent(averagePosition)}
@@ -157,7 +188,12 @@ function ReturnCurveBody({ data, range }: { data: ReturnCurveData; range: CurveR
           </p>
         ) : null}
         {hasReconstructed ? <p>浅色那段是事后用成交记录推算的，不是当天实时记下的。</p> : null}
-        {!last.isClose ? <p>最后一个点是盘中数值，收盘后会更新。</p> : null}
+        {!hasBenchmark ? (
+          <p>暂缺可对齐的指数收盘数据，暂不显示指数收益，账户曲线仍可查看。</p>
+        ) : hasBenchmarkGaps ? (
+          <p>部分日期缺少指数收盘数据，指数曲线在缺失处断开；指数收益截至上方标注的日期。</p>
+        ) : null}
+        {!last.isClose ? <p>最后一个点尚未记录到收盘，显示的是当天最后一次记录。</p> : null}
       </div>
     </div>
   );
@@ -339,6 +375,16 @@ function CurveChart({ points, benchmarkName }: { points: CurvePoint[]; benchmark
             />
           ))}
           <g className="text-sky-600">
+            {points.length === 1 && points[0] && points[0].fills.length === 0 ? (
+              <circle
+                cx={x(0)}
+                cy={y(points[0].accountReturn)}
+                r={3.5}
+                className="fill-background"
+                stroke="currentColor"
+                strokeWidth={2}
+              />
+            ) : null}
             {reconstructedRuns.map((run) => (
               <path
                 key={`r${run[0]}`}
@@ -461,7 +507,7 @@ function DayTooltip({
       </p>
       <TooltipRow label="总资产" value={formatCurrency(point.totalAsset)} />
       <TooltipRow
-        label="当日盈亏"
+        label="较上一记录盈亏"
         value={formatCurrency(point.dayProfit)}
         valueClassName={changeTone(point.dayProfit)}
       />

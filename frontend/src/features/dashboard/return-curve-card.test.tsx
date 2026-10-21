@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ReturnCurveData } from "./return-curve";
 import { ReturnCurveCard } from "./return-curve-card";
+import { accountKeys } from "./query-keys";
 
 const api = vi.hoisted(() => ({ getReturnCurve: vi.fn() }));
 vi.mock("@/lib/api", () => api);
@@ -52,8 +53,9 @@ const curve: ReturnCurveData = {
   ],
 };
 
-function renderCard() {
+function renderCard(cached?: ReturnCurveData) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  if (cached) client.setQueryData(accountKeys.returnCurve(), cached);
   return render(
     <QueryClientProvider client={client}>
       <ReturnCurveCard />
@@ -76,6 +78,7 @@ describe("ReturnCurveCard", () => {
     // The last day's index close is not settled yet; the latest one is 10/8.
     expect(screen.getByText("同期沪深300")).toBeInTheDocument();
     expect(screen.getByText("+2.50%")).toBeInTheDocument();
+    expect(screen.getByText("截至 10/8 收盘")).toBeInTheDocument();
     expect(screen.getByText("-2.94%")).toBeInTheDocument();
   });
 
@@ -98,7 +101,10 @@ describe("ReturnCurveCard", () => {
 
     expect(await screen.findByText(/大部分资金是现金/)).toBeInTheDocument();
     expect(screen.getByText(/事后用成交记录推算的/)).toBeInTheDocument();
-    expect(screen.getByText("最后一个点是盘中数值，收盘后会更新。")).toBeInTheDocument();
+    expect(
+      screen.getByText("最后一个点尚未记录到收盘，显示的是当天最后一次记录。"),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/部分日期缺少指数收盘数据/)).toBeInTheDocument();
   });
 
   it("lets the keyboard step through days and shows that day's fills", async () => {
@@ -131,5 +137,46 @@ describe("ReturnCurveCard", () => {
 
     expect(await screen.findByText(/收益曲线加载失败/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "重试" })).toBeInTheDocument();
+  });
+
+  it("explains a missing endpoint and retries successfully", async () => {
+    api.getReturnCurve
+      .mockRejectedValueOnce(Object.assign(new Error("Not Found"), { status: 404 }))
+      .mockResolvedValueOnce(curve);
+    const user = userEvent.setup();
+    renderCard();
+
+    expect(await screen.findByText(/当前后端未提供收益曲线接口/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "重试" }));
+
+    expect(await screen.findByText("累计收益")).toBeInTheDocument();
+    expect(screen.queryByText(/当前后端未提供收益曲线接口/)).not.toBeInTheDocument();
+  });
+
+  it("keeps account returns visible when no comparable index base exists", async () => {
+    api.getReturnCurve.mockResolvedValueOnce({ ...curve, base_benchmark_close: null });
+    renderCard();
+
+    expect(await screen.findByText(/暂缺可对齐的指数收盘数据/)).toBeInTheDocument();
+    expect(screen.getByText("+1.00%")).toBeInTheDocument();
+    expect(screen.queryByText("+2.50%")).not.toBeInTheDocument();
+  });
+
+  it("keeps the last successful curve visible when a background refresh fails", async () => {
+    api.getReturnCurve.mockRejectedValueOnce(new Error("网络错误"));
+    renderCard(curve);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("刷新失败：网络错误");
+    expect(screen.getByText("+1.00%")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /累计收益曲线/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "重试" })).toBeInTheDocument();
+  });
+
+  it("explains late recording while showing the opening date as the return basis", async () => {
+    api.getReturnCurve.mockResolvedValueOnce({ ...curve, days: curve.days.slice(-1) });
+    renderCard();
+
+    expect(await screen.findByText(/首条净值记录晚于开户日期/)).toBeInTheDocument();
+    expect(screen.getByText("8/28 起")).toBeInTheDocument();
   });
 });

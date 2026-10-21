@@ -18,7 +18,7 @@ export type CurvePoint = {
   /** Change since the start of the range, as a ratio: -0.031 is -3.1%. */
   accountReturn: number;
   benchmarkReturn: number | null;
-  /** Change since the previous close, in yuan. */
+  /** Change since the previous recorded value, in yuan. */
   dayProfit: number;
   /** Holdings as a share of the account. */
   positionRatio: number;
@@ -28,8 +28,10 @@ export type CurvePoint = {
 };
 
 export type CurveSummary = {
+  startDate: string | null;
   accountReturn: number | null;
   benchmarkReturn: number | null;
+  benchmarkDate: string | null;
   /** The deepest fall from a previous high inside the range, as a ratio ≤ 0. */
   maxDrawdown: number | null;
   positionRatio: number | null;
@@ -38,15 +40,19 @@ export type CurveSummary = {
 export type Curve = { points: CurvePoint[]; summary: CurveSummary };
 
 const EMPTY_SUMMARY: CurveSummary = {
+  startDate: null,
   accountReturn: null,
   benchmarkReturn: null,
+  benchmarkDate: null,
   maxDrawdown: null,
   positionRatio: null,
 };
 
 function monthsBefore(isoDate: string, months: number) {
   const [year = 1970, month = 1, day = 1] = isoDate.split("-").map(Number);
-  const shifted = new Date(Date.UTC(year, month - 1 - months, day));
+  const shifted = new Date(Date.UTC(year, month - 1 - months, 1));
+  const lastDay = new Date(Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth() + 1, 0));
+  shifted.setUTCDate(Math.min(day, lastDay.getUTCDate()));
   return shifted.toISOString().slice(0, 10);
 }
 
@@ -76,11 +82,9 @@ export function buildCurve(data: ReturnCurveData, range: CurveRange): Curve {
   if (first === undefined) return { points: [], summary: EMPTY_SUMMARY };
 
   const baseAsset = before?.total_asset ?? data.initial_capital ?? first.total_asset;
-  const baseClose =
-    (before ? before.benchmark_close : data.base_benchmark_close) ??
-    inRange.find((day) => day.benchmark_close !== null && day.benchmark_close !== undefined)
-      ?.benchmark_close ??
-    null;
+  // Both lines must share their starting date. Substituting a later index
+  // close would silently measure a different period from the account.
+  const baseClose = (before ? before.benchmark_close : data.base_benchmark_close) ?? null;
 
   let previousAsset = baseAsset;
   let peak = baseAsset;
@@ -109,9 +113,11 @@ export function buildCurve(data: ReturnCurveData, range: CurveRange): Curve {
   return {
     points,
     summary: {
+      startDate: before ? first.date : (data.open_date ?? first.date),
       accountReturn: last?.accountReturn ?? null,
       benchmarkReturn: lastBenchmark?.benchmarkReturn ?? null,
-      maxDrawdown,
+      benchmarkDate: lastBenchmark?.date ?? null,
+      maxDrawdown: points.length < 2 ? null : maxDrawdown,
       positionRatio: last?.positionRatio ?? null,
     },
   };
