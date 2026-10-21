@@ -88,14 +88,17 @@ def to_account_overview_dto(
 ) -> AccountOverviewDTO:
     initial = snapshot.initial_capital
     safe_initial = initial if initial is not None and initial > 0 else None
-    current_net_value = snapshot.net_value
-    if current_net_value is None and safe_initial is not None:
-        current_net_value = snapshot.total_asset / safe_initial
-    total_return_rate = None
-    if current_net_value is not None:
-        total_return_rate = current_net_value - 1.0
-    elif safe_initial is not None:
-        total_return_rate = snapshot.total_profit / safe_initial
+    # The upstream net value is rounded (e.g. 0.968). Derive the displayed
+    # return from the same assets and opening capital as the return curve,
+    # keeping the upstream number separately in `net_value`.
+    current_net_value = (
+        snapshot.total_asset / safe_initial
+        if safe_initial is not None
+        else snapshot.net_value
+    )
+    total_return_rate = (
+        current_net_value - 1.0 if current_net_value is not None else None
+    )
     previous_asset = snapshot.total_asset - snapshot.daily_profit
     if previous_asset <= 0 and safe_initial is not None:
         previous_asset = safe_initial
