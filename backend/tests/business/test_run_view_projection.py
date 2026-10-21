@@ -29,6 +29,30 @@ def _trace_with_steps(steps: list[TraceStep], *, status: str = "running") -> Run
     )
 
 
+def test_an_old_degraded_summary_exposes_its_stored_cause_without_rewriting_it() -> (
+    None
+):
+    trace = RunTrace(
+        stages=[
+            TraceStage(
+                stage_id="summary:na",
+                key="summary",
+                round=None,
+                title="总结",
+                description="",
+                status="degraded",
+                summary="应用重启，保留 Markdown 报告",
+            )
+        ]
+    )
+
+    projected = project_run_trace(trace)
+
+    public_steps = projected["stages"][0]["steps"]  # type: ignore[index]
+    assert public_steps[0]["summary"] == "应用重启，保留 Markdown 报告"
+    assert trace.stages[0].steps == []
+
+
 def test_projection_excludes_prompt_inputs_and_raw_tool_payloads() -> None:
     trace = _trace_with_steps(
         [

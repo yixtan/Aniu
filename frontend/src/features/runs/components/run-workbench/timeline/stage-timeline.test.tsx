@@ -199,6 +199,41 @@ describe("StageTimeline", () => {
     );
 
     expect(screen.getByRole("heading", { name: "Markdown 回退报告" })).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "总结降级提示" })).toHaveTextContent(
+      "运行已完成，已保留 Markdown 报告。",
+    );
+    expect(screen.getByRole("button", { name: "展开阶段" })).toBeInTheDocument();
+    fireEvent.click(screen.getByText("查看降级原因"));
+    expect(screen.getByText("HTML 总结生成失败，已回退 Markdown")).toBeVisible();
+  });
+
+  it("explains old Markdown fallbacks even when detailed reasons were not kept", () => {
+    renderTimeline(makeRun());
+
+    expect(screen.getByRole("status", { name: "总结降级提示" })).toHaveTextContent(
+      "这次运行未记录详细的降级原因。",
+    );
+  });
+
+  it("does not treat an order watch's Markdown report as an HTML failure", () => {
+    renderTimeline(
+      makeRun({
+        trace: {
+          schema_version: 3,
+          event_seq: 1,
+          current_stage_id: null,
+          stages: [{ ...runStage, key: "watch" }],
+        },
+      }),
+    );
+
+    expect(screen.queryByRole("status", { name: "总结降级提示" })).not.toBeInTheDocument();
+  });
+
+  it("does not show a degradation warning while HTML is still being rendered", () => {
+    renderTimeline(makeRun({ status: "RUNNING" }));
+
+    expect(screen.queryByRole("status", { name: "总结降级提示" })).not.toBeInTheDocument();
   });
 
   it("uses warning styling for market-session blocks and distinct source badges", () => {

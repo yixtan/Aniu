@@ -199,6 +199,11 @@ async def test_a_run_parked_in_summary_keeps_its_report_instead_of_failing(
         if stage.key == "summary"
     )
     assert summary_stage.status == "degraded"
+    fallback = next(
+        step for step in summary_stage.steps if step.step_id == "markdown_fallback"
+    )
+    assert fallback.summary is not None
+    assert "应用重启" in fallback.summary
 
 
 @pytest.mark.asyncio

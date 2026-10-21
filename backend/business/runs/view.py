@@ -235,9 +235,31 @@ def _project_step(step: TraceStep) -> dict[str, object]:
 
 
 def _project_stage_steps(stage: TraceStage) -> list[dict[str, object]]:
-    return [
+    steps = [
         _project_step(step) for step in stage.steps if step.type in PUBLIC_STEP_TYPES
     ]
+    # Older restart recovery kept the cause only on the stage, which the
+    # public contract omits. Project it without mutating the historical trace.
+    if (
+        stage.key == "summary"
+        and stage.status == "degraded"
+        and stage.summary
+        and not any(step["step_id"] == "markdown_fallback" for step in steps)
+    ):
+        steps.append(
+            _project_step(
+                TraceStep(
+                    step_id="markdown_fallback",
+                    type="status",
+                    title="回退 Markdown",
+                    status="completed",
+                    summary=stage.summary,
+                    started_at=stage.started_at,
+                    ended_at=stage.ended_at,
+                )
+            )
+        )
+    return steps
 
 
 def project_run_trace(trace: RunTrace) -> dict[str, object]:

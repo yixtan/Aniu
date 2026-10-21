@@ -98,9 +98,9 @@ npm --prefix frontend run api:generate
 
 **模型的「最大输出」不能设成等于上下文窗口。** Summary 阶段的输入预算是
 `上下文窗口 − 最大输出 − 2000`（[`stages/summary_stage.py`](backend/business/runs/stages/summary_stage.py)）。两者相等时预算为负，
-`build_summary_stage_payload` 抛出 `summary input budget is empty`，编排器捕获后**静默降级**成
-Markdown：运行仍标记为 COMPLETED，只有 `summary_render_mode` 从 `html` 变成
-`markdown`，页面上看不出任何异常。本仓库曾因此连续 69 次运行都没生成过 HTML 总结。
+`build_summary_stage_payload` 抛出 `summary input budget is empty`，编排器捕获后降级成
+Markdown：运行仍标记为 COMPLETED，`summary_render_mode` 从 `html` 变成
+`markdown`。过去页面没有明显提示；现在最终报告上方会显示降级状态及原因入口。本仓库曾因此连续 69 次运行都没生成过 HTML 总结。
 
 排查方法——正常应为 `html`：
 
@@ -313,6 +313,8 @@ completed 梦境的那些」，最新的优先。所以：
 收益曲线的沪深300 收盘价存在 `benchmark_daily_closes`，**只有出现比已存最新一天更晚的交易日时才去取**——首页每次刷新
 账户都会重新拉曲线，不这样会整天重复下载同一段历史。取的时候从最早那天（开户前一个交易日）一直取到最新，所以事后补出来的
 旧日子也会顺带补上指数；但落在已存最新一天之前、上游当时就没有的空缺不会反复去要。当天的指数收盘 15:30 之后才取。
+
+总结降级不自动重跑交易。新记录的具体原因在 `markdown_fallback` 状态步骤；旧记录若只存在阶段的 `summary` 字段，公开投影补出原因供界面读取，不修改历史原文。盯盘的 Markdown 记录是正常结果，不显示总结降级提示。
 
 **收益总览与曲线必须使用同一口径。** 有有效初始资金时，两者都用 `总资产 / 初始资金 - 1`，不要用平台四舍五入后的净值倒算收益率；原始平台净值仍保留在 `net_value`。没有初始资金时，总览才回退到平台净值。
 
