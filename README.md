@@ -211,6 +211,8 @@ ANIU_ENABLE_SCHEDULER=1 ./install.sh
 
 ## 本地开发
 
+开发约定、架构约束、隔离调试方法和历史故障经验统一维护在 [开发指南](DEVELOPMENT.md)。Codex 与 Claude Code 的项目入口均引用这份指南。
+
 后端和前端分别运行，适合边改边调试：
 
 ```bash
