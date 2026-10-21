@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 
 from backend.api.schemas.common import ApiModel
@@ -26,6 +26,13 @@ class ReturnCurveDayResponse(ApiModel):
     fills: list[ReturnCurveFillResponse]
 
 
+class EquityRecordingStatusResponse(ApiModel):
+    trade_date: date
+    attempted_at: datetime
+    last_success_at: datetime | None
+    error_message: str | None
+
+
 class ReturnCurveResponse(ApiModel):
     benchmark_name: str
     initial_capital: float | None = None
@@ -33,3 +40,4 @@ class ReturnCurveResponse(ApiModel):
     base_date: date | None = None
     base_benchmark_close: float | None = None
     days: list[ReturnCurveDayResponse]
+    recording_status: EquityRecordingStatusResponse | None = None

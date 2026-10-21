@@ -43,6 +43,7 @@ from backend.infra.calendar import (
 from backend.infra.integrations.agent_runner import AgentRunnerFactoryAdapter
 from backend.infra.integrations.agent_runtime import AgentRuntimeFactory
 from backend.infra.integrations.benchmark_history import PublicBenchmarkHistory
+from backend.infra.integrations.daily_equity_recorder import DailyEquityRecorder
 from backend.infra.integrations.dream_agent import DreamAgentRunner
 from backend.infra.integrations.email import ResendReportMailer
 from backend.infra.integrations.email.run_report_query import RunReportQuery
@@ -139,6 +140,14 @@ class AppRuntime:
         repr=False,
     )
     models_dev_catalog: ModelsDevCatalog | None = None
+    daily_equity_recorder: DailyEquityRecorder | None = None
+
+    def require_daily_equity_recorder(self) -> DailyEquityRecorder:
+        if self.daily_equity_recorder is None:
+            self.daily_equity_recorder = DailyEquityRecorder(
+                self.require_session_factory()
+            )
+        return self.daily_equity_recorder
 
     def require_session_factory(self) -> async_sessionmaker[AsyncSession]:
         if self.session_factory is None:
@@ -369,12 +378,13 @@ class AppRuntime:
             trading_calendar=TradingCalendar2026(),
             refresh_gate=self.account_refresh_gate,
             fill_notifier=self.optional_notification_dispatcher(),
-            equity_recorder=DailyEquityRepository(session),
+            equity_recorder=self.require_daily_equity_recorder(),
         )
 
     def performance_service(self, session: AsyncSession) -> PerformanceService:
         return PerformanceService(
             equity_repo=DailyEquityRepository(session),
+            recording_status=self.require_daily_equity_recorder(),
             benchmark_repo=BenchmarkCloseRepository(session),
             benchmark_history=PublicBenchmarkHistory(self.require_public_stock_data()),
             account_facts=AccountFactsRepository(session),

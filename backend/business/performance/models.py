@@ -29,6 +29,14 @@ class DailyEquity:
     source: EquitySource = EquitySource.RECORDED
 
 
+@dataclass(frozen=True, slots=True)
+class EquityRecordingStatus:
+    trade_date: date
+    attempted_at: datetime
+    last_success_at: datetime | None
+    error_message: str | None
+
+
 # The benchmark the curve is drawn against.
 BENCHMARK_SYMBOL = "000300.SH"
 BENCHMARK_NAME = "沪深300"

@@ -43,6 +43,7 @@ from backend.stock_api.mx import MxMoniClient
 
 def _make_runner(session_factory, *, enabled: bool = True) -> JobRunner:
     runtime = AppRuntime(RuntimeConfig())
+    runtime.session_factory = session_factory
     runtime.stream_hub = StreamHub()
     runtime.mx_http_client = httpx.AsyncClient()
     return JobRunner(
