@@ -17,6 +17,7 @@ from backend.business.market import MarketOverviewQueryPort
 from backend.business.memories.service import MemoryService
 from backend.business.notifications.service import NotificationService
 from backend.business.open_findings import OpenFindingService
+from backend.business.performance import PerformanceService
 from backend.business.reports.service import ReportMailService
 from backend.business.runs.service import RunService
 from backend.business.schedules.service import ScheduleAppService
@@ -70,6 +71,8 @@ class ApiRuntimePort(Protocol):
     def dream_query_service(self, session: AsyncSession) -> DreamService: ...
 
     async def account_service(self, session: AsyncSession) -> AccountAppService: ...
+
+    def performance_service(self, session: AsyncSession) -> PerformanceService: ...
 
     def require_public_stock_data(self) -> object: ...
 
@@ -131,6 +134,13 @@ async def get_account_app_service(
     runtime: Annotated[ApiRuntimePort, Depends(get_runtime)],
 ) -> AccountAppService:
     return await runtime.account_service(session)
+
+
+def get_performance_service(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    runtime: Annotated[ApiRuntimePort, Depends(get_runtime)],
+) -> PerformanceService:
+    return runtime.performance_service(session)
 
 
 def get_market_overview_service(

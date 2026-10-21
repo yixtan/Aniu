@@ -29,6 +29,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AwayModeToggle } from "@/features/dashboard/away-mode-toggle";
 import { orderFigures } from "@/features/dashboard/order-figures";
 import { accountKeys } from "@/features/dashboard/query-keys";
+import { ReturnCurveCard } from "@/features/dashboard/return-curve-card";
 import { useRefreshAnimation } from "@/hooks/use-refresh-animation";
 import {
   getAccountDashboard,
@@ -512,6 +513,8 @@ function AccountOverview({
           </Card>
         ))}
       </div>
+
+      <ReturnCurveCard />
 
       {query.isError ? (
         <div

@@ -22,6 +22,7 @@ from backend.business.market import MarketOverviewQueryPort
 from backend.business.memories.service import MemoryService
 from backend.business.notifications.service import NotificationService
 from backend.business.open_findings import OpenFindingService
+from backend.business.performance import PerformanceService
 from backend.business.reports.service import ReportMailService
 from backend.business.runs.abort_registry import ActiveRunAbortRegistry
 from backend.business.runs.executor import RunExecutor
@@ -41,6 +42,7 @@ from backend.infra.calendar import (
 )
 from backend.infra.integrations.agent_runner import AgentRunnerFactoryAdapter
 from backend.infra.integrations.agent_runtime import AgentRuntimeFactory
+from backend.infra.integrations.benchmark_history import PublicBenchmarkHistory
 from backend.infra.integrations.dream_agent import DreamAgentRunner
 from backend.infra.integrations.email import ResendReportMailer
 from backend.infra.integrations.email.run_report_query import RunReportQuery
@@ -59,6 +61,8 @@ from backend.infra.integrations.run_watchlist import RunWatchlistQuery
 from backend.infra.integrations.watchlist_stock_names import QuoteStockNameLookup
 from backend.infra.repositories import (
     AccountCacheRepository,
+    AccountFactsRepository,
+    BenchmarkCloseRepository,
     DailyEquityRepository,
     MemoryDreamRepository,
     MemoryRepository,
@@ -366,6 +370,16 @@ class AppRuntime:
             refresh_gate=self.account_refresh_gate,
             fill_notifier=self.optional_notification_dispatcher(),
             equity_recorder=DailyEquityRepository(session),
+        )
+
+    def performance_service(self, session: AsyncSession) -> PerformanceService:
+        return PerformanceService(
+            equity_repo=DailyEquityRepository(session),
+            benchmark_repo=BenchmarkCloseRepository(session),
+            benchmark_history=PublicBenchmarkHistory(self.require_public_stock_data()),
+            account_facts=AccountFactsRepository(session),
+            trading_calendar=TradingCalendar2026(),
+            committer=session,
         )
 
     def run_service(self, session: AsyncSession) -> RunService:

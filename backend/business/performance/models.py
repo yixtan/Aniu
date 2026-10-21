@@ -27,3 +27,24 @@ class DailyEquity:
     # stopped early and the row is that moment, not the close.
     captured_at: datetime
     source: EquitySource = EquitySource.RECORDED
+
+
+# The benchmark the curve is drawn against.
+BENCHMARK_SYMBOL = "000300.SH"
+BENCHMARK_NAME = "沪深300"
+
+
+@dataclass(frozen=True, slots=True)
+class AccountStart:
+    open_date: date
+    initial_capital: float
+
+
+@dataclass(frozen=True, slots=True)
+class DayFill:
+    trade_date: date
+    symbol: str
+    stock_name: str
+    direction: str
+    quantity: int
+    price: float

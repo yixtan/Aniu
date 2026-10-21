@@ -277,6 +277,11 @@ export async function getAccountDashboard() {
   return getResponseData(result);
 }
 
+export async function getReturnCurve() {
+  const result = await openapiClient.GET("/api/aniu/performance/return-curve");
+  return getResponseData(result);
+}
+
 export async function refreshAccountCache() {
   const result = await openapiClient.POST("/api/aniu/account/refresh");
   return getResponseData(result);

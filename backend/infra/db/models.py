@@ -290,6 +290,17 @@ class AccountDailyEquityModel(Base):
     source: Mapped[str] = mapped_column(Text, nullable=False)
 
 
+class BenchmarkDailyCloseModel(Base):
+    """An index's settled daily close, kept so the curve asks upstream once."""
+
+    __tablename__ = "benchmark_daily_closes"
+
+    symbol: Mapped[str] = mapped_column(Text, primary_key=True)
+    trade_date: Mapped[str] = mapped_column(Text, primary_key=True)
+    close: Mapped[float] = mapped_column(Float, nullable=False)
+    fetched_at: Mapped[str] = mapped_column(Text, nullable=False, default=utc_now_iso)
+
+
 class StrategyRunModel(Base):
     """Strategy run header row."""
 

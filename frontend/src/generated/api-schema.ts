@@ -372,6 +372,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/aniu/performance/return-curve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Return Curve */
+        get: operations["get_return_curve_api_aniu_performance_return_curve_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/aniu/report-email": {
         parameters: {
             query?: never;
@@ -1938,6 +1955,57 @@ export interface components {
              * @default
              */
             operator_question: string;
+        };
+        /** ReturnCurveDayResponse */
+        ReturnCurveDayResponse: {
+            /** Benchmark Close */
+            benchmark_close?: number | null;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Fills */
+            fills: components["schemas"]["ReturnCurveFillResponse"][];
+            /** Is Close */
+            is_close: boolean;
+            /** Market Value */
+            market_value: number;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "recorded" | "reconstructed";
+            /** Total Asset */
+            total_asset: number;
+        };
+        /** ReturnCurveFillResponse */
+        ReturnCurveFillResponse: {
+            /** Direction */
+            direction: string;
+            /** Price */
+            price: number;
+            /** Quantity */
+            quantity: number;
+            /** Stock Name */
+            stock_name: string;
+            /** Symbol */
+            symbol: string;
+        };
+        /** ReturnCurveResponse */
+        ReturnCurveResponse: {
+            /** Base Benchmark Close */
+            base_benchmark_close?: number | null;
+            /** Base Date */
+            base_date?: string | null;
+            /** Benchmark Name */
+            benchmark_name: string;
+            /** Days */
+            days: components["schemas"]["ReturnCurveDayResponse"][];
+            /** Initial Capital */
+            initial_capital?: number | null;
+            /** Open Date */
+            open_date?: string | null;
         };
         /**
          * RunDayResponse
@@ -4219,6 +4287,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_return_curve_api_aniu_performance_return_curve_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReturnCurveResponse"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
