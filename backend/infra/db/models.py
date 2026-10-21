@@ -290,6 +290,18 @@ class AccountDailyEquityModel(Base):
     source: Mapped[str] = mapped_column(Text, nullable=False)
 
 
+class EquityRecordingStatusModel(Base):
+    """Latest result of the automatic daily-equity write, separate from cache."""
+
+    __tablename__ = "equity_recording_status"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    trade_date: Mapped[str] = mapped_column(Text, nullable=False)
+    attempted_at: Mapped[str] = mapped_column(Text, nullable=False)
+    last_success_at: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class BenchmarkDailyCloseModel(Base):
     """An index's settled daily close, kept so the curve asks upstream once."""
 

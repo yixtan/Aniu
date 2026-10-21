@@ -16,6 +16,7 @@ import {
 import { getReturnCurve } from "@/lib/api";
 import { formatCurrency, formatNumber, formatPercent, getErrorMessage } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { EquityRecordingNotice } from "./equity-recording-notice";
 
 const CHART_HEIGHT = 200;
 const BARS_HEIGHT = 44;
@@ -103,6 +104,7 @@ export function ReturnCurveCard() {
           </div>
         ) : (
           <>
+            <EquityRecordingNotice status={query.data.recording_status} />
             {query.isError ? (
               <div role="alert" className="mb-3 flex flex-wrap items-center gap-2 text-sm">
                 <p className="text-muted-foreground">

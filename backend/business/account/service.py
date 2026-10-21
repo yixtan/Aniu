@@ -136,7 +136,7 @@ class AccountAppService:
         )
         await self._commit(execution_guard=execution_guard)
         await self._announce_fills(orders)
-        await self._record_daily_equity(snapshot, execution_guard=execution_guard)
+        await self._record_daily_equity(snapshot)
         return to_account_refresh_result_dto(
             state=state,
             status="refreshed",
@@ -173,8 +173,6 @@ class AccountAppService:
     async def _record_daily_equity(
         self,
         snapshot: AccountSnapshot,
-        *,
-        execution_guard: ExecutionGuard | None,
     ) -> None:
         """Keep today's value, overwritten until the close leaves the last one.
 
@@ -199,7 +197,6 @@ class AccountAppService:
                     captured_at=snapshot.captured_at,
                 )
             )
-            await self._commit(execution_guard=execution_guard)
         except Exception:
             logger.warning("daily equity was not recorded", exc_info=True)
 

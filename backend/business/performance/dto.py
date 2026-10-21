@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 
+from backend.business.performance.models import EquityRecordingStatus
+
 
 @dataclass(frozen=True, slots=True)
 class ReturnCurveFillDTO:
@@ -37,3 +39,4 @@ class ReturnCurveDTO:
     base_date: date | None
     base_benchmark_close: float | None
     days: list[ReturnCurveDayDTO]
+    recording_status: EquityRecordingStatus | None = None

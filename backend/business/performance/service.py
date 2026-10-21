@@ -24,6 +24,7 @@ from backend.business.performance.ports import (
     BenchmarkCloseRepositoryPort,
     BenchmarkHistoryPort,
     DailyEquityRepositoryPort,
+    EquityRecordingStatusPort,
     TradingCalendarPort,
 )
 from backend.business.shared import CommitterPort
@@ -48,6 +49,7 @@ class PerformanceService:
         trading_calendar: TradingCalendarPort,
         committer: CommitterPort | None = None,
         clock: Callable[[], datetime] | None = None,
+        recording_status: EquityRecordingStatusPort | None = None,
     ) -> None:
         self._equity_repo = equity_repo
         self._benchmark_repo = benchmark_repo
@@ -56,6 +58,7 @@ class PerformanceService:
         self._calendar = trading_calendar
         self._committer = committer
         self._clock = clock or (lambda: datetime.now(tz=UTC))
+        self._recording_status = recording_status
 
     async def return_curve(self) -> ReturnCurveDTO:
         now = self._clock().astimezone(MARKET_TIMEZONE)
@@ -88,6 +91,11 @@ class PerformanceService:
                 )
             )
         return ReturnCurveDTO(
+            recording_status=(
+                await self._recording_status.recording_status()
+                if self._recording_status is not None
+                else None
+            ),
             benchmark_name=BENCHMARK_NAME,
             initial_capital=None if start is None else start.initial_capital,
             open_date=None if start is None else start.open_date,

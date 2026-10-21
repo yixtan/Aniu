@@ -179,4 +179,59 @@ describe("ReturnCurveCard", () => {
     expect(await screen.findByText(/首条净值记录晚于开户日期/)).toBeInTheDocument();
     expect(screen.getByText("8/28 起")).toBeInTheDocument();
   });
+
+  it("shows a failed equity write beside the retained curve and its timestamps", async () => {
+    api.getReturnCurve.mockResolvedValueOnce({
+      ...curve,
+      recording_status: {
+        trade_date: "2026-10-21",
+        attempted_at: "2026-10-21T07:10:00Z",
+        last_success_at: "2026-10-21T07:00:00Z",
+        error_message: "数据库正忙，请稍后刷新账户。",
+      },
+    });
+    renderCard();
+
+    const warning = await screen.findByRole("alert", { name: "净值保存异常" });
+    expect(warning).toHaveTextContent("2026-10-21 的最新净值未保存");
+    expect(warning).toHaveTextContent("数据库正忙");
+    expect(warning).toHaveTextContent("15:10:00");
+    expect(warning).toHaveTextContent("15:00:00");
+    expect(screen.getByRole("img", { name: /累计收益曲线/ })).toBeInTheDocument();
+  });
+
+  it("still warns when the first equity write failed and there is no history yet", async () => {
+    api.getReturnCurve.mockResolvedValueOnce({
+      ...curve,
+      days: [],
+      recording_status: {
+        trade_date: "2026-10-21",
+        attempted_at: "2026-10-21T07:10:00Z",
+        last_success_at: null,
+        error_message: "存储空间不足，请清理磁盘后刷新账户。",
+      },
+    });
+    renderCard();
+
+    expect(await screen.findByRole("alert", { name: "净值保存异常" })).toHaveTextContent(
+      "尚无保存成功的状态记录",
+    );
+    expect(screen.getByText(/还没有记录/)).toBeInTheDocument();
+  });
+
+  it("shows successful saving without a failure alert", async () => {
+    api.getReturnCurve.mockResolvedValueOnce({
+      ...curve,
+      recording_status: {
+        trade_date: "2026-10-21",
+        attempted_at: "2026-10-21T07:10:00Z",
+        last_success_at: "2026-10-21T07:10:00Z",
+        error_message: null,
+      },
+    });
+    renderCard();
+
+    expect(await screen.findByText(/净值最近保存成功/)).toHaveTextContent("15:10:00");
+    expect(screen.queryByRole("alert", { name: "净值保存异常" })).not.toBeInTheDocument();
+  });
 });

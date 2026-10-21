@@ -85,8 +85,8 @@ async def test_a_refresh_during_the_session_records_the_days_value() -> None:
             source=EquitySource.RECORDED,
         )
     }
-    # The cache commits first, the day's value after it.
-    assert committer.commits == 2
+    # The recorder owns its transaction; the cache session is committed once.
+    assert committer.commits == 1
 
 
 @pytest.mark.asyncio

@@ -6,11 +6,22 @@ from collections.abc import Mapping
 from datetime import date
 from typing import Protocol
 
-from backend.business.performance.models import AccountStart, DailyEquity, DayFill
+from backend.business.performance.models import (
+    AccountStart,
+    DailyEquity,
+    DayFill,
+    EquityRecordingStatus,
+)
 
 
 class DailyEquityRecorderPort(Protocol):
+    """Records and commits independently of the account cache transaction."""
+
     async def record_day(self, equity: DailyEquity) -> None: ...
+
+
+class EquityRecordingStatusPort(Protocol):
+    async def recording_status(self) -> EquityRecordingStatus | None: ...
 
 
 class DailyEquityRepositoryPort(DailyEquityRecorderPort, Protocol):

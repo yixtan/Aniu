@@ -1255,6 +1255,23 @@ export interface components {
             /** Updated */
             updated: number;
         };
+        /** EquityRecordingStatusResponse */
+        EquityRecordingStatusResponse: {
+            /**
+             * Attempted At
+             * Format: date-time
+             */
+            attempted_at: string;
+            /** Error Message */
+            error_message: string | null;
+            /** Last Success At */
+            last_success_at: string | null;
+            /**
+             * Trade Date
+             * Format: date
+             */
+            trade_date: string;
+        };
         /** ErrorDetailResponse */
         ErrorDetailResponse: {
             /** Code */
@@ -2006,6 +2023,7 @@ export interface components {
             initial_capital?: number | null;
             /** Open Date */
             open_date?: string | null;
+            recording_status?: components["schemas"]["EquityRecordingStatusResponse"] | null;
         };
         /**
          * RunDayResponse
