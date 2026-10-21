@@ -2,6 +2,7 @@
 
 from backend.infra.repositories.account_cache_repo import AccountCacheRepository
 from backend.infra.repositories.audit_log_repo import AuditLogRepository, AuditRecord
+from backend.infra.repositories.daily_equity_repo import DailyEquityRepository
 from backend.infra.repositories.fill_record_repo import (
     FillRecordRepository,
 )
@@ -33,6 +34,7 @@ __all__ = [
     "AccountCacheRepository",
     "AuditLogRepository",
     "AuditRecord",
+    "DailyEquityRepository",
     "FillRecordRepository",
     "MemoryDreamRepository",
     "MemoryRepository",

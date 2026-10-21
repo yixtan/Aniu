@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
+from zoneinfo import ZoneInfo
 
 from backend.business.account import (
     AccountSnapshot,
@@ -29,6 +31,7 @@ from backend.business.notifications import (
     OrderFillNotifierPort,
     OrderFillObservation,
 )
+from backend.business.performance import DailyEquity, DailyEquityRecorderPort
 from backend.business.shared import (
     AccountRefreshThrottledError,
     CommitterPort,
@@ -40,6 +43,13 @@ from backend.business.shared.stock_api_source import (
 )
 
 ExecutionGuard = Callable[[], Awaitable[None]]
+
+logger = logging.getLogger(__name__)
+MARKET_TIMEZONE = ZoneInfo("Asia/Shanghai")
+# Before the open the broker still shows yesterday's close. A row dated today
+# with those numbers would read as a flat day if Aniu then stopped before the
+# bell, so a day's value is only taken once its session has begun.
+SESSION_OPENS = time(9, 30)
 
 
 class AccountAppService:
@@ -53,6 +63,8 @@ class AccountAppService:
         trading_calendar: TradingCalendarPort | None = None,
         refresh_gate: AccountRefreshGate | None = None,
         fill_notifier: OrderFillNotifierPort | None = None,
+        equity_recorder: DailyEquityRecorderPort | None = None,
+        clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._portfolio_client = portfolio_client
         self._account_cache_repo = account_cache_repo
@@ -60,6 +72,8 @@ class AccountAppService:
         self._committer = committer
         self._trading_calendar = trading_calendar
         self._fill_notifier = fill_notifier
+        self._equity_recorder = equity_recorder
+        self._clock = clock or (lambda: datetime.now(tz=UTC))
 
     async def get_account_dashboard(self) -> AccountDashboardDTO:
         snapshot = await self._ensure_cache()
@@ -91,7 +105,7 @@ class AccountAppService:
         clear_read_cache = getattr(self._portfolio_client, "clear_read_cache", None)
         if callable(clear_read_cache):
             clear_read_cache()
-        now = datetime.now(tz=UTC)
+        now = self._clock()
 
         try:
             snapshot, positions, orders = await self._fetch_live_cache(now)
@@ -122,6 +136,7 @@ class AccountAppService:
         )
         await self._commit(execution_guard=execution_guard)
         await self._announce_fills(orders)
+        await self._record_daily_equity(snapshot, execution_guard=execution_guard)
         return to_account_refresh_result_dto(
             state=state,
             status="refreshed",
@@ -154,6 +169,51 @@ class AccountAppService:
                 for order in orders
             ]
         )
+
+    async def _record_daily_equity(
+        self,
+        snapshot: AccountSnapshot,
+        *,
+        execution_guard: ExecutionGuard | None,
+    ) -> None:
+        """Keep today's value, overwritten until the close leaves the last one.
+
+        Written after the cache is committed and allowed to fail on its own: it
+        is history for a chart, and a refresh exists to show the account and
+        announce fills, neither of which should wait on it.
+        """
+
+        if self._equity_recorder is None:
+            return
+        day = self._equity_day(snapshot.captured_at)
+        if day is None:
+            return
+        try:
+            await self._equity_recorder.record_day(
+                DailyEquity(
+                    trade_date=day,
+                    total_asset=snapshot.total_asset,
+                    available_cash=snapshot.available_cash,
+                    frozen_cash=snapshot.frozen_cash,
+                    market_value=snapshot.market_value,
+                    captured_at=snapshot.captured_at,
+                )
+            )
+            await self._commit(execution_guard=execution_guard)
+        except Exception:
+            logger.warning("daily equity was not recorded", exc_info=True)
+
+    def _equity_day(self, captured_at: datetime) -> date | None:
+        local = captured_at.astimezone(MARKET_TIMEZONE)
+        if local.time() < SESSION_OPENS:
+            return None
+        day = local.date()
+        if (
+            self._trading_calendar is not None
+            and self._trading_calendar.last_trading_day_on_or_before(day) != day
+        ):
+            return None
+        return day
 
     async def _ensure_cache(self) -> AccountSnapshot:
         snapshot = await self._account_cache_repo.get_account_snapshot()

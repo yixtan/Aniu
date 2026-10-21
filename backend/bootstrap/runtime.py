@@ -59,6 +59,7 @@ from backend.infra.integrations.run_watchlist import RunWatchlistQuery
 from backend.infra.integrations.watchlist_stock_names import QuoteStockNameLookup
 from backend.infra.repositories import (
     AccountCacheRepository,
+    DailyEquityRepository,
     MemoryDreamRepository,
     MemoryRepository,
     ModelProfileRepository,
@@ -364,6 +365,7 @@ class AppRuntime:
             trading_calendar=TradingCalendar2026(),
             refresh_gate=self.account_refresh_gate,
             fill_notifier=self.optional_notification_dispatcher(),
+            equity_recorder=DailyEquityRepository(session),
         )
 
     def run_service(self, session: AsyncSession) -> RunService:
