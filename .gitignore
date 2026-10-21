@@ -9,7 +9,6 @@ build
 venv/
 
 # Environment
-/AGENTS.md
 /THIRD_PARTY_NOTICES.md
 /dev.py
 .env
