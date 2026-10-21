@@ -115,6 +115,13 @@ async def _complete_run_parked_in_summary(
         committer=None,
         snapshot_publisher=None,
     ).make_recorder(run, persist_run=persist)
+    await recorder.set_status_step(
+        RunState.SUMMARY.value,
+        step_id="markdown_fallback",
+        title="回退 Markdown",
+        summary=reason,
+        data={"reason": "summary_not_rendered"},
+    )
     await recorder.degrade_stage(RunState.SUMMARY.value, reason)
 
 

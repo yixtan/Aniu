@@ -14,6 +14,7 @@ import type { RunDetail } from "@/lib/api-types";
 import { EvaluationButton } from "../evaluation-sheet";
 import { StreamingContent } from "../streaming";
 import { StageNode } from "./stage-node";
+import { SummaryStatusNotice } from "./summary-status-notice";
 
 /** Whether the browser exposes the Clipboard API at all.
  *
@@ -218,6 +219,8 @@ export function StageTimeline({
           <span className="font-medium tabular-nums">总耗时{totalDuration}</span>
         </button>
       </div>
+
+      <SummaryStatusNotice run={run} />
 
       {stagesExpanded ? (
         <ol id={stageListId} className="flex flex-col gap-0 py-0">
