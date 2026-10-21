@@ -117,7 +117,7 @@ export function buildCurve(data: ReturnCurveData, range: CurveRange): Curve {
       accountReturn: last?.accountReturn ?? null,
       benchmarkReturn: lastBenchmark?.benchmarkReturn ?? null,
       benchmarkDate: lastBenchmark?.date ?? null,
-      maxDrawdown,
+      maxDrawdown: points.length < 2 ? null : maxDrawdown,
       positionRatio: last?.positionRatio ?? null,
     },
   };

@@ -130,6 +130,7 @@ describe("buildCurve", () => {
 
     expect(summary.startDate).toBe("2026-08-28");
     expect(summary.accountReturn).toBeCloseTo(0.01);
+    expect(summary.maxDrawdown).toBeNull();
   });
 });
 

@@ -168,7 +168,7 @@ function ReturnCurveBody({ data, range }: { data: ReturnCurveData; range: CurveR
         <Stat
           label="最大回撤"
           value={formatPercent(summary.maxDrawdown)}
-          hint="从最高点往下跌得最多的一次"
+          hint={points.length < 2 ? "至少需要两个交易日的记录" : "仅按已有净值记录计算"}
         />
         <Stat
           label="当前仓位"
