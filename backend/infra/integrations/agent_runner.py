@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import Callable
 from typing import cast
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -17,6 +18,7 @@ from backend.agent.kernel.runtime_config import LlmRuntimeConfig
 from backend.business.notifications.trade_event import (
     parse_cancel_instruction_details,
 )
+from backend.business.order_directives import OrderDirective
 from backend.business.runs import RunEventType, StrategySnapshot
 from backend.business.runs.agent_runner import (
     AgentRunnerPort,
@@ -128,7 +130,11 @@ class _StageToolRegistry:
         run_id: int,
         invocation_session_factory: async_sessionmaker[AsyncSession] | None,
         stock_api_tool_call_logger: StockApiToolCallLogger | None = None,
+        watch_order_plan: tuple[OrderDirective, ...] | None = None,
+        watch_cancellations_accepted: Callable[[], bool] | None = None,
     ) -> None:
+        self._watch_cancellations_accepted = watch_cancellations_accepted
+        self._watch_order_plan = watch_order_plan
         self._source = source
         self._label = label
         self._run_id = run_id
@@ -245,7 +251,21 @@ class _StageToolRegistry:
         ) as calls:
             try:
                 run_for_call = getattr(tool, "run_for_call", None)
-                if callable(run_for_call):
+                if (
+                    self._label == "Watch" or self._label.startswith("Watch:")
+                ) and coerce_side_effect_level(
+                    getattr(tool, "side_effect_level", None)
+                ) is SideEffectLevel.WRITE:
+                    run_for_watch = getattr(tool, "run_for_watch", None)
+                    if not callable(run_for_watch):
+                        raise ValueError("盯盘写工具缺少动作条件校验，已阻止写操作")
+                    result = await run_for_watch(
+                        directives=self._watch_order_plan,
+                        cancellations_accepted=self._watch_cancellations_accepted,
+                        abort_signal=abort_signal,
+                        **kwargs,
+                    )
+                elif callable(run_for_call):
                     result = await run_for_call(
                         run_id=self._run_id,
                         tool_call_id=tool_call_id,
@@ -506,6 +526,8 @@ class AgentRunnerFactoryAdapter:
             run_id=workflow.run.run_id,
             invocation_session_factory=self._invocation_session_factory,
             stock_api_tool_call_logger=self._stock_api_tool_call_logger,
+            watch_order_plan=workflow.watch_order_plan,
+            watch_cancellations_accepted=workflow.cancellations_accepted,
         )
         system_prompt = ""
 

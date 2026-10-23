@@ -333,6 +333,7 @@ class AniuOrchestrator:
         """
 
         directives = await self._current_order_plan(run.run_id)
+        context.watch_order_plan = directives
         context.authorized_order_ids = frozenset(
             item.order_id for item in directives
         )

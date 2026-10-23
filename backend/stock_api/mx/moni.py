@@ -430,6 +430,7 @@ class MxMoniClient:
                                 "enableAmount",
                                 "enableQty",
                                 "availableStockQty",
+                                "availCount",
                             )
                         )
                         if _pick(
@@ -440,6 +441,7 @@ class MxMoniClient:
                             "enableAmount",
                             "enableQty",
                             "availableStockQty",
+                            "availCount",
                         )
                         not in {None, "", "--"}
                         else None

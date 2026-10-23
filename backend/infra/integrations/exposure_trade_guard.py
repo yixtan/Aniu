@@ -15,7 +15,11 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from backend.business.account import AccountSnapshot, PortfolioOrderSnapshot
+from backend.business.account import (
+    AccountSnapshot,
+    PortfolioOrderSnapshot,
+    PositionSnapshot,
+)
 from backend.business.exposure import ExposureCap
 from backend.business.shared.trading.value_objects import utc_now
 from backend.infra.repositories.exposure_cap_repo import ExposureCapRepository
@@ -63,30 +67,7 @@ def check_buy_exposure(
         or snapshot.frozen_cash < 0
     ):
         raise ValueError("账户估值无效，无法核对总敞口，禁止新增买入")
-    pending = 0.0
-    for order in orders:
-        if order.direction.upper() != "BUY":
-            continue
-        remaining = order.quantity - order.filled_quantity
-        if remaining < 0:
-            raise ValueError("买单成交数量异常，禁止新增买入")
-        if remaining == 0 or order.status in {
-            "FILLED",
-            "CANCELLED",
-            "PARTIAL_CANCELLED",
-            "REJECTED",
-        }:
-            continue
-        if (
-            order.status
-            not in {"PENDING", "PARTIAL", "PENDING_CANCEL", "PARTIAL_PENDING_CANCEL"}
-            or order.order_price is None
-            or not math.isfinite(order.order_price)
-            or order.order_price <= 0
-        ):
-            raise ValueError("未完成买单状态或价格不明，禁止新增买入")
-        # Filled shares are already in market_value; only the remainder is reserved.
-        pending += remaining * order.order_price
+    pending = sum(amount for _, amount in pending_buy_amounts(orders))
     # Frozen funds also cover orders not yet visible in the list. Use the larger
     # amount, not the sum, to avoid counting the same pending order twice.
     reserved = max(pending, snapshot.frozen_cash)
@@ -138,3 +119,64 @@ def check_same_day_chase(
                 f"同日重跑不得高价追买：{symbol} 此前买单价 {reference:g}，"
                 f"本笔 {price:g}。不得取消深档后补建浅档；候选登记候补，等待跨日确认。"
             )
+
+
+_TERMINAL_ORDER_STATUSES = frozenset(
+    {"FILLED", "CANCELLED", "PARTIAL_CANCELLED", "REJECTED"}
+)
+
+
+def pending_buy_amounts(
+    orders: list[PortfolioOrderSnapshot],
+) -> list[tuple[str, float]]:
+    """Only known sells and confirmed terminal orders can be excluded."""
+    amounts = []
+    for order in orders:
+        remaining = order.quantity - order.filled_quantity
+        if remaining < 0:
+            raise ValueError("委托成交数量异常，禁止新增买入")
+        if remaining == 0 or order.status in _TERMINAL_ORDER_STATUSES:
+            continue
+        direction = order.direction.upper()
+        if direction == "SELL":
+            continue
+        if direction != "BUY":
+            raise ValueError("未完成委托方向不明，禁止新增买入")
+        if (
+            order.status
+            not in {"PENDING", "PARTIAL", "PENDING_CANCEL", "PARTIAL_PENDING_CANCEL"}
+            or order.order_price is None
+            or not math.isfinite(order.order_price)
+            or order.order_price <= 0
+        ):
+            raise ValueError("未完成买单状态或价格不明，禁止新增买入")
+        amounts.append((order.symbol, remaining * order.order_price))
+    return amounts
+
+
+def check_position_limits(
+    snapshot: AccountSnapshot,
+    positions: list[PositionSnapshot],
+    orders: list[PortfolioOrderSnapshot],
+    *,
+    symbol: str,
+    price: float,
+    quantity: int,
+) -> None:
+    values: dict[str, float] = {}
+    for position in positions:
+        if not math.isfinite(position.market_value) or position.market_value < 0:
+            raise ValueError("持仓估值无效，禁止新增买入")
+        if position.quantity > 0:
+            values[position.symbol] = (
+                values.get(position.symbol, 0) + position.market_value
+            )
+    if snapshot.market_value > 0 and not values:
+        raise ValueError("账户有持仓市值但缺少持仓明细，禁止新增买入")
+    for code, amount in pending_buy_amounts(orders):
+        values[code] = values.get(code, 0) + amount
+    values[symbol] = values.get(symbol, 0) + price * quantity
+    if values[symbol] > snapshot.total_asset * 0.10 + 0.005:
+        raise ValueError("本笔买入后单票持仓加在挂买单超过总资产10%，禁止新增买入")
+    if len(values) > 10:
+        raise ValueError("持仓加在挂买单合计超过10只，禁止新增买入")

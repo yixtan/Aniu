@@ -10,7 +10,11 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from sqlalchemy import select
 
-from backend.business.account import AccountSnapshot, PortfolioOrderSnapshot
+from backend.business.account import (
+    AccountSnapshot,
+    PortfolioOrderSnapshot,
+    PositionSnapshot,
+)
 from backend.infra.db.models import ExposureCapModel, StrategyRunModel
 from backend.infra.integrations.exposure_cap_agent_tools import DeclareExposureCapTool
 from backend.infra.integrations.exposure_trade_guard import check_buy_exposure
@@ -84,6 +88,23 @@ def clients(account=None, orders=None):
     portfolio.clear_read_cache = Mock()
     portfolio.get_account_snapshot.return_value = account or snapshot()
     portfolio.get_orders.return_value = [] if orders is None else orders
+    account_value = (account or snapshot()).market_value
+    portfolio.get_positions.return_value = (
+        []
+        if account_value == 0
+        else [
+            PositionSnapshot(
+                symbol="600001",
+                stock_name="合成持仓",
+                quantity=100,
+                avg_cost=10,
+                current_price=10,
+                market_value=account_value,
+                profit_ratio=0,
+                available_quantity=100,
+            )
+        ]
+    )
     trading = AsyncMock()
     trading.trade.return_value = {"status": "submitted"}
     return portfolio, trading
@@ -304,7 +325,7 @@ async def test_production_factory_wires_guard_and_http_preflight_is_fresh(
                     },
                 },
             )
-        if path.endswith("/orders"):
+        if path.endswith("/orders") or path.endswith("/positions"):
             return httpx.Response(200, json={"code": 200, "data": []})
         if path.endswith("/trade"):
             return httpx.Response(200, json={"code": 200, "data": {"orderId": "test"}})
