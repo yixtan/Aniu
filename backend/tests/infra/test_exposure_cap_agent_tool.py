@@ -1,6 +1,8 @@
-"""Declaring the cap: recorded, refused when unreasoned, never enforcing."""
+"""Declaring the cap: recorded with reasons and same-day limits."""
 
 from __future__ import annotations
+
+from datetime import UTC, datetime
 
 import pytest
 
@@ -8,6 +10,15 @@ from backend.business.exposure import ExposureCapService
 from backend.infra.db.models import StrategyRunModel
 from backend.infra.integrations.exposure_cap_agent_tools import DeclareExposureCapTool
 from backend.infra.repositories.exposure_cap_repo import ExposureCapRepository
+
+
+@pytest.fixture(autouse=True)
+def declaration_clock(monkeypatch):
+    monkeypatch.setattr(
+        "backend.infra.integrations.exposure_trade_guard.utc_now",
+        lambda: datetime(2026, 9, 21, 2, tzinfo=UTC),
+    )
+
 
 RUN_ID = 20260921101
 

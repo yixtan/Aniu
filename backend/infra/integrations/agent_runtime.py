@@ -99,6 +99,7 @@ class AgentRuntimeFactory:
                 research=self._mx_research_client,
                 portfolio=self._mx_portfolio_client,
                 trading=self._mx_trading_client,
+                session_factory=self._session_factory,
             )
         return registry
 

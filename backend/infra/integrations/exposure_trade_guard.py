@@ -1,0 +1,99 @@
+"""Enforce declared limits before a buy can reach the simulator.
+
+SQLite's writer lock serializes declarations and buy preflights across tools
+and processes. The lock is released on errors; no trading request is replayed.
+"""
+
+from __future__ import annotations
+
+import math
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from zoneinfo import ZoneInfo
+
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from backend.business.account import AccountSnapshot, PortfolioOrderSnapshot
+from backend.business.exposure import ExposureCap
+from backend.business.shared.trading.value_objects import utc_now
+from backend.infra.repositories.exposure_cap_repo import ExposureCapRepository
+
+
+@asynccontextmanager
+async def locked_cap_repository(
+    factory: async_sessionmaker[AsyncSession], run_id: int
+) -> AsyncIterator[tuple[ExposureCapRepository, float | None]]:
+    async with factory() as session:
+        # This app persists trading state in SQLite. Take the write lock before
+        # reading so two runs cannot both approve against the previous limit.
+        await session.execute(text("BEGIN IMMEDIATE"))
+        repo = ExposureCapRepository(session)
+        day, daily_limit = await repo.daily_limit_for_run(run_id)
+        if day != utc_now().astimezone(ZoneInfo("Asia/Shanghai")).date():
+            raise ValueError("运行已跨交易日，禁止沿用旧声明；请等待当日新运行")
+        yield repo, daily_limit
+        await session.commit()
+
+
+def check_declaration(cap: ExposureCap, daily_limit: float | None) -> None:
+    if daily_limit is not None and cap.cap_pct > daily_limit:
+        raise ValueError(
+            f"同日重跑不能提高总敞口上限：当日有效上限 {daily_limit:g}%，"
+            f"拒绝声明 {cap.cap_pct:g}%。维持或下调上限；新增候选只登记候补，"
+            "升档等待下一交易日首轮重新确认。"
+        )
+
+
+def check_buy_exposure(
+    snapshot: AccountSnapshot,
+    orders: list[PortfolioOrderSnapshot],
+    *,
+    price: float,
+    quantity: int,
+    limit: float,
+) -> None:
+    if (
+        not math.isfinite(snapshot.total_asset)
+        or snapshot.total_asset <= 0
+        or not math.isfinite(snapshot.market_value)
+        or snapshot.market_value < 0
+        or not math.isfinite(snapshot.frozen_cash)
+        or snapshot.frozen_cash < 0
+    ):
+        raise ValueError("账户估值无效，无法核对总敞口，禁止新增买入")
+    pending = 0.0
+    for order in orders:
+        if order.direction.upper() != "BUY":
+            continue
+        remaining = order.quantity - order.filled_quantity
+        if remaining < 0:
+            raise ValueError("买单成交数量异常，禁止新增买入")
+        if remaining == 0 or order.status in {
+            "FILLED",
+            "CANCELLED",
+            "PARTIAL_CANCELLED",
+            "REJECTED",
+        }:
+            continue
+        if (
+            order.status
+            not in {"PENDING", "PARTIAL", "PENDING_CANCEL", "PARTIAL_PENDING_CANCEL"}
+            or order.order_price is None
+            or not math.isfinite(order.order_price)
+            or order.order_price <= 0
+        ):
+            raise ValueError("未完成买单状态或价格不明，禁止新增买入")
+        # Filled shares are already in market_value; only the remainder is reserved.
+        pending += remaining * order.order_price
+    # Frozen funds also cover orders not yet visible in the list. Use the larger
+    # amount, not the sum, to avoid counting the same pending order twice.
+    reserved = max(pending, snapshot.frozen_cash)
+    projected = snapshot.market_value + reserved + price * quantity
+    ceiling = snapshot.total_asset * limit / 100
+    if not math.isfinite(projected) or projected > ceiling + 0.005:
+        raise ValueError(
+            f"买入后潜在总敞口 {projected:.2f} 元超过当日上限 {limit:g}%"
+            f"（{ceiling:.2f} 元）；已计入持仓、未成交买单及本笔委托。"
+            "不提高上限、不追买；新增候选登记候补与 forgone。"
+        )

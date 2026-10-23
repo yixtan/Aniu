@@ -6,9 +6,9 @@ days, each new rule inheriting it, and the one that finally documented it
 derived the number from a tolerance nobody had chosen either. Memory holds how
 to size given conditions; today's number belongs to today's run.
 
-Declared rather than enforced. Nothing here refuses an order: the instrument
-is that the number is stated before trading, recorded as a field rather than
-as prose, and answerable to the review afterwards.
+The number is stated before trading and recorded as a field rather than prose.
+The execution tools additionally refuse same-day increases and buys exceeding
+the declared daily limit. This value object remains the decision record.
 """
 
 from __future__ import annotations
