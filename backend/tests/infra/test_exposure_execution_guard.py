@@ -73,6 +73,7 @@ def order(**kwargs):
             "filled_quantity": 0,
             "filled_price": None,
             "order_price": 20,
+            "submitted_at": datetime(2026, 10, 23, 1, tzinfo=UTC),
             **kwargs,
         }
     )
@@ -387,3 +388,58 @@ async def test_concurrent_buys_observe_previous_accepted_reservation(session_fac
     assert sum(isinstance(r, dict) for r in results) == 1
     assert sum(isinstance(r, ValueError) for r in results) == 1
     trading.trade.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_chasing_earlier_bid_is_blocked_even_with_plenty_of_cap(session_factory):
+    await seed(session_factory, 1, "2026-10-23T06:40:00+00:00")
+    await declare(session_factory, 1, 20)
+    portfolio, trading = clients(
+        replace(snapshot(), market_value=1000, frozen_cash=0), [order(order_price=10)]
+    )
+    tool = TradeTool(trading, portfolio, session_factory=session_factory)
+    with pytest.raises(ValueError, match="高价追买"):
+        await tool.run_for_call(
+            run_id=1, tool_call_id="buy", instruction="买入 600000 14.3 100"
+        )
+    trading.trade.assert_not_awaited()
+    await tool.run_for_call(
+        run_id=1, tool_call_id="lower", instruction="买入 600000 9 100"
+    )
+    trading.trade.assert_awaited_once()
+
+
+@pytest.mark.parametrize(
+    "status", ["PENDING", "FILLED", "CANCELLED", "PARTIAL_CANCELLED"]
+)
+def test_cancel_or_fill_does_not_erase_prior_run_price_anchor(status):
+    from backend.infra.integrations.exposure_trade_guard import check_same_day_chase
+
+    with pytest.raises(ValueError, match="高价追买"):
+        check_same_day_chase(
+            [order(order_price=10, status=status)],
+            started_at=NOW,
+            symbol="600000",
+            price=11,
+        )
+
+
+@pytest.mark.parametrize("submitted", [datetime(2026, 10, 22, 1, tzinfo=UTC), NOW])
+def test_prior_day_or_current_run_levels_do_not_block_buy(submitted):
+    from backend.infra.integrations.exposure_trade_guard import check_same_day_chase
+
+    check_same_day_chase(
+        [order(order_price=10, submitted_at=submitted)],
+        started_at=NOW,
+        symbol="600000",
+        price=11,
+    )
+
+
+def test_missing_buy_timestamp_fails_closed():
+    from backend.infra.integrations.exposure_trade_guard import check_same_day_chase
+
+    with pytest.raises(ValueError, match="缺少时间"):
+        check_same_day_chase(
+            [order(submitted_at=None)], started_at=NOW, symbol="600000", price=11
+        )

@@ -11,6 +11,7 @@ from backend.agent.tools.registry import ToolRegistry
 from backend.business.account import PortfolioOrderSnapshot
 from backend.infra.integrations.exposure_trade_guard import (
     check_buy_exposure,
+    check_same_day_chase,
     locked_cap_repository,
 )
 from backend.infra.integrations.mx_screen import compact_screen_result
@@ -364,6 +365,7 @@ class TradeTool:
                 "数量必须为 100 的整数倍；不支持市价委托。"
                 "执行前系统会复核卖出持仓数量、买入可用资金与当日敞口。"
                 "买入必须先声明上限；同日不能上调；持仓加未成交买单和本笔金额不能超限。"
+                "同日后续运行不能高于此前同标的买单价格补建浅档或追买。"
             ),
             "parameters": {
                 "type": "object",
@@ -407,6 +409,12 @@ class TradeTool:
             assert isinstance(price, (int, float)) and isinstance(quantity, int)
             check_buy_exposure(
                 snapshot, orders, price=float(price), quantity=quantity, limit=limit
+            )
+            check_same_day_chase(
+                orders,
+                started_at=await repo.started_at_for_run(run_id),
+                symbol=str(intent.payload["stockCode"]),
+                price=float(price),
             )
             if abort_signal is not None:
                 abort_signal.throw_if_aborted()

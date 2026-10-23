@@ -58,7 +58,7 @@ class ExposureCapRepository:
         await self._session.flush()
         return _to_domain(model)
 
-    async def daily_limit_for_run(self, run_id: int) -> tuple[date, float | None]:
+    async def started_at_for_run(self, run_id: int) -> datetime:
         # Use the trusted run timestamp, not a model argument or ID arithmetic.
         started = await self._session.scalar(
             select(StrategyRunModel.started_at).where(StrategyRunModel.id == run_id)
@@ -68,6 +68,10 @@ class ExposureCapRepository:
         instant = datetime.fromisoformat(started)
         if instant.tzinfo is None:
             raise ValueError("运行时间缺少时区，禁止声明或新增买入")
+        return instant
+
+    async def daily_limit_for_run(self, run_id: int) -> tuple[date, float | None]:
+        instant = await self.started_at_for_run(run_id)
         day = instant.astimezone(ZoneInfo("Asia/Shanghai")).date()
         minimum = await self._session.scalar(
             select(func.min(ExposureCapModel.cap_pct))

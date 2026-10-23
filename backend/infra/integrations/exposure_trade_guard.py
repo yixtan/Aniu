@@ -9,6 +9,7 @@ from __future__ import annotations
 import math
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
@@ -97,3 +98,43 @@ def check_buy_exposure(
             f"（{ceiling:.2f} 元）；已计入持仓、未成交买单及本笔委托。"
             "不提高上限、不追买；新增候选登记候补与 forgone。"
         )
+
+
+def check_same_day_chase(
+    orders: list[PortfolioOrderSnapshot],
+    *,
+    started_at: datetime,
+    symbol: str,
+    price: float,
+) -> None:
+    """A later run cannot create a shallower buy leg above today's earlier bid.
+
+    Compare only prior-run orders. Multiple levels planned within the first
+    run remain possible. Cancelling an earlier bid does not erase its anchor.
+    """
+    shanghai = ZoneInfo("Asia/Shanghai")
+    for order in orders:
+        if (
+            order.symbol != symbol
+            or order.direction.upper() != "BUY"
+            or order.status == "REJECTED"
+        ):
+            continue
+        submitted = order.submitted_at
+        reference = order.order_price or order.filled_price
+        if submitted is None or submitted.tzinfo is None or reference is None:
+            raise ValueError(
+                "同标的历史买单缺少时间或价格，无法核对同日追买，禁止新增买入"
+            )
+        if not math.isfinite(reference) or reference <= 0:
+            raise ValueError("同标的历史买单价格无效，禁止新增买入")
+        if (
+            submitted.astimezone(shanghai).date()
+            != started_at.astimezone(shanghai).date()
+        ):
+            continue
+        if submitted < started_at and price > reference + 0.000001:
+            raise ValueError(
+                f"同日重跑不得高价追买：{symbol} 此前买单价 {reference:g}，"
+                f"本笔 {price:g}。不得取消深档后补建浅档；候选登记候补，等待跨日确认。"
+            )
