@@ -19,8 +19,11 @@ from typing import Any, cast
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from backend.business.exposure import ExposureCap, ExposureCapService
+from backend.infra.integrations.exposure_trade_guard import (
+    check_declaration,
+    locked_cap_repository,
+)
 from backend.infra.integrations.tool_policy import SideEffectLevel
-from backend.infra.repositories.exposure_cap_repo import ExposureCapRepository
 from backend.llm import AbortSignal, ProviderJsonObject, ToolDefinition
 
 _RUN_STAGES = ("Run",)
@@ -28,15 +31,7 @@ _RUN_STAGES = ("Run",)
 
 @dataclass
 class DeclareExposureCapTool:
-    """Records the cap. Refuses nothing.
-
-    Deliberately not an enforcement point: an order goes out through the
-    trading tools and this never sees it. What it buys is that the number is
-    stated before the trading rather than narrated after it, kept as a field
-    rather than as a line in a report, and put in front of the independent
-    review, which can then ask why today's differs from Friday's — or why it
-    does not.
-    """
+    """Record a reasoned limit, refusing automatic same-day increases."""
 
     session_factory: async_sessionmaker[AsyncSession]
     name: str = "declare_exposure_cap"
@@ -57,7 +52,9 @@ class DeclareExposureCapTool:
                 "这个数字由你按当下行情与账户自身记录决定，"
                 "不是别处规定的常量，也不要写进长期记忆——"
                 "长期记忆存的是「什么条件下该定多少」的方法，不是今天这个数。"
-                "没有声明就没有当日口径，报告里也无从核对。"
+                "没有声明就不能新增买入。系统按上海交易日核对，"
+                "同日只能维持或下调，不能因反弹、发现候选或重跑提高上限；"
+                "买入还会核对持仓加未成交买单和本笔金额。"
             ),
             "parameters": cast(
                 ProviderJsonObject,
@@ -128,11 +125,9 @@ class DeclareExposureCapTool:
             # The reasons are the instrument. A cap with none is the number on
             # its own, which is what this replaces.
             raise ValueError(str(exc)) from exc
-        async with self.session_factory() as session:
-            stored = await ExposureCapService(
-                ExposureCapRepository(session)
-            ).declare(cap)
-            await session.commit()
+        async with locked_cap_repository(self.session_factory, run_id) as (repo, limit):
+            check_declaration(cap, limit)
+            stored = await ExposureCapService(repo).declare(cap)
         return {
             "status": "ok",
             "cap_pct": stored.cap_pct,

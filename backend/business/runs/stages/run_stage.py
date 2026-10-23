@@ -45,7 +45,20 @@ class RunStage:
             else False
         )
         runtime_payload: dict[str, object] = {"market_session_open": market_open}
-        prompt_parts = [stage_settings.prompt, _MEMORY_TOOL_PROTOCOL]
+        prompt_parts = [
+            stage_settings.prompt,
+            _MEMORY_TOOL_PROTOCOL,
+            (
+                "<exposure-execution-rules>"
+                "敞口执行约束优先于历史经验中的升档建议：每天首轮可以重新定档；"
+                "同一上海交易日内只允许维持或降低已声明上限，"
+                "盘中反弹、深V反转、发现候选均不能自动升档。"
+                "买入前必须成功声明；持仓市值加未成交买单及本笔委托不能超限。"
+                "被拒绝后不得跳过检查或拆单绕过；候选登记候补与forgone，"
+                "跨日确认等待下一交易日首轮。不自动追买，不重跑交易。"
+                "</exposure-execution-rules>"
+            ),
+        ]
         # Both the list and the instruction about it are left out when nothing
         # is followed: there is nothing to screen, and asking a model to
         # consider an empty list only invites it to say so.

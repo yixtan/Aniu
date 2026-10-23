@@ -5,11 +5,18 @@ from __future__ import annotations
 import asyncio
 from dataclasses import asdict, dataclass, field
 
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
 from backend.agent.tools.registry import ToolRegistry
 from backend.business.account import PortfolioOrderSnapshot
+from backend.infra.integrations.exposure_trade_guard import (
+    check_buy_exposure,
+    check_same_day_chase,
+    locked_cap_repository,
+)
 from backend.infra.integrations.mx_screen import compact_screen_result
 from backend.infra.integrations.tool_policy import SideEffectLevel
-from backend.llm import ToolDefinition
+from backend.llm import AbortSignal, ToolDefinition
 from backend.stock_api import (
     MxMoniClient,
     MxPaperTradingClient,
@@ -297,9 +304,9 @@ class CancelledOrderLedger:
         self._undone: set[tuple[str, str, float, int]] = set()
 
     @staticmethod
-    def _key(symbol: str, direction: str, price: float, quantity: int) -> tuple[
-        str, str, float, int
-    ]:
+    def _key(
+        symbol: str, direction: str, price: float, quantity: int
+    ) -> tuple[str, str, float, int]:
         # A-share limit prices carry two decimals; rounding wider than that
         # keeps a float that arrived as 185.00000001 from reading as a new
         # price, without merging two genuinely different ones.
@@ -337,6 +344,7 @@ class TradeTool:
     """Shared with the cancel tool. Without it the coherence guard is inert,
     which is why `register_mx_tools` always supplies one and a test pins that
     both tools receive the same instance."""
+    session_factory: async_sessionmaker[AsyncSession] | None = None
     name: str = "trade"
     enabled_stages: tuple[str, ...] = field(default=TRADE_STAGES)
     side_effect_level: SideEffectLevel = SideEffectLevel.WRITE
@@ -355,7 +363,9 @@ class TradeTool:
                 "只接受格式“买入/卖出 <六位代码> <价格> <数量>”，"
                 "例如“买入 600519 1700 100”。"
                 "数量必须为 100 的整数倍；不支持市价委托。"
-                "执行前系统会复核卖出持仓数量和买入可用资金。"
+                "执行前系统会复核卖出持仓数量、买入可用资金与当日敞口。"
+                "买入必须先声明上限；同日不能上调；持仓加未成交买单和本笔金额不能超限。"
+                "同日后续运行不能高于此前同标的买单价格补建浅档或追买。"
             ),
             "parameters": {
                 "type": "object",
@@ -365,7 +375,57 @@ class TradeTool:
             },
         }
 
+    async def run_for_call(
+        self,
+        *,
+        run_id: int,
+        tool_call_id: str,
+        abort_signal: AbortSignal | None = None,
+        instruction: str,
+    ) -> object:
+        del tool_call_id
+        if abort_signal is not None:
+            abort_signal.throw_if_aborted()
+        intent = parse_trade_instruction(instruction)
+        if intent.name != "trade":
+            raise ValueError("trade only accepts a limit buy or sell instruction")
+        if intent.payload["type"] != "buy":
+            return await self._execute(instruction)
+        if self.session_factory is None or self.portfolio is None:
+            raise ValueError("买入缺少持久化风控或账户连接，禁止下单")
+        async with locked_cap_repository(self.session_factory, run_id) as (repo, limit):
+            declared = await repo.for_run(run_id)
+            if declared is None or limit is None:
+                raise ValueError(
+                    "本次运行尚未声明总敞口上限；先调用 declare_exposure_cap"
+                )
+            # Preflight must not reuse a three-second portfolio cache left by
+            # earlier reads or another run.
+            self.portfolio.clear_read_cache()
+            snapshot = await self.portfolio.get_account_snapshot()
+            orders = await self.portfolio.get_orders()
+            price = intent.payload["price"]
+            quantity = intent.payload["quantity"]
+            assert isinstance(price, (int, float)) and isinstance(quantity, int)
+            check_buy_exposure(
+                snapshot, orders, price=float(price), quantity=quantity, limit=limit
+            )
+            check_same_day_chase(
+                orders,
+                started_at=await repo.started_at_for_run(run_id),
+                symbol=str(intent.payload["stockCode"]),
+                price=float(price),
+            )
+            if abort_signal is not None:
+                abort_signal.throw_if_aborted()
+            return await self._execute(instruction)
+
     async def run(self, instruction: str) -> object:
+        if self.session_factory is not None:
+            raise RuntimeError("trade requires trusted run call context")
+        return await self._execute(instruction)
+
+    async def _execute(self, instruction: str) -> object:
         intent = parse_trade_instruction(instruction)
         if intent.name != "trade":
             raise ValueError("trade only accepts a limit buy or sell instruction")
@@ -434,6 +494,7 @@ def register_mx_tools(
     research: MxResearchClient,
     portfolio: MxMoniClient,
     trading: MxPaperTradingClient,
+    session_factory: async_sessionmaker[AsyncSession] | None = None,
 ) -> None:
     """Expose every supported MX capability as a direct Agent tool."""
 
@@ -444,7 +505,7 @@ def register_mx_tools(
     # One ledger, both tools, one run: the guard only means anything if the
     # tool that cancels and the tool that places are looking at the same book.
     ledger = CancelledOrderLedger()
-    registry.register(TradeTool(trading, portfolio, ledger))
+    registry.register(TradeTool(trading, portfolio, ledger, session_factory))
     registry.register(CancelTool(trading, portfolio, ledger))
 
 
@@ -581,9 +642,7 @@ def _refuse_to_recreate_a_cancelled_order(
     payload = intent.payload
     price_value = payload["price"]
     quantity_value = payload["quantity"]
-    if not isinstance(price_value, (int, float)) or not isinstance(
-        quantity_value, int
-    ):
+    if not isinstance(price_value, (int, float)) or not isinstance(quantity_value, int):
         return
     symbol = str(payload["stockCode"])
     direction = str(payload["type"])

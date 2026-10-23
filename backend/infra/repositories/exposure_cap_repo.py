@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.business.exposure.models import MAX_REASON_LENGTH, ExposureCap
-from backend.infra.db.models import ExposureCapModel
+from backend.infra.db.models import ExposureCapModel, StrategyRunModel
 
 
 def _parse(value: str | None) -> datetime | None:
@@ -56,6 +57,30 @@ class ExposureCapRepository:
         model.declared_at = cap.declared_at.isoformat()
         await self._session.flush()
         return _to_domain(model)
+
+    async def started_at_for_run(self, run_id: int) -> datetime:
+        # Use the trusted run timestamp, not a model argument or ID arithmetic.
+        started = await self._session.scalar(
+            select(StrategyRunModel.started_at).where(StrategyRunModel.id == run_id)
+        )
+        if not started:
+            raise ValueError("无法确认运行交易日，禁止声明或新增买入")
+        instant = datetime.fromisoformat(started)
+        if instant.tzinfo is None:
+            raise ValueError("运行时间缺少时区，禁止声明或新增买入")
+        return instant
+
+    async def daily_limit_for_run(self, run_id: int) -> tuple[date, float | None]:
+        instant = await self.started_at_for_run(run_id)
+        day = instant.astimezone(ZoneInfo("Asia/Shanghai")).date()
+        minimum = await self._session.scalar(
+            select(func.min(ExposureCapModel.cap_pct))
+            .join(StrategyRunModel, StrategyRunModel.id == ExposureCapModel.run_id)
+            .where(
+                func.date(StrategyRunModel.started_at, "+8 hours") == day.isoformat()
+            )
+        )
+        return day, None if minimum is None else float(minimum)
 
     async def for_run(self, run_id: int) -> ExposureCap | None:
         model = (
