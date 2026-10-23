@@ -80,6 +80,16 @@ class StockMarketDataService:
             lambda value: _result_ttl_seconds(ttl, value),
         )
 
+    async def execute_fresh(
+        self,
+        request: PublicStockRequest,
+        cancellation_token: AbortSignal | None = None,
+    ) -> dict[str, object]:
+        """Bypass local read caches for side-effect preflight evidence."""
+        return await self._router.execute(
+            request, cancellation_token=cancellation_token
+        )
+
     async def execute_diagnostic(
         self,
         request: PublicStockRequest,

@@ -302,6 +302,7 @@ async def test_trade_and_cancel_apply_portfolio_preflight_checks() -> None:
         current_price=1700,
         market_value=170_000,
         profit_ratio=0.0625,
+        available_quantity=100,
     )
     order = PortfolioOrderSnapshot(
         order_id="order-1",

@@ -244,3 +244,16 @@ def test_asking_for_more_rows_never_returns_fewer(asked: int) -> None:
         # The longest head that fits: one more row would not.
         assert meta["returned_count"] == returned
         assert serialized(_rows_result(returned + 1)) > 64_000 - 200
+
+
+@pytest.mark.asyncio
+async def test_execute_fresh_bypasses_a_warmed_quote_cache():
+    router = FakeRouter({"data": {"quotes": [{"symbol": "600000.SH", "price": 10}]}})
+    service = StockMarketDataService(cast(PublicStockRouter, router))
+    request = QuoteSnapshotRequest(("600000",))
+    await service.execute(request)
+    router.result = {"data": {"quotes": [{"symbol": "600000.SH", "price": 9}]}}
+    cached = await service.execute(request)
+    fresh = await service.execute_fresh(request)
+    assert cached["data"] != fresh["data"]
+    assert router.calls == 2

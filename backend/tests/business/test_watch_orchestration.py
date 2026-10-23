@@ -48,12 +48,14 @@ class StaticWatchStage:
     calls: int = 0
     seen_directives: tuple[OrderDirective, ...] = ()
     seen_authorized: frozenset[str] | None = None
+    seen_trusted_plan: tuple[OrderDirective, ...] | None = None
 
     async def execute(self, context, runner, *, directives=()) -> RunReport:
         del runner
         self.calls += 1
         self.seen_directives = tuple(directives)
         self.seen_authorized = context.authorized_order_ids
+        self.seen_trusted_plan = context.watch_order_plan
         return self.report
 
 
@@ -121,6 +123,7 @@ async def test_the_plan_the_model_sees_is_the_plan_the_authorizer_enforces() -> 
 
     assert [item.order_id for item in stage.seen_directives] == ["111", "222"]
     assert stage.seen_authorized == frozenset({"111", "222"})
+    assert stage.seen_trusted_plan == plan.directives
 
 
 @pytest.mark.asyncio

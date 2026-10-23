@@ -3,19 +3,25 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from backend.agent.tools.registry import ToolRegistry
 from backend.business.account import PortfolioOrderSnapshot
+from backend.business.order_directives import OrderDirective
+from backend.business.shared.trading.value_objects import utc_now
 from backend.infra.integrations.exposure_trade_guard import (
     check_buy_exposure,
+    check_position_limits,
     check_same_day_chase,
     locked_cap_repository,
 )
 from backend.infra.integrations.mx_screen import compact_screen_result
 from backend.infra.integrations.tool_policy import SideEffectLevel
+from backend.infra.integrations.watch_cancel_guard import verify_watch_cancel
 from backend.llm import AbortSignal, ToolDefinition
 from backend.stock_api import (
     MxMoniClient,
@@ -27,6 +33,7 @@ from backend.stock_api.mx.trading_parser import (
     ParsedTradeIntent,
     parse_trade_instruction,
 )
+from backend.stock_api.public import StockMarketDataService
 
 READ_STAGES = ("Run",)
 TRADE_STAGES = ("Run",)
@@ -363,7 +370,9 @@ class TradeTool:
                 "只接受格式“买入/卖出 <六位代码> <价格> <数量>”，"
                 "例如“买入 600519 1700 100”。"
                 "数量必须为 100 的整数倍；不支持市价委托。"
-                "执行前系统会复核卖出持仓数量、买入可用资金与当日敞口。"
+                "执行前系统会复核可卖数量、买入可用资金与当日敞口。"
+                "单票持仓加在挂买单不得超过总资产10%，合计最多10只；"
+                "可卖数量缺失时禁止卖出。"
                 "买入必须先声明上限；同日不能上调；持仓加未成交买单和本笔金额不能超限。"
                 "同日后续运行不能高于此前同标的买单价格补建浅档或追买。"
             ),
@@ -410,6 +419,15 @@ class TradeTool:
             check_buy_exposure(
                 snapshot, orders, price=float(price), quantity=quantity, limit=limit
             )
+            positions = await self.portfolio.get_positions()
+            check_position_limits(
+                snapshot,
+                positions,
+                orders,
+                symbol=str(intent.payload["stockCode"]),
+                price=float(price),
+                quantity=quantity,
+            )
             check_same_day_chase(
                 orders,
                 started_at=await repo.started_at_for_run(run_id),
@@ -440,6 +458,7 @@ class CancelTool:
     portfolio: MxMoniClient | None = None
     ledger: CancelledOrderLedger | None = None
     """Shared with the trade tool; see `TradeTool.ledger`."""
+    market_data: StockMarketDataService | None = None
     name: str = "cancel"
     enabled_stages: tuple[str, ...] = field(default=WATCH_TRADE_STAGES)
     side_effect_level: SideEffectLevel = SideEffectLevel.WRITE
@@ -464,6 +483,7 @@ class CancelTool:
                 "例如“撤单 262154600000047682 515880”；"
                 "需要撤销全部未成交委托时使用“一键撤单”。"
                 "系统会先复核委托编号、股票代码和可撤状态。"
+                "盯盘还会独立验证计划动作与价格/时间条件，未触发不得撤单。"
                 "注意 14:57–15:00 是收盘集合竞价，交易所不接受撤单，"
                 "此时段内撤单必定失败，重试也不会成功。"
             ),
@@ -474,6 +494,40 @@ class CancelTool:
                 "additionalProperties": False,
             },
         }
+
+    async def run_for_watch(
+        self,
+        *,
+        instruction: str,
+        directives: tuple[OrderDirective, ...] | None,
+        abort_signal: AbortSignal | None = None,
+        cancellations_accepted: Callable[[], bool] | None = None,
+    ) -> object:
+        await verify_watch_cancel(
+            instruction,
+            directives=directives,
+            market_data=self.market_data,
+            abort_signal=abort_signal,
+        )
+        if abort_signal is not None:
+            abort_signal.throw_if_aborted()
+        if self.portfolio is None:
+            raise ValueError("盯盘缺少账户连接，已阻止撤单")
+        self.portfolio.clear_read_cache()
+        # Re-check after evidence I/O: the closing auction may have started
+        # while the price/order requests were in flight.
+        if not callable(cancellations_accepted) or not cancellations_accepted():
+            raise ValueError("当前撤单时段无法确认或已结束，已阻止撤单")
+        intent = parse_trade_instruction(instruction)
+        about_to_undo = await _preflight_cancel(self.portfolio, intent)
+        if not cancellations_accepted():
+            raise ValueError("撤单时段已结束，已阻止撤单")
+        if abort_signal is not None:
+            abort_signal.throw_if_aborted()
+        result = await self.client.cancel(instruction)
+        if self.ledger is not None:
+            self.ledger.record(about_to_undo)
+        return result
 
     async def run(self, instruction: str) -> object:
         intent = parse_trade_instruction(instruction)
@@ -495,6 +549,7 @@ def register_mx_tools(
     portfolio: MxMoniClient,
     trading: MxPaperTradingClient,
     session_factory: async_sessionmaker[AsyncSession] | None = None,
+    market_data: StockMarketDataService | None = None,
 ) -> None:
     """Expose every supported MX capability as a direct Agent tool."""
 
@@ -506,7 +561,7 @@ def register_mx_tools(
     # tool that cancels and the tool that places are looking at the same book.
     ledger = CancelledOrderLedger()
     registry.register(TradeTool(trading, portfolio, ledger, session_factory))
-    registry.register(CancelTool(trading, portfolio, ledger))
+    registry.register(CancelTool(trading, portfolio, ledger, market_data))
 
 
 async def _preflight_trade(
@@ -534,35 +589,64 @@ async def _preflight_trade(
             )
         return
 
+    clear = getattr(portfolio, "clear_read_cache", None)
+    if callable(clear):
+        clear()
     positions = await portfolio.get_positions()
     position = next((item for item in positions if item.symbol == stock_code), None)
     if position is None:
         raise ValueError(f"卖出数量 {quantity} 超过 {stock_code} 可卖数量 0")
     available = position.available_quantity
     if available is None:
-        orders = await portfolio.get_orders()
-        occupied = 0
-        unknown_remaining = False
-        pending_statuses = {
-            "PENDING",
-            "PARTIAL",
-            "PARTIAL_PENDING_CANCEL",
-            "PENDING_CANCEL",
-        }
-        for order in orders:
-            if order.symbol != stock_code or order.direction != "SELL":
-                continue
-            remaining = max(order.quantity - order.filled_quantity, 0)
-            if order.status in pending_statuses:
-                occupied += remaining
-            elif order.status == "UNKNOWN" and remaining > 0:
-                unknown_remaining = True
-        if unknown_remaining:
-            raise ValueError(
-                f"无法确认 {stock_code} 可卖数量；请求卖出 {quantity} 股，"
-                "请先确认未完成卖出委托"
-            )
-        available = max(position.quantity - occupied, 0)
+        raise ValueError(
+            "缺少可靠的可卖数量，无法核对T+1，已阻止卖出；请刷新账户后再判断"
+        )
+    # Some upstream snapshots expose availCount without deducting today's
+    # fills. It is an upper bound, never permission to sell T+1 locked shares.
+    today = utc_now().astimezone(ZoneInfo("Asia/Shanghai")).date()
+    bought_today = 0
+    reserved_sells = 0
+    for order in await portfolio.get_orders():
+        if order.symbol != stock_code:
+            continue
+        direction = order.direction.upper()
+        remaining = order.quantity - order.filled_quantity
+        if remaining < 0:
+            raise ValueError("委托成交数量异常，无法确认可卖数量")
+        if direction not in {"BUY", "SELL"}:
+            if order.filled_quantity > 0 or (
+                remaining > 0
+                and order.status
+                not in {"FILLED", "CANCELLED", "PARTIAL_CANCELLED", "REJECTED"}
+            ):
+                raise ValueError("同标的委托方向不明，无法确认可卖数量")
+            continue
+        if direction == "BUY" and order.filled_quantity > 0:
+            if order.submitted_at is None or order.submitted_at.tzinfo is None:
+                raise ValueError("买入成交时间缺失，无法确认T+1可卖数量")
+            trade_day = order.submitted_at.astimezone(ZoneInfo("Asia/Shanghai")).date()
+            if trade_day > today:
+                raise ValueError("买入成交时间异常，无法确认可卖数量")
+            if trade_day == today:
+                bought_today += order.filled_quantity
+        if direction == "SELL" and remaining > 0:
+            if order.status in {
+                "PENDING",
+                "PARTIAL",
+                "PENDING_CANCEL",
+                "PARTIAL_PENDING_CANCEL",
+            }:
+                reserved_sells += remaining
+            elif order.status not in {
+                "FILLED",
+                "CANCELLED",
+                "PARTIAL_CANCELLED",
+                "REJECTED",
+            }:
+                raise ValueError("同标的卖单状态不明，无法确认可卖数量")
+    available = min(
+        available, max(position.quantity - bought_today - reserved_sells, 0)
+    )
     if quantity > available:
         raise ValueError(f"卖出数量 {quantity} 超过 {stock_code} 可卖数量 {available}")
 

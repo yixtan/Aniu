@@ -581,3 +581,40 @@ async def test_mx_moni_preserves_final_rate_limit_detail_and_status() -> None:
     assert len(call_logs) == 2
     assert all("test-mx-key" not in (call.error_message or "") for call in call_logs)
     await client.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("available", [0, 80])
+async def test_mx_avail_count_is_mapped_without_guessing_from_total(available):
+    def handler(request):
+        assert request.url.path.endswith("/positions")
+        return httpx.Response(
+            200,
+            json={
+                "code": 200,
+                "data": {
+                    "currencyUnit": 1,
+                    "posList": [
+                        {
+                            "secCode": "600000",
+                            "secName": "合成测试",
+                            "count": 100,
+                            "costPrice": 10,
+                            "price": 10,
+                            "value": 1000,
+                            "availCount": available,
+                        }
+                    ]
+                },
+            },
+        )
+
+    client = MxMoniClient(
+        api_key="test",
+        base_url="https://isolated.invalid",
+        transport=httpx.MockTransport(handler),
+        request_interval=0,
+    )
+    positions = await client.get_positions()
+    assert positions[0].available_quantity == available
+    await client.aclose()

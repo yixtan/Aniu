@@ -166,13 +166,14 @@ class RunExecutionContext:
     disposition rule already exists to prevent, applied to the same failure
     one level up.
     """
+    watch_order_plan: tuple[OrderDirective, ...] | None = None
+    """Trusted plan for executing Watch writes; never supplied by the model."""
     authorized_order_ids: frozenset[str] | None = None
     """Orders the current plan speaks about, or None outside an order watch.
 
-    The watch decides *when* a stated condition is met; this decides whether
-    the order was ever in scope. Keeping the two apart is what makes the
-    agreed rule — no plan means look but do not touch — a property of the code
-    rather than a sentence in a prompt that a capable model may reason past.
+    This limits scope. Before a Watch write the tool also verifies the full
+    trusted plan, its action and fresh price/time conditions. Model judgement
+    alone never authorizes a cancellation.
 
     An empty set is not the same as None: it says a plan was read and it named
     nothing, which forbids every write. None says this is not a watch.
