@@ -26,6 +26,7 @@ from backend.business.performance import PerformanceService
 from backend.business.reports.service import ReportMailService
 from backend.business.runs.abort_registry import ActiveRunAbortRegistry
 from backend.business.runs.executor import RunExecutor
+from backend.business.runs.reconciliation import ExecutionCheckQueryPort
 from backend.business.runs.service import RunService
 from backend.business.schedules.service import ScheduleAppService
 from backend.business.settings.channels import ModelChannelService
@@ -51,6 +52,7 @@ from backend.infra.integrations.evaluation_agent import (
     EvaluationAgent,
     EvaluationContextReader,
 )
+from backend.infra.integrations.execution_check import ExecutionCheckQuery
 from backend.infra.integrations.notifications import (
     RoutingNotificationSender,
     TradeNotificationDispatcher,
@@ -391,6 +393,9 @@ class AppRuntime:
             trading_calendar=TradingCalendar2026(),
             committer=session,
         )
+
+    def execution_check_query(self, session: AsyncSession) -> ExecutionCheckQueryPort:
+        return ExecutionCheckQuery(session)
 
     def run_service(self, session: AsyncSession) -> RunService:
         stream_hub = self.require_stream_hub()
