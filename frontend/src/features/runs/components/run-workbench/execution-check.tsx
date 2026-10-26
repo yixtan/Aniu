@@ -54,6 +54,11 @@ export function ExecutionCheckPanel({ runId, status }: { runId: number; status: 
           {getErrorMessage(query.error || refresh.error)}
         </p>
       )}
+      {refresh.data?.status === "stale" && (
+        <p role="alert" className="mt-2 text-sm text-amber-700">
+          账户刷新未成功，仍显示上次观测结果。
+        </p>
+      )}
       {data && (
         <div className="mt-2 space-y-2 text-sm">
           {data.interrupted && (
