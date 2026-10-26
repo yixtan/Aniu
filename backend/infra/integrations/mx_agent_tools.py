@@ -403,6 +403,8 @@ class TradeTool:
         if self.session_factory is None or self.portfolio is None:
             raise ValueError("买入缺少持久化风控或账户连接，禁止下单")
         async with locked_cap_repository(self.session_factory, run_id) as (repo, limit):
+            if abort_signal is not None:
+                abort_signal.throw_if_aborted()
             declared = await repo.for_run(run_id)
             if declared is None or limit is None:
                 raise ValueError(

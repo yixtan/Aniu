@@ -464,3 +464,76 @@ def test_missing_buy_timestamp_fails_closed():
         check_same_day_chase(
             [order(submitted_at=None)], started_at=NOW, symbol="600000", price=11
         )
+
+
+@pytest.mark.asyncio
+async def test_slow_buy_keeps_worker_lease_alive_and_serializes_declarations(
+    session_factory,
+):
+    from contextlib import suppress
+
+    from backend.business.runs.abort_registry import ActiveRunAbortRegistry
+    from backend.infra.repositories.run_job_repo import RunJobRepository
+    from backend.infra.workers.run_worker import RunWorker
+
+    await seed(session_factory, 1)
+    await seed(session_factory, 2)
+    await declare(session_factory, 1, 10)
+    async with session_factory() as session:
+        jobs = RunJobRepository(session)
+        await jobs.create_pending(1)
+        await session.commit()
+        claim = await jobs.claim_next(worker_id="test", lease_seconds=1)
+        await session.commit()
+    assert claim is not None
+    failed = asyncio.Event()
+    worker = RunWorker(
+        session_factory=session_factory,
+        executor_factory=lambda _: None,
+        abort_registry=ActiveRunAbortRegistry(),
+        worker_id="test",
+        lease_seconds=1,
+        heartbeat_seconds=0.05,
+    )
+    heartbeat = asyncio.create_task(
+        worker._heartbeat_loop(1, claim.claim_token, failed)
+    )
+    entered, release = asyncio.Event(), asyncio.Event()
+    portfolio, trading = clients()
+
+    async def slow_snapshot():
+        entered.set()
+        await release.wait()
+        return snapshot()
+
+    portfolio.get_account_snapshot.side_effect = slow_snapshot
+    tool = TradeTool(trading, portfolio, session_factory=session_factory)
+    buy = asyncio.create_task(
+        tool.run_for_call(
+            run_id=1, tool_call_id="slow", instruction="买入 600000 10 100"
+        )
+    )
+    lowering = None
+    try:
+        await asyncio.wait_for(entered.wait(), 2)
+        lowering = asyncio.create_task(declare(session_factory, 2, 5))
+        # External read takes longer than an entire lease; real DB heartbeat must
+        # still renew, while the competing policy change must remain blocked.
+        await asyncio.sleep(1.25)
+        assert not failed.is_set()
+        assert not lowering.done()
+        async with session_factory() as session:
+            job = await RunJobRepository(session).get_by_run_id(1)
+        assert job.heartbeat_at > claim.heartbeat_at
+        assert job.lease_expires_at > datetime.now(UTC)
+        release.set()
+        await asyncio.wait_for(buy, 2)
+        await asyncio.wait_for(lowering, 2)
+        trading.trade.assert_awaited_once()
+    finally:
+        release.set()
+        for task in (buy, lowering, heartbeat):
+            if task is not None:
+                task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await task

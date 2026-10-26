@@ -1,7 +1,7 @@
 """Enforce declared limits before a buy can reach the simulator.
 
-SQLite's writer lock serializes declarations and buy preflights across tools
-and processes. The lock is released on errors; no trading request is replayed.
+A separate lock database serializes declarations and buy preflights across
+processes without blocking the application database's worker heartbeats.
 """
 
 from __future__ import annotations
@@ -12,7 +12,6 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from backend.business.account import (
@@ -22,6 +21,7 @@ from backend.business.account import (
 )
 from backend.business.exposure import ExposureCap
 from backend.business.shared.trading.value_objects import utc_now
+from backend.infra.integrations.trade_mutex import trade_mutex
 from backend.infra.repositories.exposure_cap_repo import ExposureCapRepository
 
 
@@ -29,10 +29,7 @@ from backend.infra.repositories.exposure_cap_repo import ExposureCapRepository
 async def locked_cap_repository(
     factory: async_sessionmaker[AsyncSession], run_id: int
 ) -> AsyncIterator[tuple[ExposureCapRepository, float | None]]:
-    async with factory() as session:
-        # This app persists trading state in SQLite. Take the write lock before
-        # reading so two runs cannot both approve against the previous limit.
-        await session.execute(text("BEGIN IMMEDIATE"))
+    async with trade_mutex(factory), factory() as session:
         repo = ExposureCapRepository(session)
         day, daily_limit = await repo.daily_limit_for_run(run_id)
         if day != utc_now().astimezone(ZoneInfo("Asia/Shanghai")).date():
