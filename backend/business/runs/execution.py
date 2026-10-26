@@ -9,6 +9,7 @@ from typing import ClassVar
 from backend.business.exposure.models import ExposureCap
 from backend.business.open_findings.models import OpenFinding
 from backend.business.order_directives import OrderDirective
+from backend.business.order_directives.handoff import HandoffCheck
 from backend.business.runs import StrategyRun, StrategySnapshot
 from backend.business.shared.trading import is_successful_trade_call
 from backend.llm import AbortSignal
@@ -107,6 +108,7 @@ class RunExecutionContext:
     run: StrategyRun
     snapshot: StrategySnapshot
     run_report: RunReport | None = None
+    handoff_checker: Callable[[int], Awaitable[HandoffCheck]] | None = None
     llm_runtime: object | None = None
     tool_registry: object | None = None
     market_session_is_open: Callable[[], bool] | None = None

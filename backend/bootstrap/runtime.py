@@ -518,7 +518,9 @@ class AppRuntime:
             abort_registry=self.abort_registry,
             notifier=self.optional_notification_dispatcher(),
             watchlist=RunWatchlistQuery(self.require_session_factory()),
-            order_plan=RunOrderPlanQuery(self.require_session_factory()),
+            order_plan=RunOrderPlanQuery(
+                self.require_session_factory(), clients.portfolio
+            ),
             open_findings=RunOpenFindingsQuery(self.require_session_factory()),
             exposure_caps=RecentExposureCapsQuery(self.require_session_factory()),
             run_completion_hook=self.optional_away_mode_service(session),

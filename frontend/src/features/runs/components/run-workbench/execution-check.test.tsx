@@ -24,7 +24,7 @@ it("shows interrupted write evidence and refreshes without rerunning trades", as
       },
     ],
   });
-  api.refreshAccountCache.mockResolvedValue({ status: "refreshed" });
+  api.refreshAccountCache.mockResolvedValue({ status: "stale" });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
@@ -37,4 +37,5 @@ it("shows interrupted write evidence and refreshes without rerunning trades", as
   await userEvent.click(screen.getByRole("button", { name: "刷新账户并核对" }));
   await waitFor(() => expect(api.getExecutionCheck).toHaveBeenCalledTimes(2));
   expect(api.refreshAccountCache).toHaveBeenCalledTimes(1);
+  expect(await screen.findByText("账户刷新未成功，仍显示上次观测结果。")).toBeInTheDocument();
 });

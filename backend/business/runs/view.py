@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from backend.business.runs import RunTrace, TraceStage, TraceStep
 from backend.business.runs.tool_presentation import (
@@ -219,13 +221,38 @@ def _project_step(step: TraceStep) -> dict[str, object]:
             model_content_characters = _model_content_characters(step, data)
             if model_content_characters is not None:
                 tool_call["model_content_characters"] = model_content_characters
+    content = step.content if step.type in {"thinking", "result"} else None
+    if step.step_id == "order_handoff_check" and step.type == "status":
+        data = dict(step.data or {})
+        raw_issues = data.get("issues")
+        issues = (
+            [x for x in raw_issues if isinstance(x, str)]
+            if isinstance(raw_issues, list)
+            else []
+        )
+        checked_at = _read_text(data.get("checked_at"))
+        if checked_at:
+            try:
+                moment = datetime.fromisoformat(checked_at)
+                checked_at = (
+                    moment.astimezone(ZoneInfo("Asia/Shanghai")).strftime(
+                        "%Y-%m-%d %H:%M:%S（北京时间）"
+                    )
+                    if moment.tzinfo is not None
+                    else "时间未确认"
+                )
+            except ValueError:
+                checked_at = "时间未确认"
+        content = "\n".join(
+            ([f"核对时间：{checked_at}"] if checked_at else []) + issues
+        )
     return {
         "step_id": step.step_id,
         "type": step.type,
         "title": step.title,
         "status": step.status,
         "summary": step.summary if step.type != "tool" else None,
-        "content": step.content if step.type in {"thinking", "result"} else None,
+        "content": content,
         "tool_call": tool_call,
         "started_at": step.started_at.isoformat()
         if step.started_at is not None

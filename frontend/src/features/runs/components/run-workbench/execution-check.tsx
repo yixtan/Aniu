@@ -3,6 +3,16 @@ import { getExecutionCheck, refreshAccountCache } from "@/lib/api";
 import { getErrorMessage } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 
+const orderStatuses: Record<string, string> = {
+  PENDING: "待成交",
+  PARTIAL: "部分成交",
+  FILLED: "全部成交",
+  CANCELLED: "已撤单",
+  PARTIAL_CANCELLED: "部分成交后撤单",
+  REJECTED: "已拒绝或作废",
+  PENDING_CANCEL: "撤单处理中",
+  PARTIAL_PENDING_CANCEL: "部分成交，撤单处理中",
+};
 const outcomes: Record<string, string> = {
   unknown: "结果待确认",
   accepted: "已受理，未确认成交",
@@ -44,6 +54,11 @@ export function ExecutionCheckPanel({ runId, status }: { runId: number; status: 
           {getErrorMessage(query.error || refresh.error)}
         </p>
       )}
+      {refresh.data?.status === "stale" && (
+        <p role="alert" className="mt-2 text-sm text-amber-700">
+          账户刷新未成功，仍显示上次观测结果。
+        </p>
+      )}
       {data && (
         <div className="mt-2 space-y-2 text-sm">
           {data.interrupted && (
@@ -66,7 +81,7 @@ export function ExecutionCheckPanel({ runId, status }: { runId: number; status: 
               </p>
               <p>
                 {item.order_id ? `委托编号 ${item.order_id}` : "没有可核对的委托编号"}
-                {item.order_status ? ` · ${item.order_status}` : ""}
+                {item.order_status ? ` · ${orderStatuses[item.order_status] ?? "状态待核对"}` : ""}
                 {item.filled_quantity !== null ? ` · 已成交 ${item.filled_quantity} 股` : ""}
               </p>
               <p className="text-muted-foreground">{item.explanation}</p>

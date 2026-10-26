@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
+import asyncio
+from datetime import UTC, datetime
+
+from backend.business.order_directives.handoff import HandoffCheck
 from backend.business.runs.agent_runner import AgentRunnerPort
 from backend.business.runs.execution import RunExecutionContext, RunReport
 from backend.business.runs.memory_ledger import with_memory_ledger
+from backend.business.runs.run_events import RunEventType
 from backend.business.runs.stages.stage_helpers import (
     directive_payload,
     emit_stage_prompt_prepared,
+    emit_tool_loop_event,
     require_llm_runtime,
 )
+from backend.business.shared import RunAbortError
 from backend.business.shared.serialization import serialize_context
 
 _MEMORY_TOOL_PROTOCOL = "\n".join(
@@ -48,6 +55,9 @@ class RunStage:
         prompt_parts = [
             stage_settings.prompt,
             _MEMORY_TOOL_PROTOCOL,
+            "结束前必须为全部有效挂单调用declare_order_plan提交本轮处置计划，"
+            "包括旧挂单、部分成交剩余量和撤单处理中委托。明确持有也是计划；"
+            "报告文字不能替代登记。系统会独立核对，遗漏或无效计划会标记交接未完成。",
             (
                 "<exposure-execution-rules>"
                 "敞口执行约束优先于历史经验中的升档建议：每天首轮可以重新定档；"
@@ -149,8 +159,32 @@ class RunStage:
         content = result.content.strip()
         if not content:
             raise ValueError("run report must not be empty")
+        content = with_memory_ledger(content, result.tool_activity)
+        if context.handoff_checker is not None:
+            try:
+                async with asyncio.timeout(20):
+                    handoff = await context.handoff_checker(context.run.run_id)
+            except RunAbortError:
+                raise
+            except Exception:
+                handoff = HandoffCheck(
+                    "unknown",
+                    datetime.now(UTC).isoformat(),
+                    0,
+                    0,
+                    ("账户或计划查询失败，请刷新账户后核对；不会自动重跑交易。",),
+                )
+            if context.abort_signal is not None:
+                context.abort_signal.throw_if_aborted()
+            await emit_tool_loop_event(
+                context,
+                stage_name="Run",
+                event_type=RunEventType.HANDOFF_CHECKED,
+                payload=handoff.payload(),
+            )
+            content += handoff.markdown()
         return RunReport(
-            content=with_memory_ledger(content, result.tool_activity),
+            content=content,
             tool_activity=result.tool_activity,
             transcript=result.transcript,
             total_tokens=result.total_tokens,
