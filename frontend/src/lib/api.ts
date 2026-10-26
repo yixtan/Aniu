@@ -601,3 +601,11 @@ export async function emailRunReport(runId: number) {
   });
   return getResponseData(result);
 }
+
+export async function getExecutionCheck(runId: number) {
+  return getResponseData(
+    await openapiClient.GET("/api/aniu/runs/{run_id}/execution-check", {
+      params: { path: { run_id: runId } },
+    }),
+  );
+}

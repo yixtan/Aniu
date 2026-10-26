@@ -1197,6 +1197,156 @@
         "title": "EvaluationResponse",
         "type": "object"
       },
+      "ExecutionCheck": {
+        "properties": {
+          "account_observed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Observed At"
+          },
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "evidence_stale": {
+            "title": "Evidence Stale",
+            "type": "boolean"
+          },
+          "interrupted": {
+            "title": "Interrupted",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ExecutionResultRow"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "notice": {
+            "title": "Notice",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "integer"
+          },
+          "run_status": {
+            "title": "Run Status",
+            "type": "string"
+          },
+          "unfinished_steps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unfinished Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "run_id",
+          "run_status",
+          "checked_at",
+          "account_observed_at",
+          "evidence_stale",
+          "interrupted",
+          "unfinished_steps",
+          "items",
+          "notice"
+        ],
+        "title": "ExecutionCheck",
+        "type": "object"
+      },
+      "ExecutionResultRow": {
+        "properties": {
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "filled_quantity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filled Quantity"
+          },
+          "instruction": {
+            "title": "Instruction",
+            "type": "string"
+          },
+          "observed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observed At"
+          },
+          "operation": {
+            "title": "Operation",
+            "type": "string"
+          },
+          "order_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Id"
+          },
+          "order_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order Status"
+          },
+          "outcome": {
+            "title": "Outcome",
+            "type": "string"
+          },
+          "tool_call_id": {
+            "title": "Tool Call Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tool_call_id",
+          "operation",
+          "instruction",
+          "outcome",
+          "order_id",
+          "order_status",
+          "filled_quantity",
+          "observed_at",
+          "explanation"
+        ],
+        "title": "ExecutionResultRow",
+        "type": "object"
+      },
       "FetchModelCatalogRequest": {
         "additionalProperties": false,
         "properties": {
@@ -8323,6 +8473,104 @@
           }
         ],
         "summary": "Request Evaluation",
+        "tags": [
+          "Runs"
+        ]
+      }
+    },
+    "/api/aniu/runs/{run_id}/execution-check": {
+      "get": {
+        "description": "Read recovery evidence without retrying trades or calling the model.",
+        "operationId": "get_execution_check_api_aniu_runs__run_id__execution_check_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource state conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          }
+        },
+        "security": [
+          {
+            "AniuSessionCookie": []
+          }
+        ],
+        "summary": "Get Execution Check",
         "tags": [
           "Runs"
         ]

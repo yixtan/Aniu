@@ -8,7 +8,7 @@ from typing import Annotated, Protocol
 from fastapi import APIRouter, Body, Depends, Query, status
 from pydantic import BaseModel, ConfigDict
 
-from backend.api.deps import get_run_service, get_run_worker
+from backend.api.deps import get_execution_check_query, get_run_service, get_run_worker
 from backend.api.schemas.error import error_responses
 from backend.api.schemas.run import (
     AbortRunResponse,
@@ -20,6 +20,7 @@ from backend.api.security import require_authenticated
 from backend.business.runs.commands import StartRunCommand
 from backend.business.runs.dto import RunDayDTO, RunDetailDTO, RunSummaryDTO
 from backend.business.runs.queries import GetRunDetailQuery, ListRunsQuery
+from backend.business.runs.reconciliation import ExecutionCheck, ExecutionCheckQueryPort
 from backend.business.runs.service import RunService
 from backend.business.shared import TriggerSource
 
@@ -149,3 +150,12 @@ async def abort_run(
     request = payload or AbortRunRequest()
     await service.abort_run(run_id, reason=request.reason)
     return AbortRunResponse(run_id=run_id, status="abort_requested")
+
+
+@router.get("/{run_id}/execution-check", response_model=ExecutionCheck)
+async def get_execution_check(
+    run_id: int,
+    query: Annotated[ExecutionCheckQueryPort, Depends(get_execution_check_query)],
+) -> ExecutionCheck:
+    """Read recovery evidence without retrying trades or calling the model."""
+    return await query.check(run_id)

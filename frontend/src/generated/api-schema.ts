@@ -556,6 +556,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/aniu/runs/{run_id}/execution-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Execution Check
+         * @description Read recovery evidence without retrying trades or calling the model.
+         */
+        get: operations["get_execution_check_api_aniu_runs__run_id__execution_check_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/aniu/schedules": {
         parameters: {
             query?: never;
@@ -1337,6 +1357,51 @@ export interface components {
              * @default 0
              */
             total_tokens: number;
+        };
+        /** ExecutionCheck */
+        ExecutionCheck: {
+            /** Account Observed At */
+            account_observed_at: string | null;
+            /**
+             * Checked At
+             * Format: date-time
+             */
+            checked_at: string;
+            /** Evidence Stale */
+            evidence_stale: boolean;
+            /** Interrupted */
+            interrupted: boolean;
+            /** Items */
+            items: components["schemas"]["ExecutionResultRow"][];
+            /** Notice */
+            notice: string;
+            /** Run Id */
+            run_id: number;
+            /** Run Status */
+            run_status: string;
+            /** Unfinished Steps */
+            unfinished_steps: string[];
+        };
+        /** ExecutionResultRow */
+        ExecutionResultRow: {
+            /** Explanation */
+            explanation: string;
+            /** Filled Quantity */
+            filled_quantity: number | null;
+            /** Instruction */
+            instruction: string;
+            /** Observed At */
+            observed_at: string | null;
+            /** Operation */
+            operation: string;
+            /** Order Id */
+            order_id: string | null;
+            /** Order Status */
+            order_status: string | null;
+            /** Outcome */
+            outcome: string;
+            /** Tool Call Id */
+            tool_call_id: string;
         };
         /** FetchModelCatalogRequest */
         FetchModelCatalogRequest: {
@@ -5099,6 +5164,82 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_execution_check_api_aniu_runs__run_id__execution_check_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutionCheck"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource state conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

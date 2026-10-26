@@ -19,6 +19,7 @@ from backend.business.notifications.service import NotificationService
 from backend.business.open_findings import OpenFindingService
 from backend.business.performance import PerformanceService
 from backend.business.reports.service import ReportMailService
+from backend.business.runs.reconciliation import ExecutionCheckQueryPort
 from backend.business.runs.service import RunService
 from backend.business.schedules.service import ScheduleAppService
 from backend.business.settings.channels import ModelChannelService
@@ -42,17 +43,17 @@ class ApiRuntimePort(Protocol):
 
     def run_service(self, session: AsyncSession) -> RunService: ...
 
+    def execution_check_query(
+        self, session: AsyncSession
+    ) -> ExecutionCheckQueryPort: ...
+
     def auth_service(self, session: AsyncSession) -> AuthAppService: ...
 
     def memory_service(self, session: AsyncSession) -> MemoryService: ...
 
-    def notification_service(
-        self, session: AsyncSession
-    ) -> NotificationService: ...
+    def notification_service(self, session: AsyncSession) -> NotificationService: ...
 
-    def report_mail_service(
-        self, session: AsyncSession
-    ) -> ReportMailService: ...
+    def report_mail_service(self, session: AsyncSession) -> ReportMailService: ...
 
     def away_mode_service(self, session: AsyncSession) -> AwayModeService: ...
 
@@ -60,13 +61,9 @@ class ApiRuntimePort(Protocol):
 
     def system_status_service(self, session: AsyncSession) -> SystemStatusService: ...
 
-    def evaluation_query_service(
-        self, session: AsyncSession
-    ) -> EvaluationService: ...
+    def evaluation_query_service(self, session: AsyncSession) -> EvaluationService: ...
 
-    def open_finding_service(
-        self, session: AsyncSession
-    ) -> OpenFindingService: ...
+    def open_finding_service(self, session: AsyncSession) -> OpenFindingService: ...
 
     def dream_query_service(self, session: AsyncSession) -> DreamService: ...
 
@@ -224,3 +221,10 @@ def get_system_status_service(
     runtime: Annotated[ApiRuntimePort, Depends(get_runtime)],
 ) -> SystemStatusService:
     return runtime.system_status_service(session)
+
+
+def get_execution_check_query(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    runtime: Annotated[ApiRuntimePort, Depends(get_runtime)],
+) -> ExecutionCheckQueryPort:
+    return runtime.execution_check_query(session)

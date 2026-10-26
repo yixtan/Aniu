@@ -84,6 +84,8 @@ def test_a_watch_stage_survives_the_response_model() -> None:
     )
 
     assert stage.key == "watch"
+
+
 @pytest.mark.asyncio
 async def test_run_days_is_not_swallowed_by_the_run_id_route(
     api_client: AsyncClient,
@@ -116,3 +118,19 @@ async def test_a_finished_run_shows_up_in_its_day(
     assert days[0]["analysis_total"] == 1
     # The analysis columns mean analyses only; nothing leaks across.
     assert days[0]["watch_total"] == 0
+
+
+@pytest.mark.asyncio
+async def test_execution_check_is_read_only_and_missing_run_is_404(run_api_client):
+    missing = await run_api_client.get("/api/aniu/runs/999/execution-check")
+    assert missing.status_code == 404
+    started = await run_api_client.post("/api/aniu/runs/start", json={})
+    run_id = started.json()["run_id"]
+    for _ in range(50):
+        response = await run_api_client.get(f"/api/aniu/runs/{run_id}/execution-check")
+        assert response.status_code == 200
+        if response.json()["run_status"] != "RUNNING":
+            break
+        await asyncio.sleep(0.05)
+    assert response.json()["run_id"] == run_id
+    assert "notice" in response.json()
