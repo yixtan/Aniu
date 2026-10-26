@@ -415,3 +415,30 @@ async def test_no_cap_declared_yet_sends_no_section() -> None:
     await RunStage().execute(context, runner)
 
     assert "recent_exposure_caps" not in runner.prompts[0]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fails", [False, True])
+async def test_system_handoff_is_recorded_after_model_report_without_retry(fails):
+    from unittest.mock import AsyncMock
+
+    from backend.business.order_directives.handoff import HandoffCheck
+    from backend.business.runs.run_events import RunEventType
+
+    context = _context(market_open=True)
+    context.handoff_checker = AsyncMock(
+        return_value=HandoffCheck("incomplete", "test", 2, 1, ("一笔遗漏",))
+    )
+    if fails:
+        context.handoff_checker.side_effect = RuntimeError("private provider failure")
+    context.tool_loop_event_sink = AsyncMock()
+    runner = RecordingRunner(AgentStageResult(content="报告声称已全部交接"))
+    result = await RunStage().execute(context, runner)
+    assert len(runner.prompts) == 1
+    context.handoff_checker.assert_awaited_once_with(1)
+    args = context.tool_loop_event_sink.call_args.args
+    assert args[1] == RunEventType.HANDOFF_CHECKED
+    assert args[2]["status"] == ("unknown" if fails else "incomplete")
+    assert "private provider" not in result.content
+    assert "挂单交接检查（系统核对）" in result.content
+    assert ("交接待核对" if fails else "交接未完成") in result.content

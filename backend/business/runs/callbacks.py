@@ -191,6 +191,16 @@ class RunExecutionCallbacks:
         payload: dict[str, Any],
     ) -> None:
         recorder = self._require_trace_recorder(run_id)
+        if event_type is RunEventType.HANDOFF_CHECKED:
+            await recorder.set_status_step(
+                stage_name,
+                step_id="order_handoff_check",
+                title="挂单交接检查",
+                summary=str(payload.get("summary") or "交接待核对"),
+                status="completed" if payload.get("status") == "complete" else "failed",
+                data=dict(payload),
+            )
+            return
         if event_type is RunEventType.CONTEXT_COMPACTED:
             index = self._compaction_counts.get(stage_name, 0) + 1
             self._compaction_counts[stage_name] = index

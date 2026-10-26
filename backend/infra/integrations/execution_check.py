@@ -150,7 +150,7 @@ class ExecutionCheckQuery:
             interrupted=interrupted,
             unfinished_steps=list(dict.fromkeys(unfinished)),
             items=items,
-            notice="系统按持久化调用账本和账户委托核对，不重新下单或重跑研究。无委托编号的请求不按股票、价格猜测归属。"
+            notice="系统按交易调用记录和账户委托核对，不重新下单或重跑研究。无委托编号的请求不按股票、价格猜测归属。"
             + (
                 " 未发现持久化交易调用记录，不代表旧版本或中断窗口内一定没有交易。"
                 if not items

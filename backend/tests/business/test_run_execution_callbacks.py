@@ -234,3 +234,36 @@ async def test_a_finished_run_stage_still_reads_the_way_it_did() -> None:
     result = next(step for step in stage.steps if step.step_id == "result")
     assert result.title == "生成 Markdown 运行报告"
     assert result.status == "completed"
+
+
+@pytest.mark.asyncio
+async def test_handoff_failure_survives_completed_report_and_public_projection():
+    from backend.business.runs.view import project_run_trace
+
+    callbacks, run = _live_callbacks(RunState.RUN)
+    await callbacks.on_state_entered(run.run_id, "Run")
+    await callbacks.on_tool_loop_event(
+        run.run_id,
+        "Run",
+        RunEventType.HANDOFF_CHECKED,
+        {
+            "status": "incomplete",
+            "summary": "交接未完成",
+            "checked_at": "2026-10-26T06:00:00+00:00",
+            "issues": ["合成委托缺少计划"],
+            "private_unused": "not public",
+        },
+    )
+    await callbacks.on_state_completed(
+        run.run_id, "Run", {"run_content": "研究报告完成"}, duration_ms=1
+    )
+    projected = project_run_trace(run.trace)
+    step = next(
+        x
+        for s in projected["stages"]
+        for x in s["steps"]
+        if x["step_id"] == "order_handoff_check"
+    )
+    assert step["status"] == "failed"
+    assert "合成委托缺少计划" in step["content"]
+    assert "private_unused" not in str(projected)

@@ -202,6 +202,7 @@ class AniuOrchestrator:
         context.market_session_is_open = self._is_market_session_open
         context.cancellations_accepted = self._are_cancellations_accepted
         context.tool_registry = self._tool_registry
+        context.handoff_checker = getattr(self._order_plan, "check_handoff", None)
         if read_watchlist:
             context.followed_companies = await self._followed_companies(run.run_id)
         self._attach_runtime_callbacks(context, run.run_id)
@@ -313,8 +314,7 @@ class AniuOrchestrator:
             },
         )
         signal.abort(
-            f"盯盘超过 {int(self._watch_deadline_seconds)} 秒未完成，"
-            "已让位以免挡住操盘"
+            f"盯盘超过 {int(self._watch_deadline_seconds)} 秒未完成，已让位以免挡住操盘"
         )
 
     async def _execute_watch(
@@ -334,9 +334,7 @@ class AniuOrchestrator:
 
         directives = await self._current_order_plan(run.run_id)
         context.watch_order_plan = directives
-        context.authorized_order_ids = frozenset(
-            item.order_id for item in directives
-        )
+        context.authorized_order_ids = frozenset(item.order_id for item in directives)
         runtime = self._runtime_for(RunState.WATCH.value)
         if runtime is None:
             raise ServiceConfigurationError("Watch llm runtime is not configured")
@@ -396,9 +394,7 @@ class AniuOrchestrator:
             )
             return ()
 
-    async def _attach_recent_exposure_caps(
-        self, context: RunExecutionContext
-    ) -> None:
+    async def _attach_recent_exposure_caps(self, context: RunExecutionContext) -> None:
         """The caps already declared, so 「为什么不动」 is answerable — and
         visible when the answer has been the same for days.
 
@@ -439,9 +435,7 @@ class AniuOrchestrator:
                 exc_info=True,
             )
 
-    async def _attach_order_plan_for_review(
-        self, context: RunExecutionContext
-    ) -> None:
+    async def _attach_order_plan_for_review(self, context: RunExecutionContext) -> None:
         """Show an analysis the plan it is about to replace.
 
         Failing to read it costs context and nothing else. That is the opposite
