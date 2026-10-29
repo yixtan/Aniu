@@ -16,6 +16,7 @@ from backend.business.runs.stages.stage_helpers import (
     emit_tool_loop_event,
     require_llm_runtime,
 )
+from backend.business.runs.trading_facts import TradingFacts
 from backend.business.shared import RunAbortError
 from backend.business.shared.serialization import serialize_context
 
@@ -55,6 +56,10 @@ class RunStage:
         prompt_parts = [
             stage_settings.prompt,
             _MEMORY_TOOL_PROTOCOL,
+            "审核状态与潜在敞口由系统在本轮结束后独立生成。"
+            "报告只写投资判断及交易意图，不自行宣称挂单已通过prepare_buy审核，"
+            "不自行计算或复述潜在敞口、剩余额度或挂单全部成交后的比例。"
+            "旧挂单没有下单前审核记录，不能从交接完成推断估值通过。",
             "买入前先完成研究与估值核验，调用prepare_buy提交拟买指令和价格失效条件，"
             "通过后用返回的buy_review_call_id调用trade；审核不下单，缺失证据不能豁免。"
             "后续挂单计划须沿用审核条件；同一轮撤单后也不得提价重挂。",
@@ -186,8 +191,32 @@ class RunStage:
                 payload=handoff.payload(),
             )
             content += handoff.markdown()
+        model_content = content
+        facts = None
+        if context.trading_facts_reader is not None:
+            try:
+                async with asyncio.timeout(40):
+                    facts = await context.trading_facts_reader(context.run.run_id)
+            except RunAbortError:
+                raise
+            except Exception:
+                facts = TradingFacts(
+                    datetime.now(UTC).isoformat(),
+                    issues=("系统事实查询未完成，审核与潜在敞口待核对。",),
+                )
+            if context.abort_signal is not None:
+                context.abort_signal.throw_if_aborted()
+            await emit_tool_loop_event(
+                context,
+                stage_name="Run",
+                event_type=RunEventType.TRADING_FACTS_COLLECTED,
+                payload={**facts.payload(), "report_markdown": facts.markdown()},
+            )
+            content += facts.markdown()
         return RunReport(
             content=content,
+            model_content=model_content,
+            system_facts=facts,
             tool_activity=result.tool_activity,
             transcript=result.transcript,
             total_tokens=result.total_tokens,

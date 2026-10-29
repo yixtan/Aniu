@@ -11,6 +11,7 @@ from backend.business.open_findings.models import OpenFinding
 from backend.business.order_directives import OrderDirective
 from backend.business.order_directives.handoff import HandoffCheck
 from backend.business.runs import StrategyRun, StrategySnapshot
+from backend.business.runs.trading_facts import TradingFacts
 from backend.business.shared.trading import is_successful_trade_call
 from backend.llm import AbortSignal
 
@@ -62,6 +63,8 @@ class RunReport:
     total_tokens: int = 0
     # The part of that total the provider served from its prompt cache.
     cached_tokens: int = 0
+    system_facts: TradingFacts | None = None
+    model_content: str | None = None
 
     def as_payload(self) -> dict[str, object]:
         return {
@@ -109,6 +112,7 @@ class RunExecutionContext:
     snapshot: StrategySnapshot
     run_report: RunReport | None = None
     handoff_checker: Callable[[int], Awaitable[HandoffCheck]] | None = None
+    trading_facts_reader: Callable[[int], Awaitable[TradingFacts]] | None = None
     llm_runtime: object | None = None
     tool_registry: object | None = None
     market_session_is_open: Callable[[], bool] | None = None

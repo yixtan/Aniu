@@ -501,7 +501,7 @@ class AppRuntime:
                 mx_research_client=clients.research,
                 mx_portfolio_client=clients.portfolio,
                 mx_trading_client=clients.trading,
-                public_stock_data=self.public_stock_data,
+                public_stock_data=self.require_public_stock_data(),
                 session_factory=self.require_session_factory(),
             ),
             invocation_session_factory=self.require_session_factory(),
@@ -519,7 +519,9 @@ class AppRuntime:
             notifier=self.optional_notification_dispatcher(),
             watchlist=RunWatchlistQuery(self.require_session_factory()),
             order_plan=RunOrderPlanQuery(
-                self.require_session_factory(), clients.portfolio
+                self.require_session_factory(),
+                clients.portfolio,
+                self.require_public_stock_data(),
             ),
             open_findings=RunOpenFindingsQuery(self.require_session_factory()),
             exposure_caps=RecentExposureCapsQuery(self.require_session_factory()),

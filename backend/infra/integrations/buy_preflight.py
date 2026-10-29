@@ -80,7 +80,9 @@ def _thresholds(result: dict[str, object], symbol: str) -> list[dict[str, object
     ]
 
 
-def _quote(result: dict[str, object], symbol: str) -> dict[str, object]:
+def _quote(
+    result: dict[str, object], symbol: str, *, allow_stale: bool = False
+) -> dict[str, object]:
     data = result.get("data")
     quotes = data.get("quotes") if isinstance(data, dict) else None
     if not isinstance(quotes, list) or len(quotes) != 1:
@@ -95,7 +97,7 @@ def _quote(result: dict[str, object], symbol: str) -> dict[str, object]:
     except ValueError as exc:
         raise ValueError("行情观测时间无效，禁止买入") from exc
     age = (utc_now() - moment).total_seconds()
-    if age < -5 or age > 60:
+    if age < -5 or (age > 60 and not allow_stale):
         raise ValueError("行情过期或时间异常，禁止买入")
     for name in ("price", "pe_ttm", "pb"):
         _positive(row.get(name), name)
@@ -106,19 +108,31 @@ def check_valuation(
     quote: dict[str, object], thresholds: list[dict[str, object]], price: float
 ) -> list[dict[str, object]]:
     """Compare at the proposed limit price, never dynamic/forward PE."""
+    checks = valuation_checks(quote, thresholds, price)
+    failures = [
+        f"{str(row['metric']).upper()} {row['window_years']}年"
+        for row in checks
+        if not row["passed"]
+    ]
+    if failures:
+        raise ValueError("拟买价未通过30分位估值门：" + "、".join(failures))
+    return checks
+
+
+def valuation_checks(
+    quote: dict[str, object], thresholds: list[dict[str, object]], price: float
+) -> list[dict[str, object]]:
     spot = _positive(quote.get("price"), "行情价格")
+    _positive(price, "拟买价")
     checks = []
-    failures = []
     for row in thresholds:
         metric = str(row["metric"])
         multiple = _positive(quote.get("pe_ttm" if metric == "pe" else "pb"), metric)
         at_limit = multiple * price / spot
         threshold = _positive(row.get("percentile_30_threshold"), "30分位阈值")
-        checks.append({**row, "at_limit": at_limit})
-        if at_limit > threshold + 1e-8:
-            failures.append(f"{metric.upper()} {row['window_years']}年")
-    if failures:
-        raise ValueError("拟买价未通过30分位估值门：" + "、".join(failures))
+        checks.append(
+            {**row, "at_limit": at_limit, "passed": at_limit <= threshold + 1e-8}
+        )
     return checks
 
 

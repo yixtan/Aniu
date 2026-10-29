@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from typing import Any
 
 from backend.business.runs import RunEventType
@@ -53,8 +54,13 @@ class SummaryStage:
         if report is None:
             raise ValueError("run report must be available before summary")
         stage_prompt = context.snapshot.settings_for_stage("Summary").prompt
+        if report.system_facts is not None:
+            stage_prompt += (
+                "\n审核状态与潜在敞口由系统单独附加，禁止在分析排版中自行生成这些字段，"
+                "不得宣称旧挂单已经通过prepare_buy审核。"
+            )
         payload = build_summary_stage_payload(
-            report,
+            replace(report, content=report.model_content or report.content),
             max_tokens=_summary_payload_budget(context, stage_prompt),
             max_bytes=_SUMMARY_INPUT_MAX_BYTES,
         )
@@ -85,7 +91,12 @@ class SummaryStage:
             abort_signal=context.abort_signal,
         )
         return SummaryDraft(
-            summary=_coerce_html_summary(result.content),
+            summary=_coerce_html_summary(result.content)
+            + (
+                report.system_facts.markdown()
+                if report.system_facts is not None
+                else ""
+            ),
             total_tokens=result.total_tokens,
             cached_tokens=result.cached_tokens,
         )

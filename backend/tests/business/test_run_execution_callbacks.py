@@ -267,3 +267,28 @@ async def test_handoff_failure_survives_completed_report_and_public_projection()
     assert step["status"] == "failed"
     assert "合成委托缺少计划" in step["content"]
     assert "private_unused" not in str(projected)
+
+
+@pytest.mark.asyncio
+async def test_system_facts_survive_projection_without_exposing_extra_metadata():
+    from backend.business.runs.view import project_run_trace
+
+    callbacks, run = _live_callbacks(RunState.RUN)
+    await callbacks.on_state_entered(run.run_id, "Run")
+    await callbacks.on_tool_loop_event(
+        run.run_id,
+        "Run",
+        RunEventType.TRADING_FACTS_COLLECTED,
+        {
+            "report_markdown": "潜在敞口6.00%，无下单前审核记录",
+            "private_unused": "not public",
+        },
+    )
+    step = next(
+        x
+        for s in project_run_trace(run.trace)["stages"]
+        for x in s["steps"]
+        if x["step_id"] == "system_trading_facts"
+    )
+    assert step["content"] == "潜在敞口6.00%，无下单前审核记录"
+    assert "private_unused" not in str(step)
