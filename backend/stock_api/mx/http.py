@@ -66,6 +66,8 @@ class MxHttpTransport:
         self,
         endpoint: str,
         body: dict[str, object],
+        *,
+        before_send: Callable[[], None] | None = None,
     ) -> dict[str, Any]:
         operation_id = _MX_OPERATION_BY_ENDPOINT.get(endpoint, endpoint)
         started = time.perf_counter()
@@ -99,6 +101,8 @@ class MxHttpTransport:
                     should_retry = False
                     retry_delay_seconds = 0.0
                     async with self._request_gate:
+                        if before_send is not None:
+                            before_send()
                         response = await self._ensure_client().post(
                             request_url,
                             json=body,

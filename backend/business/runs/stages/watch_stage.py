@@ -17,6 +17,8 @@ on. Each one still spent about 30,000 tokens confirming that.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from backend.business.order_directives import OrderDirective
 from backend.business.runs.agent_runner import AgentRunnerPort
 from backend.business.runs.execution import RunExecutionContext, RunReport
@@ -25,6 +27,8 @@ from backend.business.runs.stages.stage_helpers import (
     emit_stage_prompt_prepared,
     require_llm_runtime,
 )
+from backend.business.runs.stages.valuation_guard import check_valuation_cancellations
+from backend.business.shared import ServiceConfigurationError
 from backend.business.shared.serialization import serialize_context
 
 _WATCH_PROTOCOL = "\n".join(
@@ -43,13 +47,28 @@ class WatchStage:
     async def execute(
         self,
         context: RunExecutionContext,
-        agent_runner: AgentRunnerPort,
+        agent_runner: AgentRunnerPort | None,
         *,
         directives: tuple[OrderDirective, ...] = (),
     ) -> RunReport:
+        guard = await check_valuation_cancellations(context, "Watch")
+        if guard is not None:
+            directives = tuple(
+                d for d in directives if d.order_id not in guard.managed_order_ids
+            )
         if not any(item.needs_watching for item in directives):
-            return _nothing_to_watch(directives)
+            report = _nothing_to_watch(directives)
+            if guard is not None:
+                return replace(
+                    report,
+                    content=report.content + guard.markdown(),
+                    tool_activity=guard.tool_activity,
+                    system_cancellations=guard.markdown(),
+                )
+            return report
         require_llm_runtime(context, stage_name="Watch")
+        if agent_runner is None:
+            raise ServiceConfigurationError("Watch llm runtime is not configured")
         stage_settings = context.snapshot.settings_for_stage("Watch")
         market_open = (
             bool(context.market_session_is_open())
@@ -83,8 +102,9 @@ class WatchStage:
         if not content:
             raise ValueError("watch record must not be empty")
         return RunReport(
-            content=content,
-            tool_activity=result.tool_activity,
+            content=content + (guard.markdown() if guard else ""),
+            tool_activity=(guard.tool_activity if guard else ()) + result.tool_activity,
+            system_cancellations=guard.markdown() if guard else None,
             transcript=result.transcript,
             total_tokens=result.total_tokens,
             cached_tokens=result.cached_tokens,
@@ -97,13 +117,13 @@ def _nothing_to_watch(directives: tuple[OrderDirective, ...]) -> RunReport:
     if not directives:
         return RunReport(
             content=(
-                "本轮不需要盯盘：当前没有挂单处置计划，盯盘不能撤单或下单，"
-                "所以没有调用模型。"
+                "当前没有挂单处置计划需要模型执行，所以没有调用模型。"
+                "系统估值处置另行核对。"
             )
         )
     lines = [
         f"本轮不需要盯盘：计划里的 {len(directives)} 笔委托都是无条件持有，"
-        "没有撤单、改价或触发条件，盯盘没有可执行的动作，所以没有调用模型。"
+        "没有撤单、改价或触发条件，模型没有可执行的动作，所以没有调用模型。"
         "持有的委托收盘时自动作废。",
         "",
     ]

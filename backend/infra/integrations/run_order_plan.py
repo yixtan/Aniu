@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from sqlalchemy import select
@@ -10,11 +11,19 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from backend.business.account.ports import PortfolioQueryPort
 from backend.business.order_directives import OrderDirective
 from backend.business.order_directives.handoff import HandoffCheck, check_handoff
+from backend.business.order_directives.valuation_cancellation import (
+    ValuationCancellationReport,
+)
 from backend.business.runs.trading_facts import TradingFacts
 from backend.infra.db.models import ToolInvocationModel
 from backend.infra.integrations.execution_check import _mapping, _order_id
 from backend.infra.integrations.trading_facts_query import TradingFactsQuery
+from backend.infra.integrations.valuation_cancellation import (
+    ValuationCancellationService,
+)
 from backend.infra.repositories import OrderDirectiveRepository
+from backend.llm import AbortSignal
+from backend.stock_api import MxPaperTradingClient
 from backend.stock_api.public import StockMarketDataService
 
 
@@ -26,6 +35,21 @@ class RunOrderPlanQuery:
     session_factory: async_sessionmaker[AsyncSession]
     portfolio: PortfolioQueryPort | None = None
     market_data: StockMarketDataService | None = None
+    trading: MxPaperTradingClient | None = None
+
+    async def valuation_guard(
+        self,
+        run_id: int,
+        abort_signal: AbortSignal | None,
+        cancellations_accepted: Callable[[], bool] | None,
+    ) -> ValuationCancellationReport:
+        if self.portfolio is None or self.trading is None:
+            return ValuationCancellationReport(
+                issues=("估值撤单缺少账户或交易连接，未发送请求。",)
+            )
+        return await ValuationCancellationService(
+            self.session_factory, self.portfolio, self.trading, self.market_data
+        ).cycle(run_id, abort_signal, cancellations_accepted)
 
     async def trading_facts(self, run_id: int) -> TradingFacts:
         return await TradingFactsQuery(

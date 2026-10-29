@@ -27,6 +27,9 @@ from backend.infra.integrations.exposure_trade_guard import (
 from backend.infra.integrations.mx_screen import compact_screen_result
 from backend.infra.integrations.tool_policy import SideEffectLevel
 from backend.infra.integrations.watch_cancel_guard import verify_watch_cancel
+from backend.infra.repositories.valuation_cancellation_repo import (
+    refuse_managed_cancellation,
+)
 from backend.llm import AbortSignal, ToolDefinition
 from backend.stock_api import (
     MxMoniClient,
@@ -422,6 +425,12 @@ class TradeTool:
         if self.session_factory is None or self.portfolio is None:
             raise ValueError("买入缺少持久化风控或账户连接，禁止下单")
         async with locked_cap_repository(self.session_factory, run_id) as (repo, limit):
+            async with self.session_factory() as guard_session:
+                await refuse_managed_cancellation(
+                    guard_session,
+                    symbol=str(intent.payload["stockCode"]),
+                    run_id=run_id,
+                )
             if abort_signal is not None:
                 abort_signal.throw_if_aborted()
             declared = await repo.for_run(run_id)
@@ -488,6 +497,7 @@ class CancelTool:
     ledger: CancelledOrderLedger | None = None
     """Shared with the trade tool; see `TradeTool.ledger`."""
     market_data: StockMarketDataService | None = None
+    session_factory: async_sessionmaker[AsyncSession] | None = None
     name: str = "cancel"
     enabled_stages: tuple[str, ...] = field(default=WATCH_TRADE_STAGES)
     side_effect_level: SideEffectLevel = SideEffectLevel.WRITE
@@ -532,6 +542,7 @@ class CancelTool:
         abort_signal: AbortSignal | None = None,
         cancellations_accepted: Callable[[], bool] | None = None,
     ) -> object:
+        await self._refuse_system_intent(instruction)
         await verify_watch_cancel(
             instruction,
             directives=directives,
@@ -559,6 +570,7 @@ class CancelTool:
         return result
 
     async def run(self, instruction: str) -> object:
+        await self._refuse_system_intent(instruction)
         intent = parse_trade_instruction(instruction)
         if intent.name not in {"cancel", "cancel_all"}:
             raise ValueError("cancel only accepts a cancel instruction")
@@ -569,6 +581,18 @@ class CancelTool:
         if self.ledger is not None:
             self.ledger.record(about_to_undo)
         return result
+
+    async def _refuse_system_intent(self, instruction: str) -> None:
+        if self.session_factory is None:
+            return
+        intent = parse_trade_instruction(instruction)
+        async with self.session_factory() as session:
+            await refuse_managed_cancellation(
+                session,
+                order_id=str(intent.payload["orderId"])
+                if intent.name == "cancel"
+                else None,
+            )
 
 
 def register_mx_tools(
@@ -593,7 +617,9 @@ def register_mx_tools(
     registry.register(
         TradeTool(trading, portfolio, ledger, session_factory, market_data)
     )
-    registry.register(CancelTool(trading, portfolio, ledger, market_data))
+    registry.register(
+        CancelTool(trading, portfolio, ledger, market_data, session_factory)
+    )
 
 
 async def _preflight_trade(

@@ -412,3 +412,39 @@ async def test_mx_http_logs_each_attempt_before_returning_success() -> None:
     assert [call.status for call in call_logs] == ["failed", "success"]
     assert call_logs[0].error_message == "MX request failed: 请求频率过高"
     await client.aclose()
+
+
+async def test_final_cancel_guard_runs_after_transport_gate_before_http():
+    from backend.infra.integrations.valuation_cancellation import CancellationNotSent
+    from backend.stock_api.mx.trading import MxPaperTradingClient
+
+    sent = []
+    transport = MxHttpTransport(
+        api_key="synthetic",
+        base_url="https://example.test",
+        transport=httpx.MockTransport(
+            lambda request: (
+                sent.append(request) or httpx.Response(200, json={"code": 200})
+            )
+        ),
+    )
+
+    class Gate:
+        async def __aenter__(self):
+            sent.append("gate acquired")
+
+        async def __aexit__(self, *args):
+            pass
+
+    transport._request_gate = Gate()
+
+    def refuse():
+        assert sent == ["gate acquired"]
+        raise CancellationNotSent("window closed")
+
+    with pytest.raises(CancellationNotSent):
+        await MxPaperTradingClient(transport).cancel(
+            "撤单 100000001 600000", before_send=refuse
+        )
+    assert sent == ["gate acquired"]
+    await transport.aclose()

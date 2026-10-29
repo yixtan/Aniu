@@ -10,6 +10,9 @@ from backend.business.exposure.models import ExposureCap
 from backend.business.open_findings.models import OpenFinding
 from backend.business.order_directives import OrderDirective
 from backend.business.order_directives.handoff import HandoffCheck
+from backend.business.order_directives.valuation_cancellation import (
+    ValuationCancellationReport,
+)
 from backend.business.runs import StrategyRun, StrategySnapshot
 from backend.business.runs.trading_facts import TradingFacts
 from backend.business.shared.trading import is_successful_trade_call
@@ -65,6 +68,7 @@ class RunReport:
     cached_tokens: int = 0
     system_facts: TradingFacts | None = None
     model_content: str | None = None
+    system_cancellations: str | None = None
 
     def as_payload(self) -> dict[str, object]:
         return {
@@ -113,6 +117,13 @@ class RunExecutionContext:
     run_report: RunReport | None = None
     handoff_checker: Callable[[int], Awaitable[HandoffCheck]] | None = None
     trading_facts_reader: Callable[[int], Awaitable[TradingFacts]] | None = None
+    valuation_guard: (
+        Callable[
+            [int, AbortSignal | None, Callable[[], bool] | None],
+            Awaitable[ValuationCancellationReport],
+        ]
+        | None
+    ) = None
     llm_runtime: object | None = None
     tool_registry: object | None = None
     market_session_is_open: Callable[[], bool] | None = None

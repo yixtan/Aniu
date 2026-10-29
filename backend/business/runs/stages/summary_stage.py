@@ -96,7 +96,8 @@ class SummaryStage:
                 report.system_facts.markdown()
                 if report.system_facts is not None
                 else ""
-            ),
+            )
+            + (report.system_cancellations or ""),
             total_tokens=result.total_tokens,
             cached_tokens=result.cached_tokens,
         )

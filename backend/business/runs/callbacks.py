@@ -191,6 +191,16 @@ class RunExecutionCallbacks:
         payload: dict[str, Any],
     ) -> None:
         recorder = self._require_trace_recorder(run_id)
+        if event_type is RunEventType.VALUATION_CANCELLATIONS_CHECKED:
+            await recorder.set_status_step(
+                stage_name,
+                step_id="system_valuation_cancellations",
+                title="挂单估值自动处置",
+                summary="系统撤单状态",
+                status="completed",
+                data=dict(payload),
+            )
+            return
         if event_type is RunEventType.TRADING_FACTS_COLLECTED:
             await recorder.set_status_step(
                 stage_name,
