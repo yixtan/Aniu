@@ -33,6 +33,7 @@ TOOL_STEP_TITLE_BY_NAME: dict[str, str] = {
     "memory_read": "记忆查询",
     "memory_write": "记忆写入",
     "declare_order_plan": "挂单处置",
+    "prepare_buy": "买入前审核",
 }
 
 MX_TOOL_NAMES = frozenset(
@@ -70,7 +71,8 @@ TRACE_TOOL_ARGUMENT_KEYS: dict[str, tuple[str, ...]] = {
     "search_news": ("query",),
     "select_stocks": ("keyword",),
     "query_portfolio": ("instruction", "limit", "full"),
-    "trade": ("instruction",),
+    "trade": ("instruction", "buy_review_call_id"),
+    "prepare_buy": ("instruction", "cancel_if_price_below", "cancel_if_price_above"),
     "cancel": ("instruction",),
     "stock_quote": ("symbols", "detail"),
     "query_kline": (

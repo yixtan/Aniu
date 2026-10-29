@@ -68,7 +68,7 @@ async def test_runtime_stage_tool_counts_stay_stable_after_kline_replacement() -
     run = names("Run")
     summary = names("Summary")
 
-    assert len(run) == 20
+    assert len(run) == 21
     assert summary == set()
     assert "query_kline" in run
     assert {"stock_signals", "market_sentiment"} <= run

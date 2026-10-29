@@ -139,6 +139,7 @@ def test_mx_registration_exposes_all_direct_tools_with_closed_schemas() -> None:
             ("Run", "Watch"),
         ),
         "trade": ("instruction", SideEffectLevel.WRITE, ("Run",)),
+        "prepare_buy": ("instruction", SideEffectLevel.WRITE, ("Run",)),
         "cancel": ("instruction", SideEffectLevel.WRITE, ("Run", "Watch")),
     }
 
@@ -407,16 +408,18 @@ async def test_a_run_may_not_restore_an_order_it_just_cancelled() -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_different_price_or_size_is_a_decision_not_an_undo() -> None:
-    """Whatever else the guard does, it must not block a real re-price."""
+async def test_cancelled_buy_cannot_be_repriced_up_but_can_be_reduced() -> None:
+    """Changing quantity must not bypass the cancelled bid price anchor."""
 
     cancel, trade, trading = _cancel_then_trade_tools(_resting_order())
 
     await cancel.run("撤单 order-9 688008")
-    await trade.run("买入 688008 188.5 200")
+    with pytest.raises(ValueError, match="不得提价"):
+        await trade.run("买入 688008 188.5 200")
+    await trade.run("买入 688008 184 200")
     await trade.run("买入 688008 185 300")
 
-    assert trading.trades == ["买入 688008 188.5 200", "买入 688008 185 300"]
+    assert trading.trades == ["买入 688008 184 200", "买入 688008 185 300"]
 
 
 @pytest.mark.asyncio
@@ -460,9 +463,12 @@ async def test_a_sweep_records_every_order_it_swept() -> None:
         await TradeTool(trading, portfolio, ledger).run(  # type: ignore[arg-type]
             "买入 688008 185 200"
         )
-    # The filled one was never cancellable, so it was never undone.
+    # A filled order does not erase the lower cancelled buy price anchor.
+    with pytest.raises(ValueError, match="不得提价"):
+        await TradeTool(trading, portfolio, ledger).run("买入 688008 190 200")
+    # Another symbol is unaffected.
     await TradeTool(trading, portfolio, ledger).run(  # type: ignore[arg-type]
-        "买入 688008 190 200"
+        "买入 688009 190 200"
     )
 
 

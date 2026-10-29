@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from backend.business.account import PortfolioOrderSnapshot
+from backend.business.order_directives.buy_conditions import check_buy_conditions
 from backend.business.order_directives.models import DirectiveAction, OrderDirective
 
 
@@ -100,6 +101,25 @@ def check_handoff(
             for v in (plan.cancel_if_price_above, plan.cancel_if_price_below)
         ):
             reason = "价格条件无效"
+        elif (
+            order.direction == "BUY"
+            and plan.action is DirectiveAction.HOLD
+            and (
+                plan.cancel_if_price_below is not None
+                or plan.cancel_if_price_above is not None
+            )
+        ):
+            if order.order_price is None:
+                reason = "买单价格缺失，无法核对失效条件"
+            else:
+                try:
+                    check_buy_conditions(
+                        order.order_price,
+                        below=plan.cancel_if_price_below,
+                        above=plan.cancel_if_price_above,
+                    )
+                except ValueError as exc:
+                    reason = str(exc)
         if reason:
             issues.append(
                 f"{order.stock_name}（{order.symbol}）委托{order.order_id}：{reason}。"

@@ -75,7 +75,12 @@ class AgentRuntimeFactory:
                     allowed_operations=AUTHORING_OPERATIONS,
                 )
             )
-            registry.register(DeclareOrderPlanTool(self._session_factory))
+            registry.register(
+                DeclareOrderPlanTool(
+                    self._session_factory,
+                    portfolio=self._mx_portfolio_client,
+                )
+            )
             registry.register(DeclareExposureCapTool(self._session_factory))
             registry.register(DisposeOpenFindingTool(self._session_factory))
         if self._public_stock_data is not None:

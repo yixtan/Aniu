@@ -13,6 +13,11 @@ from backend.agent.tools.registry import ToolRegistry
 from backend.business.account import PortfolioOrderSnapshot
 from backend.business.order_directives import OrderDirective
 from backend.business.shared.trading.value_objects import utc_now
+from backend.infra.integrations.buy_preflight import (
+    PrepareBuyTool,
+    load_buy_review,
+    recheck_buy_review,
+)
 from backend.infra.integrations.exposure_trade_guard import (
     check_buy_exposure,
     check_position_limits,
@@ -342,6 +347,13 @@ class CancelledOrderLedger:
 
         return self._key(symbol, direction, price, quantity) in self._undone
 
+    def forbids_buy_price(self, symbol: str, price: float) -> bool:
+        """Even a stale upstream order list cannot erase a local cancel."""
+        return any(
+            stock == symbol and direction == "buy" and price > anchor + 0.000001
+            for stock, direction, anchor, _ in self._undone
+        )
+
 
 @dataclass(slots=True)
 class TradeTool:
@@ -352,6 +364,7 @@ class TradeTool:
     which is why `register_mx_tools` always supplies one and a test pins that
     both tools receive the same instance."""
     session_factory: async_sessionmaker[AsyncSession] | None = None
+    market_data: StockMarketDataService | None = None
     name: str = "trade"
     enabled_stages: tuple[str, ...] = field(default=TRADE_STAGES)
     side_effect_level: SideEffectLevel = SideEffectLevel.WRITE
@@ -375,10 +388,15 @@ class TradeTool:
                 "可卖数量缺失时禁止卖出。"
                 "买入必须先声明上限；同日不能上调；持仓加未成交买单和本笔金额不能超限。"
                 "同日后续运行不能高于此前同标的买单价格补建浅档或追买。"
+                "买入须先调用prepare_buy并提供成功的buy_review_call_id；"
+                "同轮撤销买单后也不能提价重挂，改数量不能豁免。"
             ),
             "parameters": {
                 "type": "object",
-                "properties": {"instruction": {"type": "string", "minLength": 1}},
+                "properties": {
+                    "instruction": {"type": "string", "minLength": 1},
+                    "buy_review_call_id": {"type": "string", "minLength": 1},
+                },
                 "required": ["instruction"],
                 "additionalProperties": False,
             },
@@ -391,8 +409,8 @@ class TradeTool:
         tool_call_id: str,
         abort_signal: AbortSignal | None = None,
         instruction: str,
+        buy_review_call_id: str | None = None,
     ) -> object:
-        del tool_call_id
         if abort_signal is not None:
             abort_signal.throw_if_aborted()
         intent = parse_trade_instruction(instruction)
@@ -400,6 +418,7 @@ class TradeTool:
             raise ValueError("trade only accepts a limit buy or sell instruction")
         if intent.payload["type"] != "buy":
             return await self._execute(instruction)
+        _refuse_to_recreate_a_cancelled_order(self.ledger, intent)
         if self.session_factory is None or self.portfolio is None:
             raise ValueError("买入缺少持久化风控或账户连接，禁止下单")
         async with locked_cap_repository(self.session_factory, run_id) as (repo, limit):
@@ -436,6 +455,14 @@ class TradeTool:
                 symbol=str(intent.payload["stockCode"]),
                 price=float(price),
             )
+            review = await load_buy_review(
+                self.session_factory,
+                run_id=run_id,
+                tool_call_id=tool_call_id,
+                review_id=buy_review_call_id,
+                instruction=instruction,
+            )
+            await recheck_buy_review(self.market_data, review, abort_signal)
             if abort_signal is not None:
                 abort_signal.throw_if_aborted()
             return await self._execute(instruction)
@@ -559,10 +586,13 @@ def register_mx_tools(
     registry.register(SearchNewsTool(research))
     registry.register(SelectStocksTool(research))
     registry.register(QueryPortfolioTool(portfolio))
+    registry.register(PrepareBuyTool(market_data))
     # One ledger, both tools, one run: the guard only means anything if the
     # tool that cancels and the tool that places are looking at the same book.
     ledger = CancelledOrderLedger()
-    registry.register(TradeTool(trading, portfolio, ledger, session_factory))
+    registry.register(
+        TradeTool(trading, portfolio, ledger, session_factory, market_data)
+    )
     registry.register(CancelTool(trading, portfolio, ledger, market_data))
 
 
@@ -732,6 +762,8 @@ def _refuse_to_recreate_a_cancelled_order(
         return
     symbol = str(payload["stockCode"])
     direction = str(payload["type"])
+    if direction == "buy" and ledger.forbids_buy_price(symbol, float(price_value)):
+        raise ValueError("本轮撤单后不得提价重挂买单，改变数量也不能豁免")
     if not ledger.undone_match(
         symbol=symbol,
         direction=direction,
@@ -743,7 +775,7 @@ def _refuse_to_recreate_a_cancelled_order(
     raise ValueError(
         f"本次运行刚撤销了同一笔委托（{symbol} {side} {quantity_value} 股 "
         f"@ {float(price_value):g}）。原价原量重挂等于这次撤单没有发生，"
-        "只会把排队位置丢掉。若仍要成交请改价或改量；若不再需要就不要重挂，"
+        "只会把排队位置丢掉。买单不得提价重挂；若不再需要就不要重挂，"
         "并在报告里写明撤单的理由。"
     )
 
