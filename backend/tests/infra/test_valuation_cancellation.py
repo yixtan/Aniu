@@ -390,3 +390,57 @@ async def test_active_state_with_no_remaining_quantity_is_not_cancelled(
     report = await service.cycle(1, None, lambda: True)
     assert report.items[0].state == "UNKNOWN"
     trading.cancel.assert_not_awaited()
+
+
+@pytest.mark.parametrize("status", ["STARTED", "FAILED", "COMPLETED"])
+@pytest.mark.parametrize("instruction", [f"撤单 {OID} 600000", "一键撤单"])
+async def test_legacy_cancel_request_is_adopted_never_resent(
+    session_factory, status, instruction
+):
+    import json
+
+    service, _, trading = await setup(session_factory)
+    async with session_factory() as session:
+        session.add(
+            ToolInvocationModel(
+                run_id=1,
+                tool_call_id="legacy-cancel",
+                tool_name="cancel",
+                arguments_json=json.dumps({"instruction": instruction}),
+                status=status,
+                result_json=json.dumps({"code": 200})
+                if status == "COMPLETED"
+                else None,
+                created_at=NOW.isoformat(),
+                updated_at=NOW.isoformat(),
+            )
+        )
+        await session.commit()
+    report = await service.cycle(1, None, lambda: True)
+    assert report.items[0].state == (
+        "SUBMITTED" if status == "COMPLETED" else "UNKNOWN"
+    )
+    assert (await record(session_factory)).request_call_id == "legacy-cancel"
+    await service.cycle(1, None, lambda: True)
+    trading.cancel.assert_not_awaited()
+
+
+async def test_old_blanket_cancel_does_not_affect_later_order(session_factory):
+    import json
+
+    service, _, trading = await setup(session_factory)
+    async with session_factory() as session:
+        session.add(
+            ToolInvocationModel(
+                run_id=1,
+                tool_call_id="old-cancel",
+                tool_name="cancel",
+                arguments_json=json.dumps({"instruction": "一键撤单"}),
+                status="STARTED",
+                created_at="2026-10-28T06:30:00+00:00",
+                updated_at=NOW.isoformat(),
+            )
+        )
+        await session.commit()
+    await service.cycle(1, None, lambda: True)
+    trading.cancel.assert_awaited_once()

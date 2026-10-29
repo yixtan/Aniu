@@ -22,6 +22,7 @@ from backend.business.order_directives.valuation_cancellation import (
 from backend.business.shared.trading.value_objects import utc_now
 from backend.infra.db.models import ValuationCancellationModel, utc_now_iso
 from backend.infra.integrations.order_valuation_audit import audit_orders
+from backend.infra.integrations.trade_mutex import trade_mutex
 from backend.infra.repositories.tool_invocation_repo import ToolInvocationRepository
 from backend.infra.repositories.valuation_cancellation_repo import (
     ValuationCancellationRepository,
@@ -133,7 +134,7 @@ class ValuationCancellationService:
         retries = {
             r.order_id: r for r in await audit_orders(retry_orders, self.market_data)
         }
-        async with self.factory() as session:
+        async with trade_mutex(self.factory), self.factory() as session:
             repo = ValuationCancellationRepository(session)
             for order, first in zip(active, reviews, strict=True):
                 review = retries.get(order.order_id, first)

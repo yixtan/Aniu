@@ -1,6 +1,8 @@
 """Claim a cancellation once, commit before HTTP, never replay uncertainty."""
 
+import json
 from dataclasses import asdict
+from datetime import datetime
 
 from sqlalchemy import or_, select, update
 from sqlalchemy.dialects.sqlite import insert
@@ -12,8 +14,14 @@ from backend.business.order_directives.valuation_cancellation import (
     TERMINAL_CANCELLATIONS,
 )
 from backend.business.runs.trading_facts import OrderValuationReview
-from backend.infra.db.models import ValuationCancellationModel, utc_now_iso
+from backend.business.shared.trading import is_successful_trade_payload
+from backend.infra.db.models import (
+    ToolInvocationModel,
+    ValuationCancellationModel,
+    utc_now_iso,
+)
 from backend.infra.repositories.tool_invocation_repo import ToolInvocationRepository
+from backend.stock_api.mx.trading_parser import parse_trade_instruction
 
 
 class ValuationCancellationRepository:
@@ -64,7 +72,54 @@ class ValuationCancellationRepository:
             row.explanation = (
                 "账户重新出现已终结的委托编号，状态矛盾或编号复用；待核对，不自动重发。"
             )
+        elif row.state == "REQUIRED" and row.request_call_id is None:
+            await self._adopt_existing_request(row, order)
         return row
+
+    async def _adopt_existing_request(
+        self, row: ValuationCancellationModel, order: PortfolioOrderSnapshot
+    ) -> None:
+        calls = await self.session.scalars(
+            select(ToolInvocationModel)
+            .where(ToolInvocationModel.tool_name == "cancel")
+            .order_by(ToolInvocationModel.created_at.desc())
+        )
+        for call in calls:
+            try:
+                args = json.loads(call.arguments_json)
+                intent = parse_trade_instruction(str(args.get("instruction") or ""))
+            except (ValueError, AttributeError):
+                continue
+            matches = (
+                intent.name == "cancel"
+                and intent.payload.get("orderId") == row.order_id
+                and intent.payload.get("stockCode") == row.symbol
+            )
+            if intent.name == "cancel_all":
+                try:
+                    matches = (
+                        order.submitted_at is None
+                        or datetime.fromisoformat(call.created_at) >= order.submitted_at
+                    )
+                except (ValueError, TypeError):
+                    matches = True
+            if not matches:
+                continue
+            try:
+                result = json.loads(call.result_json or "null")
+            except ValueError:
+                result = None
+            row.state = (
+                "SUBMITTED"
+                if call.status == "COMPLETED" and is_successful_trade_payload(result)
+                else "UNKNOWN"
+            )
+            row.request_run_id = call.run_id
+            row.request_call_id = call.tool_call_id
+            row.explanation = (
+                "发现既有撤单流水，沿用账户核对，不另发撤单；受理不代表已撤销。"
+            )
+            return
 
     async def claim(
         self, order_id: str, run_id: int
