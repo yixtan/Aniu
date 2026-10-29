@@ -55,6 +55,9 @@ class RunStage:
         prompt_parts = [
             stage_settings.prompt,
             _MEMORY_TOOL_PROTOCOL,
+            "买入前先完成研究与估值核验，调用prepare_buy提交拟买指令和价格失效条件，"
+            "通过后用返回的buy_review_call_id调用trade；审核不下单，缺失证据不能豁免。"
+            "后续挂单计划须沿用审核条件；同一轮撤单后也不得提价重挂。",
             "结束前必须为全部有效挂单调用declare_order_plan提交本轮处置计划，"
             "包括旧挂单、部分成交剩余量和撤单处理中委托。明确持有也是计划；"
             "报告文字不能替代登记。系统会独立核对，遗漏或无效计划会标记交接未完成。",

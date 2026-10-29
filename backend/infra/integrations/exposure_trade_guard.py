@@ -85,10 +85,11 @@ def check_same_day_chase(
     symbol: str,
     price: float,
 ) -> None:
-    """A later run cannot create a shallower buy leg above today's earlier bid.
+    """Later runs and cancelled bids cannot be replaced by shallower buys.
 
     Compare only prior-run orders. Multiple levels planned within the first
-    run remain possible. Cancelling an earlier bid does not erase its anchor.
+    run remain possible while live. Cancelling a bid locks its price anchor,
+    including within the same run and regardless of replacement quantity.
     """
     shanghai = ZoneInfo("Asia/Shanghai")
     for order in orders:
@@ -111,9 +112,18 @@ def check_same_day_chase(
             != started_at.astimezone(shanghai).date()
         ):
             continue
-        if submitted < started_at and price > reference + 0.000001:
+        if (
+            submitted < started_at
+            or order.status
+            in {
+                "CANCELLED",
+                "PARTIAL_CANCELLED",
+                "PENDING_CANCEL",
+                "PARTIAL_PENDING_CANCEL",
+            }
+        ) and price > reference + 0.000001:
             raise ValueError(
-                f"同日重跑不得高价追买：{symbol} 此前买单价 {reference:g}，"
+                f"同日重跑或撤单后不得高价追买：{symbol} 此前买单价 {reference:g}，"
                 f"本笔 {price:g}。不得取消深档后补建浅档；候选登记候补，等待跨日确认。"
             )
 

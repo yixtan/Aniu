@@ -12,6 +12,7 @@ from backend.business.order_directives import DirectiveAction, OrderDirective
 from backend.infra.integrations.mx_agent_tools import CancelTool, TradeTool
 from backend.stock_api.mx import MxMoniClient, MxPaperTradingClient
 from backend.stock_api.mx.http import MxHttpTransport
+from backend.tests.infra.buy_fixtures import approve
 from backend.tests.infra.test_exposure_execution_guard import declare, seed
 
 
@@ -38,6 +39,7 @@ def clocks(monkeypatch):
         "eleventh",
         "unknown-direction",
         "missing-sellable",
+        "missing-review",
         "valid-buy",
         "valid-sell",
     ],
@@ -122,14 +124,22 @@ async def test_real_adapters_enforce_before_trade_http(session_factory, scenario
             else "买入 600000 10 100"
         )
         if scenario.startswith("valid"):
+            if scenario == "valid-buy":
+                tool.market_data = await approve(session_factory, 1, instruction)
             await tool.run_for_call(
-                run_id=1, tool_call_id="write", instruction=instruction
+                run_id=1,
+                tool_call_id="write",
+                buy_review_call_id="review",
+                instruction=instruction,
             )
             assert len(writes) == 1
         else:
             with pytest.raises(ValueError):
                 await tool.run_for_call(
-                    run_id=1, tool_call_id="write", instruction=instruction
+                    run_id=1,
+                    tool_call_id="write",
+                    buy_review_call_id="review",
+                    instruction=instruction,
                 )
             assert writes == []
 

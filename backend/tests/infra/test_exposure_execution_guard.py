@@ -19,6 +19,7 @@ from backend.infra.db.models import ExposureCapModel, StrategyRunModel
 from backend.infra.integrations.exposure_cap_agent_tools import DeclareExposureCapTool
 from backend.infra.integrations.exposure_trade_guard import check_buy_exposure
 from backend.infra.integrations.mx_agent_tools import TradeTool
+from backend.tests.infra.buy_fixtures import approve
 
 REASONS = dict(basis="市场结构", changed_from="按当日口径", forgone="候补")
 NOW = datetime(2026, 10, 23, 6, 40, tzinfo=UTC)
@@ -206,9 +207,15 @@ async def test_valid_buy_passes_and_exits_need_no_cap(session_factory):
     await seed(session_factory, 1)
     await declare(session_factory, 1, 8)
     portfolio, trading = clients(replace(snapshot(), market_value=3000, frozen_cash=0))
-    tool = TradeTool(trading, portfolio, session_factory=session_factory)
+    service = await approve(session_factory, 1, "买入 600000 14.3 100")
+    tool = TradeTool(
+        trading, portfolio, session_factory=session_factory, market_data=service
+    )
     assert await tool.run_for_call(
-        run_id=1, tool_call_id="buy", instruction="买入 600000 14.3 100"
+        run_id=1,
+        tool_call_id="buy",
+        buy_review_call_id="review",
+        instruction="买入 600000 14.3 100",
     ) == {"status": "submitted"}
     trading.trade.assert_awaited_once()
     # Sale still goes through the existing quantity check, never this buy gate.
@@ -351,22 +358,30 @@ async def test_production_factory_wires_guard_and_http_preflight_is_fresh(
         # must fetch the new 7.81% exposure, not approve against this old zero.
         await portfolio.get_account_snapshot()
         state.update(market_value=3460, frozen=4350)
+        service = await approve(session_factory, 109, "买入 600000 14.3 100")
         registry = await AgentRuntimeFactory(
             mx_research_client=object(),
             mx_portfolio_client=portfolio,
             mx_trading_client=trading,
             session_factory=session_factory,
+            public_stock_data=service,
         ).build_tool_registry()
         tool = registry.get("trade")
         with pytest.raises(ValueError, match="8%"):
             await tool.run_for_call(
-                run_id=109, tool_call_id="buy", instruction="买入 600000 14.3 100"
+                run_id=109,
+                tool_call_id="buy",
+                buy_review_call_id="review",
+                instruction="买入 600000 14.3 100",
             )
         assert sum(p.endswith("/balance") for p in calls) == 2
         assert not any(p.endswith("/trade") for p in calls)
         state.update(market_value=0, frozen=0)
         await tool.run_for_call(
-            run_id=109, tool_call_id="buy", instruction="买入 600000 14.3 100"
+            run_id=109,
+            tool_call_id="buy",
+            buy_review_call_id="review",
+            instruction="买入 600000 14.3 100",
         )
         assert sum(p.endswith("/trade") for p in calls) == 1
 
@@ -397,10 +412,17 @@ async def test_concurrent_buys_observe_previous_accepted_reservation(session_fac
 
     portfolio.get_account_snapshot.side_effect = fresh
     trading.trade.side_effect = reserve
+    for run_id in (1, 2):
+        service = await approve(session_factory, run_id, "买入 600000 20 100")
     results = await asyncio.gather(
         *[
-            TradeTool(trading, portfolio, session_factory=session_factory).run_for_call(
-                run_id=run_id, tool_call_id="buy", instruction="买入 600000 20 100"
+            TradeTool(
+                trading, portfolio, session_factory=session_factory, market_data=service
+            ).run_for_call(
+                run_id=run_id,
+                tool_call_id="buy",
+                buy_review_call_id="review",
+                instruction="买入 600000 20 100",
             )
             for run_id in (1, 2)
         ],
@@ -418,14 +440,23 @@ async def test_chasing_earlier_bid_is_blocked_even_with_plenty_of_cap(session_fa
     portfolio, trading = clients(
         replace(snapshot(), market_value=1000, frozen_cash=0), [order(order_price=10)]
     )
-    tool = TradeTool(trading, portfolio, session_factory=session_factory)
+    service = await approve(session_factory, 1, "买入 600000 9 100")
+    tool = TradeTool(
+        trading, portfolio, session_factory=session_factory, market_data=service
+    )
     with pytest.raises(ValueError, match="高价追买"):
         await tool.run_for_call(
-            run_id=1, tool_call_id="buy", instruction="买入 600000 14.3 100"
+            run_id=1,
+            tool_call_id="buy",
+            buy_review_call_id="review",
+            instruction="买入 600000 14.3 100",
         )
     trading.trade.assert_not_awaited()
     await tool.run_for_call(
-        run_id=1, tool_call_id="lower", instruction="买入 600000 9 100"
+        run_id=1,
+        tool_call_id="lower",
+        buy_review_call_id="review",
+        instruction="买入 600000 9 100",
     )
     trading.trade.assert_awaited_once()
 
@@ -507,10 +538,16 @@ async def test_slow_buy_keeps_worker_lease_alive_and_serializes_declarations(
         return snapshot()
 
     portfolio.get_account_snapshot.side_effect = slow_snapshot
-    tool = TradeTool(trading, portfolio, session_factory=session_factory)
+    service = await approve(session_factory, 1, "买入 600000 10 100")
+    tool = TradeTool(
+        trading, portfolio, session_factory=session_factory, market_data=service
+    )
     buy = asyncio.create_task(
         tool.run_for_call(
-            run_id=1, tool_call_id="slow", instruction="买入 600000 10 100"
+            run_id=1,
+            tool_call_id="slow",
+            buy_review_call_id="review",
+            instruction="买入 600000 10 100",
         )
     )
     lowering = None

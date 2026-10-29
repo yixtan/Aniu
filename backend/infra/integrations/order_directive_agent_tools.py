@@ -12,9 +12,11 @@ from backend.business.order_directives import (
     DirectiveAction,
     OrderDirectiveService,
 )
+from backend.infra.integrations.buy_plan_validation import validate_buy_plan
 from backend.infra.integrations.tool_policy import SideEffectLevel
 from backend.infra.repositories.order_directive_repo import OrderDirectiveRepository
 from backend.llm import AbortSignal, ProviderJsonObject, ToolDefinition
+from backend.stock_api import MxMoniClient
 
 _RUN_STAGES = ("Run",)
 logger = logging.getLogger(__name__)
@@ -92,6 +94,7 @@ class DeclareOrderPlanTool:
     """
 
     session_factory: async_sessionmaker[AsyncSession]
+    portfolio: MxMoniClient | None = None
     name: str = "declare_order_plan"
     enabled_stages: tuple[str, ...] = field(default=_RUN_STAGES)
     side_effect_level: SideEffectLevel = SideEffectLevel.WRITE
@@ -109,6 +112,8 @@ class DeclareOrderPlanTool:
                 "登记本次运行对每一笔未成交委托的处置，供高频盯盘任务执行。"
                 "**整份替换**：调用一次并带上全部未成交委托，"
                 "没有写进来的委托将不受任何处置约束。未调用则盯盘不会动手。"
+                "本轮新买单的价格失效条件必须与prepare_buy审核完全一致，"
+                "不能在下单后放宽或补加；发现判断错误可明确cancel。"
             ),
             "parameters": cast(
                 ProviderJsonObject,
@@ -140,6 +145,9 @@ class DeclareOrderPlanTool:
             raise RuntimeError("declare_order_plan aborted")
         if directives is None:
             raise ValueError("declare_order_plan requires a directives list")
+        await validate_buy_plan(
+            self.session_factory, self.portfolio, run_id, directives
+        )
         async with self.session_factory() as session:
             result = await OrderDirectiveService(
                 OrderDirectiveRepository(session)

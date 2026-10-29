@@ -285,6 +285,9 @@ def _parse_quotes(source: str) -> list[dict[str, object]]:
                 "low": _number_field(fields, 34),
                 "amount_ten_thousand_cny": _number_field(fields, 37),
                 "turnover_rate": _number_field(fields, 38),
+                # A-share rolling PE; dynamic/static multiples are fields 52/53.
+                "pe_ttm": _number_field(fields, 39),
+                "pb": _number_field(fields, 46),
             }
         )
     if not quotes:

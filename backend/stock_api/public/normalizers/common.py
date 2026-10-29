@@ -216,6 +216,12 @@ def normalize_datetime(value: object) -> str | None:
             return None
     if re.fullmatch(r"\d{8}", value_text):
         value_text = f"{value_text[:4]}-{value_text[4:6]}-{value_text[6:8]}"
+    elif re.fullmatch(r"\d{14}", value_text):
+        # Tencent sends YYYYMMDDHHMMSS in Asia/Shanghai.
+        value_text = (
+            f"{value_text[:4]}-{value_text[4:6]}-{value_text[6:8]}T"
+            f"{value_text[8:10]}:{value_text[10:12]}:{value_text[12:14]}"
+        )
     try:
         parsed = datetime.fromisoformat(value_text.replace("Z", "+00:00"))
     except ValueError:

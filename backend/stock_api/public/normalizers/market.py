@@ -148,6 +148,17 @@ def normalize_quotes(
                     "amount": full_values["amount"],
                     "amount_currency": "CNY",
                     "turnover_rate": full_values["turnover_rate"],
+                    # Never substitute dynamic PE (EastMoney f162).
+                    "pe_ttm": first_number(row, "f164")
+                    if provider == "eastmoney"
+                    else first_number(row, "pe_ttm")
+                    if provider == "tencent"
+                    else None,
+                    "pb": first_number(row, "f167")
+                    if provider == "eastmoney"
+                    else first_number(row, "pb")
+                    if provider == "tencent"
+                    else None,
                 }
             )
             missing_fields.update(
