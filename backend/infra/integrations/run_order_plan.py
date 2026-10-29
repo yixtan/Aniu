@@ -10,9 +10,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from backend.business.account.ports import PortfolioQueryPort
 from backend.business.order_directives import OrderDirective
 from backend.business.order_directives.handoff import HandoffCheck, check_handoff
+from backend.business.runs.trading_facts import TradingFacts
 from backend.infra.db.models import ToolInvocationModel
 from backend.infra.integrations.execution_check import _mapping, _order_id
+from backend.infra.integrations.trading_facts_query import TradingFactsQuery
 from backend.infra.repositories import OrderDirectiveRepository
+from backend.stock_api.public import StockMarketDataService
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,6 +25,12 @@ class RunOrderPlanQuery:
 
     session_factory: async_sessionmaker[AsyncSession]
     portfolio: PortfolioQueryPort | None = None
+    market_data: StockMarketDataService | None = None
+
+    async def trading_facts(self, run_id: int) -> TradingFacts:
+        return await TradingFactsQuery(
+            self.session_factory, self.portfolio, self.market_data
+        ).collect(run_id)
 
     async def check_handoff(self, run_id: int) -> HandoffCheck:
         if self.portfolio is None:

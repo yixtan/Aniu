@@ -191,6 +191,16 @@ class RunExecutionCallbacks:
         payload: dict[str, Any],
     ) -> None:
         recorder = self._require_trace_recorder(run_id)
+        if event_type is RunEventType.TRADING_FACTS_COLLECTED:
+            await recorder.set_status_step(
+                stage_name,
+                step_id="system_trading_facts",
+                title="审核状态与潜在敞口（系统生成）",
+                summary="系统已生成交易事实；只读复核不产生买入授权。",
+                status="completed",
+                data=dict(payload),
+            )
+            return
         if event_type is RunEventType.HANDOFF_CHECKED:
             await recorder.set_status_step(
                 stage_name,

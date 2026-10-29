@@ -1,4 +1,5 @@
 import { HandoffNotice } from "./handoff-notice";
+import { TradingFactsNotice } from "./trading-facts-notice";
 import { ExecutionCheckPanel } from "./execution-check";
 import { useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -163,6 +164,7 @@ function RunWorkbenchContent({
       <Card className="border-border/75 bg-card/90 flex min-h-[24rem] flex-1 flex-col overflow-hidden shadow-sm">
         <CardContent className="min-h-0 flex-1 px-4 py-3">
           <div ref={scrollerRef} className="h-full min-h-0 overflow-y-auto">
+            <TradingFactsNotice run={snapshot} />
             <HandoffNotice run={snapshot} />
             <ExecutionCheckPanel runId={snapshot.run_id} status={snapshot.status} />
             <StageTimeline

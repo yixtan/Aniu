@@ -203,6 +203,7 @@ class AniuOrchestrator:
         context.cancellations_accepted = self._are_cancellations_accepted
         context.tool_registry = self._tool_registry
         context.handoff_checker = getattr(self._order_plan, "check_handoff", None)
+        context.trading_facts_reader = getattr(self._order_plan, "trading_facts", None)
         if read_watchlist:
             context.followed_companies = await self._followed_companies(run.run_id)
         self._attach_runtime_callbacks(context, run.run_id)
