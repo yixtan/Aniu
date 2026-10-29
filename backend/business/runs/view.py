@@ -222,7 +222,10 @@ def _project_step(step: TraceStep) -> dict[str, object]:
             if model_content_characters is not None:
                 tool_call["model_content_characters"] = model_content_characters
     content = step.content if step.type in {"thinking", "result"} else None
-    if step.step_id == "system_trading_facts" and step.type == "status":
+    if (
+        step.step_id in {"system_trading_facts", "system_valuation_cancellations"}
+        and step.type == "status"
+    ):
         # Only the system callback writes this reserved status step. Do not
         # expose arbitrary provider or tool metadata through the public view.
         content = _read_text(dict(step.data or {}).get("report_markdown"))

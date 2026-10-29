@@ -16,6 +16,7 @@ from backend.business.runs.stages.stage_helpers import (
     emit_tool_loop_event,
     require_llm_runtime,
 )
+from backend.business.runs.stages.valuation_guard import check_valuation_cancellations
 from backend.business.runs.trading_facts import TradingFacts
 from backend.business.shared import RunAbortError
 from backend.business.shared.serialization import serialize_context
@@ -46,6 +47,7 @@ class RunStage:
         agent_runner: AgentRunnerPort,
     ) -> RunReport:
         require_llm_runtime(context, stage_name="Run")
+        guard_before = await check_valuation_cancellations(context, "Run")
         stage_settings = context.snapshot.settings_for_stage("Run")
         market_open = (
             bool(context.market_session_is_open())
@@ -53,6 +55,8 @@ class RunStage:
             else False
         )
         runtime_payload: dict[str, object] = {"market_session_open": market_open}
+        if guard_before is not None:
+            runtime_payload["system_valuation_cancellations"] = guard_before.markdown()
         prompt_parts = [
             stage_settings.prompt,
             _MEMORY_TOOL_PROTOCOL,
@@ -168,6 +172,9 @@ class RunStage:
         if not content:
             raise ValueError("run report must not be empty")
         content = with_memory_ledger(content, result.tool_activity)
+        guard_after = await check_valuation_cancellations(context, "Run", guard_before)
+        guard = guard_after or guard_before
+        system_cancellations = guard.markdown() if guard is not None else None
         if context.handoff_checker is not None:
             try:
                 async with asyncio.timeout(20):
@@ -192,6 +199,8 @@ class RunStage:
             )
             content += handoff.markdown()
         model_content = content
+        if system_cancellations is not None:
+            content += system_cancellations
         facts = None
         if context.trading_facts_reader is not None:
             try:
@@ -217,7 +226,10 @@ class RunStage:
             content=content,
             model_content=model_content,
             system_facts=facts,
-            tool_activity=result.tool_activity,
+            system_cancellations=system_cancellations,
+            tool_activity=(guard_before.tool_activity if guard_before else ())
+            + result.tool_activity
+            + (guard_after.tool_activity if guard_after else ()),
             transcript=result.transcript,
             total_tokens=result.total_tokens,
             cached_tokens=result.cached_tokens,

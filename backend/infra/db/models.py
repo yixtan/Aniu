@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 from sqlalchemy import (
     JSON,
     Boolean,
@@ -16,17 +14,13 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
 
-
-def utc_now_iso() -> str:
-    """Return the current UTC time as an ISO-8601 string."""
-
-    return datetime.now(tz=UTC).isoformat()
-
-
-class Base(DeclarativeBase):
-    """Declarative base for all ORM models."""
+from backend.infra.db.base import Base as Base
+from backend.infra.db.base import utc_now_iso as utc_now_iso
+from backend.infra.db.cancellation_model import (
+    ValuationCancellationModel as ValuationCancellationModel,
+)
 
 
 class AuditLogModel(Base):

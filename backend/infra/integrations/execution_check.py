@@ -16,6 +16,7 @@ from backend.infra.db.models import (
     ToolInvocationModel,
 )
 from backend.infra.repositories.account_cache_repo import AccountCacheRepository
+from backend.stock_api.mx.trading_parser import parse_trade_instruction
 
 
 def _mapping(raw: str | None) -> dict[str, object]:
@@ -76,9 +77,12 @@ class ExecutionCheckQuery:
             instruction = str(arguments.get("instruction") or "未记录指令")
             oid = _order_id(result) if call.tool_name == "trade" else None
             if call.tool_name == "cancel":
-                parts = instruction.split()
-                if len(parts) == 3 and parts[0] == "撤单":
-                    oid = parts[2]
+                try:
+                    intent = parse_trade_instruction(instruction)
+                    if intent.name == "cancel":
+                        oid = str(intent.payload["orderId"])
+                except ValueError:
+                    pass
             order = orders.get(oid) if oid else None
             # A cache predating this call is not evidence for its result.
             if observed is None or observed < datetime.fromisoformat(call.created_at):

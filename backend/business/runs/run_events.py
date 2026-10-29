@@ -122,6 +122,7 @@ class RunEventType(StrEnum):
     CONTEXT_COMPACTED = "ContextCompacted"
     HANDOFF_CHECKED = "HandoffChecked"
     TRADING_FACTS_COLLECTED = "TradingFactsCollected"
+    VALUATION_CANCELLATIONS_CHECKED = "ValuationCancellationsChecked"
     TOOL_CALL_REQUESTED = "ToolCallRequested"
     TOOL_CALL_COMPLETED = "ToolCallCompleted"
     TOOL_CALL_BLOCKED = "ToolCallBlocked"

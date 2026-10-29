@@ -522,6 +522,7 @@ class AppRuntime:
                 self.require_session_factory(),
                 clients.portfolio,
                 self.require_public_stock_data(),
+                clients.trading,
             ),
             open_findings=RunOpenFindingsQuery(self.require_session_factory()),
             exposure_caps=RecentExposureCapsQuery(self.require_session_factory()),

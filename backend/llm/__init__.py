@@ -1,6 +1,6 @@
 """OpenAI Chat and Anthropic Messages runtime inspired by Pi AI."""
 
-from backend.llm.abort import AbortSignal
+from backend.llm.abort import AbortSignal, await_with_abort
 from backend.llm.client import LLMClient
 from backend.llm.connectivity import ModelConnectivityTester
 from backend.llm.context import (
@@ -81,6 +81,7 @@ from backend.llm.thinking import (
 
 __all__ = [
     "AbortSignal",
+    "await_with_abort",
     "AssistantContent",
     "AssistantInputMessage",
     "AssistantMessage",

@@ -138,3 +138,20 @@ async def test_cancel_can_be_confirmed_by_account(session):
     item = (await ExecutionCheckQuery(session).check(1)).items[0]
     assert item.outcome == "cancelled"
     assert item.filled_quantity == 20
+
+
+async def test_cancel_uses_order_id_before_symbol_for_confirmation(session):
+    await seed(
+        session,
+        operation="cancel",
+        instruction="撤单 262154600000047682 600001",
+        order_status="CANCELLED",
+    )
+    from sqlalchemy import update
+
+    await session.execute(
+        update(AccountOrderCacheModel).values(order_id="262154600000047682")
+    )
+    await session.commit()
+    report = await ExecutionCheckQuery(session).check(1)
+    assert report.items[0].outcome == "cancelled"

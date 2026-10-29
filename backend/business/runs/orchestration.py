@@ -204,6 +204,7 @@ class AniuOrchestrator:
         context.tool_registry = self._tool_registry
         context.handoff_checker = getattr(self._order_plan, "check_handoff", None)
         context.trading_facts_reader = getattr(self._order_plan, "trading_facts", None)
+        context.valuation_guard = getattr(self._order_plan, "valuation_guard", None)
         if read_watchlist:
             context.followed_companies = await self._followed_companies(run.run_id)
         self._attach_runtime_callbacks(context, run.run_id)
@@ -337,11 +338,13 @@ class AniuOrchestrator:
         context.watch_order_plan = directives
         context.authorized_order_ids = frozenset(item.order_id for item in directives)
         runtime = self._runtime_for(RunState.WATCH.value)
-        if runtime is None:
-            raise ServiceConfigurationError("Watch llm runtime is not configured")
         context.llm_runtime = runtime
-        runner = self._agent_runner_factory.create(
-            context, label=RunState.WATCH.value, runtime=runtime
+        runner = (
+            self._agent_runner_factory.create(
+                context, label=RunState.WATCH.value, runtime=runtime
+            )
+            if runtime is not None
+            else None
         )
         await self._callbacks.on_state_entered(run.run_id, RunState.WATCH.value)
         deadline = asyncio.create_task(
