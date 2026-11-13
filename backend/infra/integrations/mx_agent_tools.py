@@ -13,11 +13,13 @@ from backend.agent.tools.registry import ToolRegistry
 from backend.business.account import PortfolioOrderSnapshot
 from backend.business.order_directives import OrderDirective
 from backend.business.shared.trading.value_objects import utc_now
+from backend.infra.integrations.buy_decision_review import recheck_complete_review
 from backend.infra.integrations.buy_preflight import (
     PrepareBuyTool,
     load_buy_review,
     recheck_buy_review,
 )
+from backend.infra.integrations.buy_research_tool import ReviewBuyTool
 from backend.infra.integrations.exposure_trade_guard import (
     check_buy_exposure,
     check_position_limits,
@@ -26,6 +28,7 @@ from backend.infra.integrations.exposure_trade_guard import (
 )
 from backend.infra.integrations.mx_screen import compact_screen_result
 from backend.infra.integrations.tool_policy import SideEffectLevel
+from backend.infra.integrations.trade_mutex import trade_mutex
 from backend.infra.integrations.watch_cancel_guard import verify_watch_cancel
 from backend.infra.repositories.valuation_cancellation_repo import (
     refuse_managed_cancellation,
@@ -289,6 +292,7 @@ class UndoneOrder:
     direction: str
     price: float
     quantity: int
+    order_id: str = ""
 
 
 class CancelledOrderLedger:
@@ -471,7 +475,18 @@ class TradeTool:
                 review_id=buy_review_call_id,
                 instruction=instruction,
             )
-            await recheck_buy_review(self.market_data, review, abort_signal)
+            fresh_quote = await recheck_buy_review(
+                self.market_data, review, abort_signal
+            )
+            await recheck_complete_review(
+                self.session_factory,
+                self.portfolio,
+                self.market_data,
+                run_id,
+                review,
+                abort_signal,
+                fresh_quote,
+            )
             if abort_signal is not None:
                 abort_signal.throw_if_aborted()
             return await self._execute(instruction)
@@ -528,8 +543,11 @@ class CancelTool:
             ),
             "parameters": {
                 "type": "object",
-                "properties": {"instruction": {"type": "string", "minLength": 1}},
-                "required": ["instruction"],
+                "properties": {
+                    "instruction": {"type": "string", "minLength": 1},
+                    "reason": {"type": "string", "minLength": 8, "maxLength": 2000},
+                },
+                "required": ["instruction", "reason"],
                 "additionalProperties": False,
             },
         }
@@ -539,6 +557,7 @@ class CancelTool:
         *,
         instruction: str,
         directives: tuple[OrderDirective, ...] | None,
+        reason: str = "",
         abort_signal: AbortSignal | None = None,
         cancellations_accepted: Callable[[], bool] | None = None,
     ) -> object:
@@ -567,9 +586,34 @@ class CancelTool:
         result = await self.client.cancel(instruction)
         if self.ledger is not None:
             self.ledger.record(about_to_undo)
-        return result
+        if self.session_factory is None:
+            return result
+        return self._with_reason(
+            result,
+            reason or "按可信挂单计划触发撤单",
+            "watch",
+            instruction,
+            directives,
+            about_to_undo,
+        )
 
-    async def run(self, instruction: str) -> object:
+    async def run_for_call(
+        self,
+        *,
+        run_id: int,
+        tool_call_id: str,
+        instruction: str,
+        reason: str = "",
+        abort_signal: AbortSignal | None = None,
+    ) -> object:
+        if self.session_factory is None:
+            raise ValueError("撤单缺少持久化记录连接")
+        async with trade_mutex(self.session_factory):
+            if abort_signal is not None:
+                abort_signal.throw_if_aborted()
+            return await self.run(instruction, reason=reason)
+
+    async def run(self, instruction: str, reason: str = "") -> object:
         await self._refuse_system_intent(instruction)
         intent = parse_trade_instruction(instruction)
         if intent.name not in {"cancel", "cancel_all"}:
@@ -580,7 +624,61 @@ class CancelTool:
         # undid nothing, and must not stop the order being placed again.
         if self.ledger is not None:
             self.ledger.record(about_to_undo)
-        return result
+        if self.session_factory is None:
+            return result
+        return self._with_reason(
+            result,
+            reason or "研究结论改变，须重新审查",
+            "run",
+            instruction,
+            None,
+            about_to_undo,
+        )
+
+    @staticmethod
+    def _with_reason(
+        result: dict[str, object],
+        reason: str,
+        origin: str,
+        instruction: str,
+        directives: tuple[OrderDirective, ...] | None,
+        orders: tuple[UndoneOrder, ...],
+    ) -> dict[str, object]:
+        intent = parse_trade_instruction(instruction)
+        plan = next(
+            (
+                p
+                for p in directives or ()
+                if p.order_id == intent.payload.get("orderId")
+            ),
+            None,
+        )
+        if plan is not None:
+            reason = plan.note or reason
+            if plan.action == "cancel":
+                origin = "run"
+        conditions = (
+            {}
+            if plan is None
+            else {
+                "cancel_if_price_above": plan.cancel_if_price_above,
+                "cancel_if_price_below": plan.cancel_if_price_below,
+                "cancel_if_unfilled_after": plan.cancel_if_unfilled_after.strftime(
+                    "%H:%M"
+                )
+                if plan.cancel_if_unfilled_after
+                else None,
+            }
+        )
+        return {
+            **result,
+            "cancellation_review": {
+                "reason": reason,
+                "origin": origin,
+                "conditions": conditions,
+                "orders": [asdict(order) for order in orders],
+            },
+        }
 
     async def _refuse_system_intent(self, instruction: str) -> None:
         if self.session_factory is None:
@@ -610,7 +708,8 @@ def register_mx_tools(
     registry.register(SearchNewsTool(research))
     registry.register(SelectStocksTool(research))
     registry.register(QueryPortfolioTool(portfolio))
-    registry.register(PrepareBuyTool(market_data))
+    registry.register(ReviewBuyTool(market_data, portfolio, session_factory))
+    registry.register(PrepareBuyTool(market_data, session_factory, portfolio))
     # One ledger, both tools, one run: the guard only means anything if the
     # tool that cancels and the tool that places are looking at the same book.
     ledger = CancelledOrderLedger()
@@ -727,6 +826,7 @@ def _undone_order(order: PortfolioOrderSnapshot) -> UndoneOrder | None:
         direction=order.direction,
         price=float(order.order_price),
         quantity=order.quantity,
+        order_id=order.order_id,
     )
 
 

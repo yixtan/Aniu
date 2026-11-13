@@ -440,7 +440,9 @@ async def test_chasing_earlier_bid_is_blocked_even_with_plenty_of_cap(session_fa
     portfolio, trading = clients(
         replace(snapshot(), market_value=1000, frozen_cash=0), [order(order_price=10)]
     )
-    service = await approve(session_factory, 1, "买入 600000 9 100")
+    service = await approve(
+        session_factory, 1, "买入 600000 9 100", portfolio=portfolio
+    )
     tool = TradeTool(
         trading, portfolio, session_factory=session_factory, market_data=service
     )

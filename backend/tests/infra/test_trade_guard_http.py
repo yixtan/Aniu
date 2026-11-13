@@ -125,7 +125,9 @@ async def test_real_adapters_enforce_before_trade_http(session_factory, scenario
         )
         if scenario.startswith("valid"):
             if scenario == "valid-buy":
-                tool.market_data = await approve(session_factory, 1, instruction)
+                tool.market_data = await approve(
+                    session_factory, 1, instruction, portfolio=p
+                )
             await tool.run_for_call(
                 run_id=1,
                 tool_call_id="write",

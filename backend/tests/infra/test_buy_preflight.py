@@ -27,7 +27,7 @@ from backend.stock_api.public.contracts import ValuationRequest
 from backend.stock_api.public.normalizers.common import normalize_datetime
 from backend.stock_api.public.normalizers.market import normalize_quotes
 from backend.stock_api.public.providers.tencent import _parse_quotes
-from backend.tests.infra.buy_fixtures import approve, market_service
+from backend.tests.infra.buy_fixtures import approve, decision_for, market_service
 from backend.tests.infra.test_exposure_execution_guard import (
     NOW,
     clients,
@@ -208,8 +208,17 @@ async def test_real_registry_persists_review_executes_once_and_binds_handoff(
     bound = _StageToolRegistry(
         registry, "Run", run_id=1, invocation_session_factory=session_factory
     )
+    evidence = await bound.call_idempotently(
+        "review_buy",
+        tool_call_id="research",
+        abort_signal=None,
+        instruction=BUY,
+        cancel_if_price_below=9,
+    )
     approved = await bound.call_idempotently(
         "prepare_buy",
+        research_review_call_id="research",
+        decision=decision_for(evidence),
         tool_call_id="review",
         abort_signal=None,
         instruction=BUY,
