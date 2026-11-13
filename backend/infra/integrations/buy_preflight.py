@@ -17,9 +17,12 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from backend.business.account.ports import PortfolioQueryPort
 from backend.business.order_directives.buy_conditions import check_buy_conditions
 from backend.business.shared.trading.value_objects import utc_now
 from backend.infra.db.models import ToolInvocationModel
+from backend.infra.integrations.buy_decision_review import confirm_research
+from backend.infra.integrations.buy_research_data import POLICY_VERSION
 from backend.infra.integrations.execution_check import _mapping
 from backend.infra.integrations.tool_policy import SideEffectLevel
 from backend.llm import AbortSignal, ProviderJsonObject, ToolDefinition
@@ -139,6 +142,8 @@ def valuation_checks(
 @dataclass(slots=True)
 class PrepareBuyTool:
     market_data: StockMarketDataService | None
+    session_factory: async_sessionmaker[AsyncSession] | None = None
+    portfolio: PortfolioQueryPort | None = None
     name: str = "prepare_buy"
     enabled_stages: tuple[str, ...] = field(default=("Run",))
     # Persist the source evidence with the ordinary idempotent tool ledger.
@@ -154,7 +159,8 @@ class PrepareBuyTool:
         return {
             "name": self.name,
             "description": (
-                "买入前审核，不下单。先完成研究，再提交拟买指令和撤单失效条件。"
+                "完整买入决策确认，不下单。必须先调用review_buy，读取其全部证据。"
+                "提交research_review_call_id，并逐条填写全部经验适用性、历次撤单原因消除依据、投资论点、反证和最终数量理由。"
                 "系统直接查询行情PE(TTM)/PB与近1/3/5/10年30分位阈值，"
                 "按拟买价逐项计算；缺失、超阈值或买价与失效条件矛盾均拒绝。"
                 "通过后把返回的buy_review_call_id交给trade，五分钟内一次有效，"
@@ -167,6 +173,65 @@ class PrepareBuyTool:
                     "type": "object",
                     "properties": {
                         "instruction": {"type": "string", "minLength": 1},
+                        "research_review_call_id": {"type": "string", "minLength": 1},
+                        "decision": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "properties": {
+                                **{
+                                    field: {
+                                        "type": "string",
+                                        "minLength": 8,
+                                        "maxLength": 4000,
+                                    }
+                                    for field in (
+                                        "thesis",
+                                        "counter_evidence",
+                                        "sizing_rationale",
+                                    )
+                                },
+                                "memory_reviews": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "additionalProperties": False,
+                                        "properties": {
+                                            "id": {"type": "integer"},
+                                            "version": {"type": "integer"},
+                                            "assessment": {
+                                                "type": "string",
+                                                "minLength": 8,
+                                                "maxLength": 4000,
+                                            },
+                                        },
+                                        "required": ["id", "version", "assessment"],
+                                    },
+                                },
+                                "cancellation_reviews": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "additionalProperties": False,
+                                        "properties": {
+                                            "key": {"type": "string"},
+                                            "resolution": {
+                                                "type": "string",
+                                                "minLength": 8,
+                                                "maxLength": 4000,
+                                            },
+                                        },
+                                        "required": ["key", "resolution"],
+                                    },
+                                },
+                            },
+                            "required": [
+                                "thesis",
+                                "counter_evidence",
+                                "sizing_rationale",
+                                "memory_reviews",
+                                "cancellation_reviews",
+                            ],
+                        },
                         "cancel_if_price_below": {
                             "type": "number",
                             "exclusiveMinimum": 0,
@@ -176,7 +241,7 @@ class PrepareBuyTool:
                             "exclusiveMinimum": 0,
                         },
                     },
-                    "required": ["instruction"],
+                    "required": ["instruction", "research_review_call_id", "decision"],
                     "additionalProperties": False,
                 },
             ),
@@ -191,38 +256,35 @@ class PrepareBuyTool:
         instruction: str,
         cancel_if_price_below: float | None = None,
         cancel_if_price_above: float | None = None,
+        research_review_call_id: str | None = None,
+        decision: dict[str, object] | None = None,
     ) -> object:
-        symbol, price, quantity = _buy(instruction)
-        check_buy_conditions(
-            price, below=cancel_if_price_below, above=cancel_if_price_above
+        result = await valuation_review(
+            self.market_data,
+            run_id,
+            tool_call_id,
+            instruction,
+            cancel_if_price_below,
+            cancel_if_price_above,
+            abort_signal,
         )
-        if self.market_data is None:
-            raise ValueError("缺少估值数据连接，禁止买入")
-        request = QuoteSnapshotRequest((symbol,), detail="full")
-        valuation, quote = await asyncio.gather(
-            self.market_data.execute_fresh(
-                ValuationRequest(request.symbols[0]), abort_signal
-            ),
-            self.market_data.execute_fresh(request, abort_signal),
+        evidence = await confirm_research(
+            self.session_factory,
+            self.portfolio,
+            run_id,
+            instruction,
+            tool_call_id,
+            research_review_call_id,
+            decision,
+            result,
         )
-        thresholds = _thresholds(valuation, request.symbols[0])
-        row = _quote(quote, request.symbols[0])
-        checks = check_valuation(row, thresholds, price)
-        if abort_signal is not None:
-            abort_signal.throw_if_aborted()
-        return {
-            "status": "approved",
-            "buy_review_call_id": tool_call_id,
-            "run_id": run_id,
-            "symbol": symbol,
-            "price": price,
-            "quantity": quantity,
-            "cancel_if_price_below": cancel_if_price_below,
-            "cancel_if_price_above": cancel_if_price_above,
-            "checked_at": utc_now().isoformat(),
-            "quote": row,
-            "checks": checks,
-        }
+        result.update(
+            policy_version=POLICY_VERSION,
+            research_review_call_id=research_review_call_id,
+            decision=decision,
+            context_fingerprint=evidence["context_fingerprint"],
+        )
+        return result
 
     async def run(self, **_: object) -> object:
         raise RuntimeError("prepare_buy requires trusted run call context")
@@ -255,7 +317,11 @@ async def load_buy_review(
     ):
         raise ValueError("缺少本轮成功的买入审核，禁止下单")
     result = _mapping(review.result_json)
-    if result.get("status") != "approved" or result.get("run_id") != run_id:
+    if (
+        result.get("status") != "approved"
+        or result.get("run_id") != run_id
+        or result.get("policy_version") != POLICY_VERSION
+    ):
         raise ValueError("买入审核未通过，禁止下单")
     symbol, price, quantity = _buy(instruction)
     if (result.get("symbol"), result.get("price"), result.get("quantity")) != (
@@ -271,9 +337,16 @@ async def load_buy_review(
         raise ValueError("买入审核时间无效，禁止下单") from exc
     if age < -5 or age > 300:
         raise ValueError("买入审核已过期，请重新调用prepare_buy")
+    research_id = result.get("research_review_call_id")
+    sibling_ids = {
+        row.tool_call_id
+        for row in rows
+        if row.tool_name == "prepare_buy"
+        and _mapping(row.result_json).get("research_review_call_id") == research_id
+    }
     for row in rows:
         if row.tool_name == "trade" and row.tool_call_id != tool_call_id:
-            if _mapping(row.arguments_json).get("buy_review_call_id") == review_id:
+            if _mapping(row.arguments_json).get("buy_review_call_id") in sibling_ids:
                 raise ValueError("买入审核已经使用，结果未知也不能重复下单")
     check_buy_conditions(
         price,
@@ -287,7 +360,7 @@ async def recheck_buy_review(
     market_data: StockMarketDataService | None,
     review: dict[str, object],
     abort_signal: AbortSignal | None,
-) -> None:
+) -> dict[str, object]:
     if market_data is None:
         raise ValueError("缺少估值数据连接，禁止买入")
     request = QuoteSnapshotRequest((str(review["symbol"]),), detail="full")
@@ -301,8 +374,51 @@ async def recheck_buy_review(
         },
         request.symbols[0],
     )
+    quote = _quote(result, request.symbols[0])
     check_valuation(
-        _quote(result, request.symbols[0]),
+        quote,
         thresholds,
         _positive(review.get("price"), "审核买价"),
     )
+
+    return quote
+
+
+async def valuation_review(
+    market_data: StockMarketDataService | None,
+    run_id: int,
+    tool_call_id: str,
+    instruction: str,
+    cancel_if_price_below: float | None,
+    cancel_if_price_above: float | None,
+    abort_signal: AbortSignal | None,
+) -> dict[str, object]:
+    symbol, price, quantity = _buy(instruction)
+    check_buy_conditions(
+        price, below=cancel_if_price_below, above=cancel_if_price_above
+    )
+    if market_data is None:
+        raise ValueError("缺少估值数据连接，禁止买入")
+    request = QuoteSnapshotRequest((symbol,), detail="full")
+    valuation, quote = await asyncio.gather(
+        market_data.execute_fresh(ValuationRequest(request.symbols[0]), abort_signal),
+        market_data.execute_fresh(request, abort_signal),
+    )
+    thresholds = _thresholds(valuation, request.symbols[0])
+    row = _quote(quote, request.symbols[0])
+    checks = check_valuation(row, thresholds, price)
+    if abort_signal is not None:
+        abort_signal.throw_if_aborted()
+    return {
+        "status": "approved",
+        "buy_review_call_id": tool_call_id,
+        "run_id": run_id,
+        "symbol": symbol,
+        "price": price,
+        "quantity": quantity,
+        "cancel_if_price_below": cancel_if_price_below,
+        "cancel_if_price_above": cancel_if_price_above,
+        "checked_at": utc_now().isoformat(),
+        "quote": row,
+        "checks": checks,
+    }

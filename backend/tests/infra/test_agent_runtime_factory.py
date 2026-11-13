@@ -170,6 +170,7 @@ async def test_runtime_factory_registers_only_direct_mx_tools() -> None:
         "query_portfolio",
         "trade",
         "prepare_buy",
+        "review_buy",
         "cancel",
     }
 

@@ -140,6 +140,7 @@ def test_mx_registration_exposes_all_direct_tools_with_closed_schemas() -> None:
         ),
         "trade": ("instruction", SideEffectLevel.WRITE, ("Run",)),
         "prepare_buy": ("instruction", SideEffectLevel.WRITE, ("Run",)),
+        "review_buy": ("instruction", SideEffectLevel.WRITE, ("Run",)),
         "cancel": ("instruction", SideEffectLevel.WRITE, ("Run", "Watch")),
     }
 
@@ -148,7 +149,12 @@ def test_mx_registration_exposes_all_direct_tools_with_closed_schemas() -> None:
         tool = registry.get(name)
         definition = tool.to_tool_definition()
         parameters = definition["parameters"]
-        assert parameters["required"] == [parameter]
+        required = [parameter]
+        if name == "prepare_buy":
+            required += ["research_review_call_id", "decision"]
+        if name == "cancel":
+            required += ["reason"]
+        assert parameters["required"] == required
         assert parameters["additionalProperties"] is False
         assert tool.side_effect_level is side_effect
         assert tool.enabled_stages == stages
